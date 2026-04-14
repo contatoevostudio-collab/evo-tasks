@@ -407,8 +407,18 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
           <>
             <button
               onClick={() => {
-                if (updateStatus === 'downloaded') window.electronAPI?.installUpdate();
-                else window.electronAPI?.checkForUpdates();
+                if (updateStatus === 'downloaded') {
+                  // Tenta instalar; se falhar, abre releases no navegador
+                  window.electronAPI?.installUpdate();
+                  setTimeout(() => {
+                    // Se ainda está rodando após 3s, o install falhou — abre navegador
+                    window.electronAPI?.openReleasesPage?.();
+                  }, 3000);
+                } else if (updateStatus === 'error') {
+                  window.electronAPI?.openReleasesPage?.();
+                } else {
+                  window.electronAPI?.checkForUpdates();
+                }
               }}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 9,
@@ -422,13 +432,8 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
               onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity = '1')}
             >
               <FiDownload size={13} />
-              {updateStatus === 'error' ? 'Erro na atualização' : updateStatus === 'downloaded' ? 'Instalar atualização' : 'Atualização disponível'}
+              {updateStatus === 'error' ? 'Baixar atualização' : updateStatus === 'downloaded' ? 'Instalar atualização' : 'Atualização disponível'}
             </button>
-            {updateStatus === 'error' && updateError && (
-              <div style={{ fontSize: 10, color: '#ff453a', padding: '0 12px 6px', opacity: 0.8, wordBreak: 'break-word' }}>
-                {updateError}
-              </div>
-            )}
           </>
         )}
 

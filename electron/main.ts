@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 
@@ -60,9 +60,19 @@ autoUpdater.on('error', (err) => {
 });
 
 ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall();
+  try {
+    autoUpdater.quitAndInstall(false, true);
+  } catch (err) {
+    // Se quitAndInstall falhar (comum em apps sem assinatura no macOS),
+    // abre a página de releases no navegador como fallback
+    shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
+  }
 });
 
 ipcMain.handle('check-for-updates', () => {
   if (!isDev) autoUpdater.checkForUpdatesAndNotify();
+});
+
+ipcMain.handle('open-releases-page', () => {
+  shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
 });

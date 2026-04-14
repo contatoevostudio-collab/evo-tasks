@@ -4,6 +4,7 @@ interface ElectronAPI {
   onUpdateAvailable: (cb: (info: unknown) => void) => void;
   onUpdateDownloaded: (cb: (info: unknown) => void) => void;
   onUpdateError?: (cb: (msg: string) => void) => void;
+  openReleasesPage?: () => Promise<void>;
 }
 
 declare global {

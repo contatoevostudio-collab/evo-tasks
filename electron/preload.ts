@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateError: (cb: (msg: string) => void) => {
     ipcRenderer.on('update-error', (_event, msg) => cb(msg));
   },
+  openReleasesPage: () => ipcRenderer.invoke('open-releases-page'),
 });
