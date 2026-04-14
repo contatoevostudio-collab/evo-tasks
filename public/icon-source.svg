@@ -1,0 +1,12 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo branco -->
+  <rect width="1024" height="1024" fill="white"/>
+  <!-- Logo azul centralizado com ~30% de padding em cada lado (logo ocupa 40% = 409px) -->
+  <!-- Original viewBox 283x283, escala 409/283 ≈ 1.446, offset 307 em cada eixo -->
+  <g transform="translate(307, 307) scale(1.446)">
+    <path d="M169.469 0V56.489H56.489V282.448H28.2445C12.6471 282.448 0 269.8 0 254.203V28.2445C0 12.6471 12.6471 0 28.2445 0H169.469Z" fill="#356BFF"/>
+    <path d="M282.446 28.2445V56.489H225.957V0H254.202C269.799 0 282.446 12.6471 282.446 28.2445Z" fill="#356BFF"/>
+    <path d="M169.466 112.98H112.977V169.469H169.466V112.98Z" fill="#356BFF"/>
+    <path d="M282.446 112.98V254.205C282.446 269.802 269.799 282.45 254.202 282.45H112.977L282.446 112.98Z" fill="#356BFF"/>
+  </g>
+</svg>
