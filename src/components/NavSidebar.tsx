@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import {
   FiHome, FiCheckSquare, FiBriefcase, FiSettings,
   FiPlus, FiChevronDown, FiChevronRight, FiChevronLeft,
-  FiEye, FiEyeOff, FiArchive, FiDownload,
+  FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
-import type { PageType } from '../types';
+import type { PageType, Theme } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
 
 interface Props {
@@ -22,13 +22,32 @@ const NAV = [
   { id: 'arquivo'  as PageType, label: 'Arquivo',  Icon: FiArchive },
 ];
 
+const THEMES: Theme[] = ['dark-blue', 'dark-pure', 'dark-warm', 'light-soft', 'light-pure'];
+const THEME_LABELS: Record<Theme, string> = {
+  'dark-blue': 'Azul Escuro',
+  'dark-pure': 'Preto',
+  'dark-warm': 'Quente Escuro',
+  'light-soft': 'Claro Suave',
+  'light-pure': 'Branco',
+};
+
+const dragRegion: React.CSSProperties = { WebkitAppRegion: 'drag' } as React.CSSProperties;
+const noDragRegion: React.CSSProperties = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
+
 export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSettings }: Props) {
   const {
     companies, subClients, tasks,
     selectedCompanies, toggleCompany, selectAllCompanies, deselectAllCompanies,
     filterSubClient, setFilterSubClient,
     sidebarCollapsed, toggleSidebar,
+    theme, setTheme,
   } = useTaskStore();
+
+  const isLightTheme = theme === 'light-soft' || theme === 'light-pure';
+  const cycleTheme = () => {
+    const idx = THEMES.indexOf(theme);
+    setTheme(THEMES[(idx + 1) % THEMES.length]);
+  };
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hoveredCompany, setHoveredCompany] = useState<string | null>(null);
@@ -54,13 +73,17 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         background: 'var(--sidebar-bg)',
         borderRight: '1px solid var(--b1)',
-        flexShrink: 0, overflow: 'hidden', paddingTop: 12, gap: 4,
+        flexShrink: 0, overflow: 'hidden', gap: 4,
       }}>
+        {/* Drag region — espaço para os traffic lights do macOS */}
+        <div style={{ width: '100%', height: 38, flexShrink: 0, ...dragRegion }} />
+
         <div style={{
           width: 32, height: 32, borderRadius: 8,
           background: 'linear-gradient(135deg, #356BFF, #64C4FF)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 4px 12px rgba(53,107,255,0.4)', marginBottom: 8,
+          ...noDragRegion,
         }}>
           <img src={EvoIcon} alt="Evo" style={{ width: 18, height: 18, objectFit: 'contain', filter: 'invert(1)' }} />
         </div>
@@ -113,6 +136,20 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
         )}
 
         <button
+          onClick={cycleTheme}
+          title={`Tema: ${THEME_LABELS[theme]} → próximo`}
+          style={{
+            width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)',
+            transition: 'all .15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+        >
+          {isLightTheme ? <FiMoon size={14} /> : <FiSun size={14} />}
+        </button>
+
+        <button
           onClick={onOpenSettings}
           style={{
             width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -152,8 +189,11 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
         position: 'sticky', top: 0, flexShrink: 0, overflow: 'hidden',
       }}
     >
+      {/* Drag region — espaço para os traffic lights do macOS */}
+      <div style={{ width: '100%', height: 38, flexShrink: 0, ...dragRegion }} />
+
       {/* Logo */}
-      <div style={{ padding: '20px 18px 16px', flexShrink: 0 }}>
+      <div style={{ padding: '4px 18px 16px', flexShrink: 0, ...noDragRegion }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8,
@@ -382,6 +422,22 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
             {updateStatus === 'downloaded' ? 'Instalar atualização' : 'Atualização disponível'}
           </button>
         )}
+
+        <button
+          onClick={cycleTheme}
+          title={`Tema atual: ${THEME_LABELS[theme]}`}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+            padding: '8px 12px', borderRadius: 10, background: 'transparent',
+            border: 'none', cursor: 'pointer', color: 'var(--t3)',
+            fontSize: 12, transition: 'all .15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
+        >
+          {isLightTheme ? <FiMoon size={13} /> : <FiSun size={13} />}
+          {THEME_LABELS[theme]}
+        </button>
 
         <button
           onClick={onOpenSettings}
