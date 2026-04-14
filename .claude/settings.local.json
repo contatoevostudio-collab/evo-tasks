@@ -21,7 +21,9 @@
       "Bash(brew install:*)",
       "Bash(gh repo:*)",
       "Bash(timeout 30 git -C \"/Users/thms/Documents/ClaudeCode EvoStudio/evo-tasks\" push origin main)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(gh release:*)",
+      "Bash(open:*)"
     ]
   }
 }

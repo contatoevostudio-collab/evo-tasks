@@ -1,14 +1,14 @@
 {
   "name": "evo-tasks",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "tsc -b && vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json",
     "dist": "npm run build && npm run build:electron && electron-builder --config electron-builder.config.cjs",
     "lint": "eslint .",
     "preview": "vite preview"
