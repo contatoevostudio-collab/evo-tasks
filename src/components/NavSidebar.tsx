@@ -52,7 +52,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hoveredCompany, setHoveredCompany] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloaded' | 'error'>('idle');
-  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [_updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     window.electronAPI?.onUpdateAvailable(() => setUpdateStatus('available'));
