@@ -17,6 +17,7 @@ module.exports = {
       { target: 'zip', arch: ['x64', 'arm64'] },
     ],
     category: 'public.app-category.productivity',
+    icon: 'public/icon.icns',
   },
   dmg: {
     title: 'Evo Tasks',
