@@ -6,6 +6,9 @@ const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 
+// Guarda eventos que chegaram antes do renderer estar pronto
+let pendingUpdateEvent: { type: 'available' | 'downloaded' | 'error'; payload?: string } | null = null;
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -27,15 +30,26 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
+  // Aguarda o renderer carregar completamente antes de verificar atualizações
+  mainWindow.webContents.on('did-finish-load', () => {
+    // Re-envia evento pendente caso o check tenha terminado antes do renderer
+    if (pendingUpdateEvent) {
+      if (pendingUpdateEvent.type === 'available') mainWindow?.webContents.send('update-available');
+      if (pendingUpdateEvent.type === 'downloaded') mainWindow?.webContents.send('update-downloaded');
+      if (pendingUpdateEvent.type === 'error') mainWindow?.webContents.send('update-error', pendingUpdateEvent.payload);
+      pendingUpdateEvent = null;
+    }
+
+    if (!isDev) {
+      autoUpdater.checkForUpdatesAndNotify();
+    }
+  });
+
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 app.whenReady().then(() => {
   createWindow();
-
-  if (!isDev) {
-    autoUpdater.checkForUpdatesAndNotify();
-  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -47,16 +61,28 @@ app.on('window-all-closed', () => {
 });
 
 autoUpdater.on('update-available', (info) => {
-  mainWindow?.webContents.send('update-available', info);
+  if (mainWindow?.webContents.isLoading()) {
+    pendingUpdateEvent = { type: 'available' };
+  } else {
+    mainWindow?.webContents.send('update-available', info);
+  }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  mainWindow?.webContents.send('update-downloaded', info);
+  if (mainWindow?.webContents.isLoading()) {
+    pendingUpdateEvent = { type: 'downloaded' };
+  } else {
+    mainWindow?.webContents.send('update-downloaded', info);
+  }
 });
 
 autoUpdater.on('error', (err) => {
   console.error('Auto-updater error:', err);
-  mainWindow?.webContents.send('update-error', err.message);
+  if (mainWindow?.webContents.isLoading()) {
+    pendingUpdateEvent = { type: 'error', payload: err.message };
+  } else {
+    mainWindow?.webContents.send('update-error', err.message);
+  }
 });
 
 ipcMain.handle('install-update', () => {
