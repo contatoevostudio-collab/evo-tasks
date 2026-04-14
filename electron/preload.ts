@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateDownloaded: (cb: (info: unknown) => void) => {
     ipcRenderer.on('update-downloaded', (_event, info) => cb(info));
   },
+  onUpdateError: (cb: (msg: string) => void) => {
+    ipcRenderer.on('update-error', (_event, msg) => cb(msg));
+  },
 });

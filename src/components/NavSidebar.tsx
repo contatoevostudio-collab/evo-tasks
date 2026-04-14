@@ -51,11 +51,13 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hoveredCompany, setHoveredCompany] = useState<string | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloaded'>('idle');
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloaded' | 'error'>('idle');
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     window.electronAPI?.onUpdateAvailable(() => setUpdateStatus('available'));
     window.electronAPI?.onUpdateDownloaded(() => setUpdateStatus('downloaded'));
+    window.electronAPI?.onUpdateError?.((msg: string) => { setUpdateStatus('error'); setUpdateError(msg); });
   }, []);
 
   const toggleExpand = (id: string) =>
@@ -402,25 +404,32 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
         <div style={{ margin: '0 4px 8px', height: 1, background: 'var(--b1)' }} />
 
         {updateStatus !== 'idle' && (
-          <button
-            onClick={() => {
-              if (updateStatus === 'downloaded') window.electronAPI?.installUpdate();
-              else window.electronAPI?.checkForUpdates();
-            }}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-              padding: '8px 12px', borderRadius: 10, marginBottom: 4,
-              background: updateStatus === 'downloaded' ? 'rgba(48,209,88,0.15)' : 'rgba(53,107,255,0.12)',
-              border: 'none', cursor: 'pointer',
-              color: updateStatus === 'downloaded' ? '#30d158' : '#356BFF',
-              fontSize: 12, fontWeight: 600, transition: 'opacity .15s',
-            }}
-            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.opacity = '0.8')}
-            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity = '1')}
-          >
-            <FiDownload size={13} />
-            {updateStatus === 'downloaded' ? 'Instalar atualização' : 'Atualização disponível'}
-          </button>
+          <>
+            <button
+              onClick={() => {
+                if (updateStatus === 'downloaded') window.electronAPI?.installUpdate();
+                else window.electronAPI?.checkForUpdates();
+              }}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                padding: '8px 12px', borderRadius: 10, marginBottom: 4,
+                background: updateStatus === 'error' ? 'rgba(255,69,58,0.12)' : updateStatus === 'downloaded' ? 'rgba(48,209,88,0.15)' : 'rgba(53,107,255,0.12)',
+                border: 'none', cursor: 'pointer',
+                color: updateStatus === 'error' ? '#ff453a' : updateStatus === 'downloaded' ? '#30d158' : '#356BFF',
+                fontSize: 12, fontWeight: 600, transition: 'opacity .15s',
+              }}
+              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.opacity = '0.8')}
+              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity = '1')}
+            >
+              <FiDownload size={13} />
+              {updateStatus === 'error' ? 'Erro na atualização' : updateStatus === 'downloaded' ? 'Instalar atualização' : 'Atualização disponível'}
+            </button>
+            {updateStatus === 'error' && updateError && (
+              <div style={{ fontSize: 10, color: '#ff453a', padding: '0 12px 6px', opacity: 0.8, wordBreak: 'break-word' }}>
+                {updateError}
+              </div>
+            )}
+          </>
         )}
 
         <button

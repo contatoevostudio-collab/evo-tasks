@@ -56,6 +56,7 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
   console.error('Auto-updater error:', err);
+  mainWindow?.webContents.send('update-error', err.message);
 });
 
 ipcMain.handle('install-update', () => {
