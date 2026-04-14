@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   FiHome, FiCheckSquare, FiBriefcase, FiSettings,
   FiPlus, FiChevronDown, FiChevronRight, FiChevronLeft,
   FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
+  FiUser, FiLogOut, FiLogIn, FiKey, FiX, FiCheck,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
+import { useAuthStore } from '../store/auth';
 import type { PageType, Theme } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
 
@@ -13,6 +15,7 @@ interface Props {
   onChangePage: (p: PageType) => void;
   onAddTask: () => void;
   onOpenSettings: () => void;
+  onLogin: () => void;
 }
 
 const NAV = [
@@ -34,7 +37,7 @@ const THEME_LABELS: Record<Theme, string> = {
 const dragRegion: React.CSSProperties = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDragRegion: React.CSSProperties = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
-export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSettings }: Props) {
+export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSettings, onLogin }: Props) {
   const {
     companies, subClients, tasks,
     selectedCompanies, toggleCompany, selectAllCompanies, deselectAllCompanies,
@@ -43,11 +46,54 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
     theme, setTheme,
   } = useTaskStore();
 
+  const { user, signOut, updatePassword } = useAuthStore();
+
   const isLightTheme = theme === 'light-soft' || theme === 'light-pure';
   const cycleTheme = () => {
     const idx = THEMES.indexOf(theme);
     setTheme(THEMES[(idx + 1) % THEMES.length]);
   };
+
+  // Profile popover
+  const profileBtnRef = useRef<HTMLButtonElement>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileView, setProfileView] = useState<'menu' | 'password'>('menu');
+  const [newPwd, setNewPwd] = useState('');
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdMsg, setPwdMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [profilePos, setProfilePos] = useState<{ left: number; bottom: number } | null>(null);
+
+  const openProfile = () => {
+    if (showProfile) { setShowProfile(false); return; }
+    const rect = profileBtnRef.current?.getBoundingClientRect();
+    if (rect) setProfilePos({ left: sidebarCollapsed ? rect.right + 8 : 12, bottom: window.innerHeight - rect.top + 8 });
+    setProfileView('menu');
+    setNewPwd('');
+    setPwdMsg(null);
+    setShowProfile(true);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwdLoading(true);
+    setPwdMsg(null);
+    await updatePassword(newPwd);
+    const err = useAuthStore.getState().error;
+    setPwdMsg(err ? { text: err, ok: false } : { text: 'Senha atualizada!', ok: true });
+    setPwdLoading(false);
+    if (!err) { setNewPwd(''); setTimeout(() => setShowProfile(false), 1500); }
+  };
+
+  // Fecha popover ao clicar fora
+  useEffect(() => {
+    if (!showProfile) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!profileBtnRef.current?.contains(target)) setShowProfile(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showProfile]);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hoveredCompany, setHoveredCompany] = useState<string | null>(null);
@@ -151,6 +197,22 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
           {isLightTheme ? <FiMoon size={14} /> : <FiSun size={14} />}
         </button>
 
+        {/* Perfil */}
+        <button
+          ref={profileBtnRef}
+          onClick={openProfile}
+          title={user ? user.email ?? 'Perfil' : 'Entrar'}
+          style={{
+            width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: showProfile ? 'var(--s2)' : 'transparent', border: 'none', cursor: 'pointer',
+            color: user ? '#356BFF' : 'var(--t4)', transition: 'all .15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+          onMouseLeave={e => { if (!showProfile) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <FiUser size={14} />
+        </button>
+
         <button
           onClick={onOpenSettings}
           style={{
@@ -182,6 +244,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
   }
 
   return (
+    <>
     <aside
       style={{
         width: 224, minWidth: 224, height: '100vh',
@@ -453,6 +516,27 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
           {THEME_LABELS[theme]}
         </button>
 
+        {/* Perfil */}
+        <button
+          ref={profileBtnRef}
+          onClick={openProfile}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+            padding: '8px 12px', borderRadius: 10,
+            background: showProfile ? 'var(--s2)' : 'transparent',
+            border: 'none', cursor: 'pointer',
+            color: user ? '#356BFF' : 'var(--t3)',
+            fontSize: 12, transition: 'all .15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+          onMouseLeave={e => { if (!showProfile) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <FiUser size={13} />
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+            {user ? (user.email ?? 'Perfil') : 'Entrar'}
+          </span>
+        </button>
+
         <button
           onClick={onOpenSettings}
           style={{
@@ -468,5 +552,118 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
         </button>
       </div>
     </aside>
+
+    {/* Popover de perfil (position: fixed, fora da sidebar) */}
+
+    {showProfile && profilePos && (
+      <div
+        onMouseDown={e => e.stopPropagation()}
+        style={{
+          position: 'fixed', left: profilePos.left, bottom: profilePos.bottom,
+          width: 220, background: 'var(--modal-bg)', border: '1px solid var(--b2)',
+          borderRadius: 14, boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+          zIndex: 9999, overflow: 'hidden',
+        }}
+      >
+        {profileView === 'menu' ? (
+          <>
+            {user ? (
+              <>
+                {/* Email */}
+                <div style={{ padding: '12px 14px 8px', borderBottom: '1px solid var(--b1)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--t4)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 3 }}>Conta</div>
+                  <div style={{ fontSize: 12, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user.email}
+                  </div>
+                </div>
+                {/* Trocar senha */}
+                <button
+                  onClick={() => setProfileView('password')}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                    padding: '10px 14px', background: 'transparent', border: 'none',
+                    cursor: 'pointer', color: 'var(--t2)', fontSize: 13, transition: 'background .15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s2)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                >
+                  <FiKey size={13} /> Trocar senha
+                </button>
+                {/* Sair */}
+                <button
+                  onClick={() => { signOut(); setShowProfile(false); }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                    padding: '10px 14px', background: 'transparent', border: 'none',
+                    cursor: 'pointer', color: '#ff453a', fontSize: 13, transition: 'background .15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.08)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                >
+                  <FiLogOut size={13} /> Sair
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { setShowProfile(false); onLogin(); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '12px 14px', background: 'transparent', border: 'none',
+                  cursor: 'pointer', color: '#356BFF', fontSize: 13, fontWeight: 600, transition: 'background .15s',
+                }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s2)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+              >
+                <FiLogIn size={13} /> Fazer login
+              </button>
+            )}
+          </>
+        ) : (
+          /* Trocar senha form */
+          <form onSubmit={handleChangePassword} style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t1)' }}>Nova senha</span>
+              <button
+                type="button"
+                onClick={() => setProfileView('menu')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex' }}
+              >
+                <FiX size={13} />
+              </button>
+            </div>
+            <input
+              type="password"
+              value={newPwd}
+              onChange={e => setNewPwd(e.target.value)}
+              required
+              minLength={6}
+              placeholder="Mínimo 6 caracteres"
+              autoFocus
+              style={{
+                padding: '8px 10px', borderRadius: 8, border: '1px solid var(--b2)',
+                background: 'var(--s1)', color: 'var(--t1)', fontSize: 12, outline: 'none',
+              }}
+            />
+            {pwdMsg && (
+              <div style={{ fontSize: 11, color: pwdMsg.ok ? '#30d158' : '#ff453a', display: 'flex', alignItems: 'center', gap: 5 }}>
+                {pwdMsg.ok ? <FiCheck size={11} /> : null} {pwdMsg.text}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={pwdLoading}
+              style={{
+                padding: '8px', borderRadius: 8, border: 'none',
+                background: '#356BFF', color: '#fff', fontSize: 12, fontWeight: 600,
+                cursor: pwdLoading ? 'not-allowed' : 'pointer', opacity: pwdLoading ? 0.6 : 1,
+              }}
+            >
+              {pwdLoading ? 'Salvando...' : 'Salvar senha'}
+            </button>
+          </form>
+        )}
+      </div>
+    )}
+    </>
   );
 }

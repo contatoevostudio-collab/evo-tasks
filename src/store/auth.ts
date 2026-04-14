@@ -9,6 +9,7 @@ interface AuthStore {
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  updatePassword(newPassword: string): Promise<void>;
   initialize(): Promise<void>;
   clearError(): void;
 }
@@ -44,6 +45,13 @@ export const useAuthStore = create<AuthStore>((set) => ({
   signOut: async () => {
     await supabase.auth.signOut();
     set({ user: null });
+  },
+
+  updatePassword: async (newPassword) => {
+    set({ error: null, loading: true });
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) set({ error: error.message, loading: false });
+    else set({ loading: false });
   },
 
   clearError: () => set({ error: null }),

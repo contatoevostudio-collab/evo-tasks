@@ -40,9 +40,10 @@ export default function App() {
   const [page, setPage] = useState<PageType>('home');
   const [modalTask,    setModalTask]    = useState<Task | null | undefined>(undefined);
   const [modalDate,    setModalDate]    = useState<string | undefined>(undefined);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showSearch,   setShowSearch]   = useState(false);
-  const [pinLocked,    setPinLocked]    = useState(() => !!localStorage.getItem('evo-tasks-pin'));
+  const [showSettings,   setShowSettings]   = useState(false);
+  const [showSearch,     setShowSearch]     = useState(false);
+  const [showAuthModal,  setShowAuthModal]  = useState(false);
+  const [pinLocked,      setPinLocked]      = useState(() => !!localStorage.getItem('evo-tasks-pin'));
 
   const openNewTask = (date?: string) => { setModalDate(date); setModalTask(null); };
   const openTask    = (task: Task)    => { setModalTask(task); setModalDate(undefined); };
@@ -86,6 +87,7 @@ export default function App() {
         onChangePage={setPage}
         onAddTask={() => openNewTask()}
         onOpenSettings={() => setShowSettings(true)}
+        onLogin={() => setShowAuthModal(true)}
       />
 
       {/* Main content */}
@@ -169,9 +171,9 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Auth gate — shows when no Supabase env vars are set, skip if no URL configured */}
-      {!authLoading && !user && import.meta.env.VITE_SUPABASE_URL && (
-        <AuthModal />
+      {/* Auth gate */}
+      {!authLoading && import.meta.env.VITE_SUPABASE_URL && (!user || showAuthModal) && (
+        <AuthModal onClose={user ? () => setShowAuthModal(false) : undefined} />
       )}
 
       {/* PIN lock */}

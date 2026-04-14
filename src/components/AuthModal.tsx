@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiMail, FiLock, FiLoader } from 'react-icons/fi';
+import { FiMail, FiLock, FiLoader, FiX } from 'react-icons/fi';
 import { useAuthStore } from '../store/auth';
 
-export function AuthModal() {
+export function AuthModal({ onClose }: { onClose?: () => void }) {
   const { signIn, signUp, loading, error, clearError } = useAuthStore();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -31,11 +31,29 @@ export function AuthModal() {
         initial={{ opacity: 0, y: 20, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         style={{
+          position: 'relative',
           background: 'var(--modal-bg)', border: '1px solid var(--b2)',
           borderRadius: 20, padding: '36px 32px', width: 360,
           boxShadow: '0 30px 80px rgba(0,0,0,0.4)',
         }}
       >
+        {/* Fechar (só quando aberto manualmente) */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--t4)', padding: 4, borderRadius: 6,
+              display: 'flex', transition: 'color .15s',
+            }}
+            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t1)')}
+            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
+          >
+            <FiX size={16} />
+          </button>
+        )}
+
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{
