@@ -5,65 +5,75 @@ import fs from 'fs';
 import { execFile } from 'child_process';
 
 // ─── Dynamic dock icon (Calendar-style) ──────────────────────────────────────
+// Usa <canvas> com desenho explícito do squircle para garantir alpha correto.
+// app.dock.setIcon() NÃO aplica squircle automaticamente — precisamos fazer isso.
 async function buildDockIcon(): Promise<Electron.NativeImage | null> {
-  const now  = new Date();
-  const day  = now.getDate();
-  const wds  = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  const wd   = wds[now.getDay()];
+  const { nativeImage } = await import('electron');
+  const now = new Date();
+  const day = now.getDate();
+  const wds = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const wd  = wds[now.getDay()];
 
-  // Render at 2× for retina — squircle shape com cantos arredondados igual padrão macOS
-  const SIZE = 512;
-  const R    = Math.round(SIZE * 0.225); // iOS/macOS squircle radius
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    html,body{width:${SIZE}px;height:${SIZE}px;overflow:hidden;background:transparent}
-    .icon{
-      width:${SIZE}px;height:${SIZE}px;
-      background:#ffffff;
-      border-radius:${R}px;
-      overflow:hidden;
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;
-      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
-    }
-    .wd{
-      color:#0a84ff;
-      font-size:${Math.round(SIZE*0.115)}px;
-      font-weight:700;
-      letter-spacing:${Math.round(SIZE*0.008)}px;
-      text-transform:uppercase;
-      margin-bottom:${Math.round(SIZE*0.008)}px;
-    }
-    .day{
-      color:#1a1a1a;
-      font-size:${Math.round(SIZE*0.44)}px;
-      font-weight:900;
-      line-height:1;
-      letter-spacing:-${Math.round(SIZE*0.008)}px;
-    }
-  </style></head><body>
-    <div class="icon">
-      <div class="wd">${wd}</div>
-      <div class="day">${day}</div>
-    </div>
+  const S  = 512;   // tamanho do canvas (2× para retina)
+  const R  = Math.round(S * 0.225); // squircle radius padrão iOS/macOS
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+  <body style="margin:0;padding:0;background:transparent;overflow:hidden">
+  <canvas id="c" width="${S}" height="${S}" style="display:block"></canvas>
+  <script>
+    const c = document.getElementById('c');
+    const ctx = c.getContext('2d');
+    const S = ${S}, R = ${R};
+
+    // Squircle path
+    ctx.beginPath();
+    ctx.moveTo(R, 0);
+    ctx.lineTo(S - R, 0);
+    ctx.arcTo(S, 0, S, R, R);
+    ctx.lineTo(S, S - R);
+    ctx.arcTo(S, S, S - R, S, R);
+    ctx.lineTo(R, S);
+    ctx.arcTo(0, S, 0, S - R, R);
+    ctx.lineTo(0, R);
+    ctx.arcTo(0, 0, R, 0, R);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // Weekday (azul, bold, uppercase)
+    ctx.fillStyle = '#0a84ff';
+    ctx.font = '700 ${Math.round(S * 0.115)}px -apple-system, "SF Pro Display", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('${wd}', S / 2, Math.round(S * 0.415));
+
+    // Day number (preto, black weight)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = '900 ${Math.round(S * 0.42)}px -apple-system, "SF Pro Display", sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText('${day}', S / 2, Math.round(S * 0.435));
+
+    window.__png = c.toDataURL('image/png');
+  <\/script>
   </body></html>`;
 
   const win = new BrowserWindow({
-    width: SIZE, height: SIZE,
+    width: S, height: S,
     show: false, frame: false,
     transparent: true,
     webPreferences: { offscreen: false },
   });
 
   await new Promise<void>(resolve => {
-    win.webContents.once('did-finish-load', () => setTimeout(resolve, 60));
+    win.webContents.once('did-finish-load', () => setTimeout(resolve, 80));
     win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   });
 
-  const img = await win.webContents.capturePage({ x: 0, y: 0, width: SIZE, height: SIZE });
+  const dataURL: string = await win.webContents.executeJavaScript('window.__png');
   win.destroy();
-  if (img.isEmpty()) return null;
-  return img;
+
+  if (!dataURL || !dataURL.startsWith('data:image/png')) return null;
+  return nativeImage.createFromDataURL(dataURL);
 }
 
 function scheduleMidnightIconUpdate() {
@@ -120,8 +130,6 @@ let mainWindow: BrowserWindow | null = null;
 let pendingUpdateEvent: { type: 'available' | 'downloaded' | 'error'; payload?: string } | null = null;
 // Caminho do arquivo de update baixado (para remover quarentena antes de instalar)
 let downloadedUpdatePath: string | null = null;
-// Timer de fallback do update — cancelado se o app realmente fechar
-let updateFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -184,14 +192,6 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Se o app vai fechar (quitAndInstall funcionou), cancela o timer de fallback
-app.on('before-quit', () => {
-  if (updateFallbackTimer) {
-    clearTimeout(updateFallbackTimer);
-    updateFallbackTimer = null;
-  }
-});
-
 autoUpdater.on('update-available', (info) => {
   if (mainWindow?.webContents.isLoading()) {
     pendingUpdateEvent = { type: 'available' };
@@ -228,27 +228,13 @@ ipcMain.handle('install-update', async () => {
     });
   }
 
-  let threw = false;
   try {
     autoUpdater.quitAndInstall(false, true);
   } catch {
-    threw = true;
-  }
-
-  if (threw) {
-    // Falha síncrona — abre GitHub como fallback
+    // Só abre GitHub se quitAndInstall lançar exceção real
     shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
-    return;
   }
-
-  // No macOS sem notarização, quitAndInstall pode falhar silenciosamente.
-  // Se o app ainda estiver rodando após 3s, é porque falhou — abre GitHub.
-  // O timer é cancelado em before-quit se o app realmente fechar.
-  if (process.platform === 'darwin') {
-    updateFallbackTimer = setTimeout(() => {
-      shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
-    }, 3000);
-  }
+  // Sem timer de fallback — se fechar é porque funcionou, se não fechar o usuário tenta de novo
 });
 
 ipcMain.handle('check-for-updates', () => {
