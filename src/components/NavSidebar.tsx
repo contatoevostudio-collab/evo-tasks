@@ -481,12 +481,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
             <button
               onClick={() => {
                 if (updateStatus === 'downloaded') {
-                  // Tenta instalar; se falhar, abre releases no navegador
                   window.electronAPI?.installUpdate();
-                  setTimeout(() => {
-                    // Se ainda está rodando após 3s, o install falhou — abre navegador
-                    window.electronAPI?.openReleasesPage?.();
-                  }, 3000);
                 } else if (updateStatus === 'error') {
                   window.electronAPI?.openReleasesPage?.();
                 } else {
