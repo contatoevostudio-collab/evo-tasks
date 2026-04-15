@@ -1,4 +1,5 @@
 interface ElectronAPI {
+  appVersion?: string;
   checkForUpdates: () => Promise<void>;
   installUpdate: () => Promise<void>;
   onUpdateAvailable: (cb: (info: unknown) => void) => void;
