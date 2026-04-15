@@ -12,22 +12,45 @@ async function buildDockIcon(): Promise<Electron.NativeImage | null> {
 
   // Render at 2× for retina sharpness
   const SIZE = 512;
+  const R    = Math.round(SIZE * 0.22); // border-radius
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     *{margin:0;padding:0;box-sizing:border-box}
-    html,body{width:${SIZE}px;height:${SIZE}px;overflow:hidden}
-    body{display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;background:#fff}
-    .top{background:#0a84ff;height:${Math.round(SIZE*0.30)}px;display:flex;align-items:center;justify-content:center}
-    .top span{color:#fff;font-size:${Math.round(SIZE*0.13)}px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
-    .bot{flex:1;display:flex;align-items:center;justify-content:center;padding-bottom:${Math.round(SIZE*0.02)}px}
-    .bot span{color:#1a1a1a;font-size:${Math.round(SIZE*0.56)}px;font-weight:100;line-height:1}
+    html,body{width:${SIZE}px;height:${SIZE}px;overflow:hidden;background:transparent}
+    .icon{
+      width:${SIZE}px;height:${SIZE}px;
+      background:#ffffff;
+      border-radius:${R}px;
+      overflow:hidden;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
+      gap:${Math.round(SIZE*0.01)}px;
+    }
+    .wd{
+      color:#0a84ff;
+      font-size:${Math.round(SIZE*0.115)}px;
+      font-weight:700;
+      letter-spacing:${Math.round(SIZE*0.008)}px;
+      text-transform:uppercase;
+    }
+    .day{
+      color:#1a1a1a;
+      font-size:${Math.round(SIZE*0.50)}px;
+      font-weight:800;
+      line-height:1;
+      letter-spacing:-${Math.round(SIZE*0.008)}px;
+    }
   </style></head><body>
-    <div class="top"><span>${wd}</span></div>
-    <div class="bot"><span>${day}</span></div>
+    <div class="icon">
+      <div class="wd">${wd}</div>
+      <div class="day">${day}</div>
+    </div>
   </body></html>`;
 
   const win = new BrowserWindow({
     width: SIZE, height: SIZE,
     show: false, frame: false,
+    transparent: true,
     webPreferences: { offscreen: false },
   });
 
