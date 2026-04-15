@@ -5,6 +5,7 @@ import { BottomBar } from './components/BottomBar';
 import { HomePage } from './components/HomePage';
 import { EmpresasPage } from './components/EmpresasPage';
 import { ArchivePage } from './components/ArchivePage';
+import { CRMPage } from './components/CRMPage';
 import { MonthView } from './components/views/MonthView';
 import { WeekView } from './components/views/WeekView';
 import { DayView } from './components/views/DayView';
@@ -108,6 +109,8 @@ export default function App() {
             {page === 'empresas' && <EmpresasPage />}
 
             {page === 'arquivo' && <ArchivePage />}
+
+            {page === 'crm' && <CRMPage />}
 
             {page === 'tarefas' && (
               <>

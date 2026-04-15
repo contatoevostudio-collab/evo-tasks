@@ -3,7 +3,7 @@ import {
   FiHome, FiCheckSquare, FiBriefcase, FiSettings,
   FiPlus, FiChevronDown, FiChevronRight, FiChevronLeft,
   FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
-  FiUser, FiLogOut, FiLogIn, FiKey, FiX, FiCheck,
+  FiUser, FiLogOut, FiLogIn, FiKey, FiX, FiCheck, FiTrendingUp,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useAuthStore } from '../store/auth';
@@ -19,10 +19,11 @@ interface Props {
 }
 
 const NAV = [
-  { id: 'home'     as PageType, label: 'Home',     Icon: FiHome },
-  { id: 'tarefas'  as PageType, label: 'Tarefas',  Icon: FiCheckSquare },
-  { id: 'empresas' as PageType, label: 'Empresas', Icon: FiBriefcase },
-  { id: 'arquivo'  as PageType, label: 'Arquivo',  Icon: FiArchive },
+  { id: 'home'     as PageType, label: 'Home',     Icon: FiHome,        beta: false },
+  { id: 'tarefas'  as PageType, label: 'Tarefas',  Icon: FiCheckSquare, beta: false },
+  { id: 'empresas' as PageType, label: 'Empresas', Icon: FiBriefcase,   beta: false },
+  { id: 'arquivo'  as PageType, label: 'Arquivo',  Icon: FiArchive,     beta: false },
+  { id: 'crm'      as PageType, label: 'CRM',      Icon: FiTrendingUp,  beta: true  },
 ];
 
 const THEMES: Theme[] = ['dark-blue', 'dark-pure', 'dark-warm', 'light-soft', 'light-pure'];
@@ -136,22 +137,26 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
           <img src={EvoIcon} alt="Evo" style={{ width: 18, height: 18, objectFit: 'contain', filter: 'invert(1)' }} />
         </div>
 
-        {NAV.map(({ id, Icon }) => (
-          <button
-            key={id}
-            onClick={() => onChangePage(id)}
-            title={id.charAt(0).toUpperCase() + id.slice(1)}
-            style={{
-              width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 10, background: currentPage === id ? 'rgba(53,107,255,0.2)' : 'transparent',
-              border: 'none', cursor: 'pointer', transition: 'background .15s',
-              color: currentPage === id ? '#64C4FF' : 'var(--t3)',
-            }}
-            onMouseEnter={e => { if (currentPage !== id) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-            onMouseLeave={e => { if (currentPage !== id) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            <Icon size={16} />
-          </button>
+        {NAV.map(({ id, label, Icon, beta }) => (
+          <div key={id} style={{ position: 'relative' }}>
+            <button
+              onClick={() => onChangePage(id)}
+              title={`${label}${beta ? ' (beta)' : ''}`}
+              style={{
+                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 10, background: currentPage === id ? 'rgba(53,107,255,0.2)' : 'transparent',
+                border: 'none', cursor: 'pointer', transition: 'background .15s',
+                color: currentPage === id ? '#64C4FF' : 'var(--t3)',
+              }}
+              onMouseEnter={e => { if (currentPage !== id) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+              onMouseLeave={e => { if (currentPage !== id) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+              <Icon size={16} />
+            </button>
+            {beta && (
+              <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', background: '#ff9f0a', pointerEvents: 'none' }} />
+            )}
+          </div>
         ))}
 
         <div style={{ flex: 1 }} />
@@ -315,7 +320,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
 
       {/* Navigation */}
       <nav style={{ padding: '8px 8px 0', flexShrink: 0 }}>
-        {NAV.map(({ id, label, Icon }) => {
+        {NAV.map(({ id, label, Icon, beta }) => {
           const active = currentPage === id;
           return (
             <button
@@ -333,9 +338,14 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
               <Icon size={15} style={{ color: active ? '#64C4FF' : 'var(--t3)', flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#356BFF' : 'var(--t2)' }}>
+              <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#356BFF' : 'var(--t2)', flex: 1 }}>
                 {label}
               </span>
+              {beta && (
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#ff9f0a', background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 4, padding: '1px 5px' }}>
+                  beta
+                </span>
+              )}
             </button>
           );
         })}

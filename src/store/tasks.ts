@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Company, SubClient, TaskStatus, TaskType, ViewMode, Priority, Theme } from '../types';
+import type { Task, Company, SubClient, Lead, LeadStage, TaskStatus, TaskType, ViewMode, Priority, Theme } from '../types';
 import { format } from 'date-fns';
 import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient } from '../lib/supabaseSync';
 
@@ -33,6 +33,7 @@ interface TaskStore {
   companies: Company[];
   subClients: SubClient[];
   tasks: Task[];
+  leads: Lead[];
   viewMode: ViewMode;
   currentDate: Date;
   selectedCompanies: string[];
@@ -72,6 +73,13 @@ interface TaskStore {
   updateSubClientNotes(id: string, notes: string): void;
   updateSubClientTips(id: string, tips: string[]): void;
 
+  // Lead CRM CRUD
+  addLead(l: Omit<Lead, 'id' | 'createdAt'>): string;
+  updateLead(id: string, updates: Partial<Lead>): void;
+  deleteLead(id: string): void;
+  moveLead(id: string, stage: LeadStage): void;
+  convertLead(id: string, companyName: string, color: string): void;
+
   setKanbanOrder(status: TaskStatus, ids: string[]): void;
   setPin(p: string | null): void;
 
@@ -109,6 +117,7 @@ export const useTaskStore = create<TaskStore>()(
       companies: DEFAULT_COMPANIES,
       subClients: DEFAULT_SUB_CLIENTS,
       tasks: SAMPLE_TASKS,
+      leads: [],
       viewMode: 'month',
       currentDate: new Date(),
       selectedCompanies: DEFAULT_COMPANIES.map((c) => c.id),
@@ -272,6 +281,35 @@ export const useTaskStore = create<TaskStore>()(
         if (userId) { const s = subClients.find(x => x.id === id); if (s) syncSubClient(s, userId).catch(console.error); }
       },
 
+      addLead: (lead) => {
+        const id = crypto.randomUUID();
+        const full: Lead = { ...lead, id, createdAt: new Date().toISOString() };
+        set((state) => ({ leads: [...state.leads, full] }));
+        return id;
+      },
+
+      updateLead: (id, updates) =>
+        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, ...updates } : l)) })),
+
+      deleteLead: (id) =>
+        set((state) => ({ leads: state.leads.filter((l) => l.id !== id) })),
+
+      moveLead: (id, stage) =>
+        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, stage } : l)) })),
+
+      convertLead: (id, companyName, color) => {
+        const companyId = crypto.randomUUID();
+        const name = companyName.trim().toUpperCase();
+        const company: Company = { id: companyId, name, color };
+        set((state) => ({
+          companies: [...state.companies, company],
+          selectedCompanies: [...state.selectedCompanies, companyId],
+          leads: state.leads.map((l) => l.id === id ? { ...l, convertedToCompanyId: companyId, stage: 'fechado' as LeadStage } : l),
+        }));
+        const userId = get().userId;
+        if (userId) syncCompany(company, userId).catch(console.error);
+      },
+
       setKanbanOrder: (status, ids) =>
         set(s => ({ kanbanOrder: { ...s.kanbanOrder, [status]: ids } })),
 
@@ -343,6 +381,7 @@ export const useTaskStore = create<TaskStore>()(
         companies: state.companies,
         subClients: state.subClients,
         tasks: state.tasks,
+        leads: state.leads,
         selectedCompanies: state.selectedCompanies,
         sidebarCollapsed: state.sidebarCollapsed,
         theme: state.theme,

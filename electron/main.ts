@@ -1,8 +1,94 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
+import fs from 'fs';
+
+// ─── Dynamic dock icon (Calendar-style) ──────────────────────────────────────
+async function buildDockIcon(): Promise<Electron.NativeImage | null> {
+  const now  = new Date();
+  const day  = now.getDate();
+  const wds  = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const wd   = wds[now.getDay()];
+
+  // Render at 2× for retina sharpness
+  const SIZE = 512;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{width:${SIZE}px;height:${SIZE}px;overflow:hidden}
+    body{display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;background:#fff}
+    .top{background:#0a84ff;height:${Math.round(SIZE*0.30)}px;display:flex;align-items:center;justify-content:center}
+    .top span{color:#fff;font-size:${Math.round(SIZE*0.13)}px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+    .bot{flex:1;display:flex;align-items:center;justify-content:center;padding-bottom:${Math.round(SIZE*0.02)}px}
+    .bot span{color:#1a1a1a;font-size:${Math.round(SIZE*0.56)}px;font-weight:100;line-height:1}
+  </style></head><body>
+    <div class="top"><span>${wd}</span></div>
+    <div class="bot"><span>${day}</span></div>
+  </body></html>`;
+
+  const win = new BrowserWindow({
+    width: SIZE, height: SIZE,
+    show: false, frame: false,
+    webPreferences: { offscreen: false },
+  });
+
+  await new Promise<void>(resolve => {
+    win.webContents.once('did-finish-load', () => setTimeout(resolve, 60));
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  });
+
+  const img = await win.webContents.capturePage({ x: 0, y: 0, width: SIZE, height: SIZE });
+  win.destroy();
+  if (img.isEmpty()) return null;
+  return img;
+}
+
+function scheduleMidnightIconUpdate() {
+  const now = new Date();
+  const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5).getTime() - now.getTime();
+  setTimeout(async () => {
+    if (process.platform === 'darwin') {
+      try { const ic = await buildDockIcon(); if (ic) app.dock?.setIcon(ic); } catch { /* ignore */ }
+    }
+    scheduleMidnightIconUpdate();
+  }, msUntilMidnight);
+}
 
 const isDev = !app.isPackaged;
+
+// ─── Cert trust prompt (primeira abertura) ────────────────────────────────────
+function promptCertTrustIfNeeded() {
+  if (process.platform !== 'darwin') return;
+
+  const flagPath = path.join(app.getPath('userData'), '.cert-trust-done');
+  if (fs.existsSync(flagPath)) return; // já mostrou antes
+
+  // Cert bundled em resources/cert.cer via extraResources no electron-builder
+  const certPath = path.join(process.resourcesPath, 'cert.cer');
+  if (!fs.existsSync(certPath)) return; // cert não empacotado, skip
+
+  dialog.showMessageBox(mainWindow!, {
+    type: 'info',
+    title: 'Evo Tasks — Configuração inicial',
+    message: 'Instalar certificado de atualização',
+    detail: [
+      'Para que as atualizações automáticas funcionem sem precisar baixar um novo instalador, instale o certificado de confiança.',
+      '',
+      'Clique em "Instalar Certificado" → o Keychain vai abrir → dê duplo clique no certificado → em "Trust" selecione "Always Trust" → feche.',
+      '',
+      'Isso só aparece uma vez.',
+    ].join('\n'),
+    buttons: ['Instalar Certificado', 'Agora não'],
+    defaultId: 0,
+    cancelId: 1,
+    icon: path.join(process.resourcesPath, '../icon.icns'),
+  }).then(({ response }) => {
+    if (response === 0) {
+      shell.openPath(certPath);
+    }
+    // Marca como feito independente da escolha — não incomoda de novo
+    fs.writeFileSync(flagPath, '1');
+  });
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -42,14 +128,24 @@ function createWindow() {
 
     if (!isDev) {
       autoUpdater.checkForUpdatesAndNotify();
+      promptCertTrustIfNeeded();
     }
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
+
+  // Set dynamic Calendar-style dock icon on macOS
+  if (process.platform === 'darwin') {
+    try {
+      const icon = await buildDockIcon();
+      if (icon) app.dock?.setIcon(icon);
+    } catch { /* ignore */ }
+    scheduleMidnightIconUpdate();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

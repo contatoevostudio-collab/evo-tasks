@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiPlus, FiEdit2, FiTrash2, FiCheck, FiX,
   FiUsers, FiFileText, FiChevronUp, FiChevronDown,
-  FiTarget, FiAlertTriangle, FiStar,
+  FiTarget, FiAlertTriangle, FiStar, FiLink,
+  FiPhone, FiMail, FiInstagram,
 } from 'react-icons/fi';
 import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -41,21 +42,25 @@ function ColorDot({ color, selected, onClick }: { color: string; selected: boole
   );
 }
 
-// ── Client Modal (Notes + Tips tabs) ──────────────────────────────────────────
+// ── Client Modal (Notes + Tips + Plataformas tabs) ────────────────────────────
 interface ClientModalProps {
   sub: SubClient;
   companyColor: string;
-  initialTab?: 'notas' | 'dicas';
+  initialTab?: 'notas' | 'dicas' | 'plataformas';
   onClose: () => void;
   onSaveNotes: (notes: string) => void;
   onSaveTips: (tips: string[]) => void;
+  onSavePlatforms: (platforms: SubClient['platforms']) => void;
 }
 
-function ClientModal({ sub, companyColor, initialTab = 'notas', onClose, onSaveNotes, onSaveTips }: ClientModalProps) {
-  const [tab, setTab]       = useState<'notas' | 'dicas'>(initialTab);
+function ClientModal({ sub, companyColor, initialTab = 'notas', onClose, onSaveNotes, onSaveTips, onSavePlatforms }: ClientModalProps) {
+  const [tab, setTab]       = useState<'notas' | 'dicas' | 'plataformas'>(initialTab);
   const [notes, setNotes]   = useState(sub.notes ?? '');
   const [tips, setTips]     = useState<string[]>(sub.tips ?? []);
   const [newTip, setNewTip] = useState('');
+  const [whatsapp,  setWhatsapp]  = useState(sub.platforms?.whatsapp ?? '');
+  const [instagram, setInstagram] = useState(sub.platforms?.instagram ?? '');
+  const [email,     setEmail]     = useState(sub.platforms?.email ?? '');
 
   const addTip = () => {
     const t = newTip.trim();
@@ -69,6 +74,11 @@ function ClientModal({ sub, companyColor, initialTab = 'notas', onClose, onSaveN
   const handleSave = () => {
     onSaveNotes(notes);
     onSaveTips(tips);
+    onSavePlatforms({
+      whatsapp:  whatsapp.trim()  || undefined,
+      instagram: instagram.trim() || undefined,
+      email:     email.trim()     || undefined,
+    });
     onClose();
   };
 
@@ -100,21 +110,25 @@ function ClientModal({ sub, companyColor, initialTab = 'notas', onClose, onSaveN
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: 'var(--s1)', borderRadius: 9, padding: 3 }}>
-              {(['notas', 'dicas'] as const).map(t => (
+              {(['notas', 'dicas', 'plataformas'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)} style={{
-                  flex: 1, padding: '6px 0', borderRadius: 7, fontSize: 12, fontWeight: 600,
+                  flex: 1, padding: '6px 0', borderRadius: 7, fontSize: 11, fontWeight: 600,
                   background: tab === t ? companyColor : 'transparent',
                   border: 'none', cursor: 'pointer',
                   color: tab === t ? '#fff' : 'var(--t3)',
                   transition: 'all .15s',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 }}>
-                  {t === 'notas' ? <><FiFileText size={11} /> Notas</> : <><FiStar size={11} /> Dicas</>}
-                  {t === 'dicas' && tips.length > 0 && (
-                    <span style={{ fontSize: 10, background: tab === 'dicas' ? 'rgba(255,255,255,0.25)' : `${companyColor}25`, color: tab === 'dicas' ? '#fff' : companyColor, borderRadius: 99, padding: '0 5px', fontWeight: 700 }}>
-                      {tips.length}
-                    </span>
-                  )}
+                  {t === 'notas' ? <><FiFileText size={10} /> Notas</>
+                    : t === 'dicas' ? (
+                      <><FiStar size={10} /> Dicas
+                        {tips.length > 0 && (
+                          <span style={{ fontSize: 9, background: tab === 'dicas' ? 'rgba(255,255,255,0.25)' : `${companyColor}25`, color: tab === 'dicas' ? '#fff' : companyColor, borderRadius: 99, padding: '0 4px', fontWeight: 700 }}>
+                            {tips.length}
+                          </span>
+                        )}
+                      </>
+                    ) : <><FiLink size={10} /> Redes</>}
                 </button>
               ))}
             </div>
@@ -187,6 +201,33 @@ function ClientModal({ sub, companyColor, initialTab = 'notas', onClose, onSaveN
               </div>
             )}
 
+            {/* Plataformas tab */}
+            {tab === 'plataformas' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <p style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 2 }}>
+                  Contatos e redes sociais do subclient.
+                </p>
+                {[
+                  { icon: FiPhone,    label: 'WhatsApp',  value: whatsapp,  setter: setWhatsapp,  placeholder: '(00) 00000-0000' },
+                  { icon: FiInstagram, label: 'Instagram', value: instagram, setter: setInstagram, placeholder: '@perfil' },
+                  { icon: FiMail,    label: 'E-mail',    value: email,     setter: setEmail,     placeholder: 'email@exemplo.com' },
+                ].map(({ icon: Icon, label, value, setter, placeholder }) => (
+                  <div key={label}>
+                    <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <Icon size={10} /> {label}
+                    </label>
+                    <input
+                      value={value} onChange={e => setter(e.target.value)}
+                      placeholder={placeholder}
+                      style={{ width: '100%', boxSizing: 'border-box', background: 'var(--ib)', border: '1px solid var(--b2)', borderRadius: 8, padding: '8px 12px', color: 'var(--t1)', fontSize: 13, outline: 'none' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = `${companyColor}60`; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = 'var(--b2)'; }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
               <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', cursor: 'pointer' }}>Cancelar</button>
               <button onClick={handleSave} style={{ padding: '7px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: companyColor, border: 'none', color: '#fff', cursor: 'pointer' }}>Salvar</button>
@@ -225,6 +266,8 @@ export function EmpresasPage() {
   const [showTaskList, setShowTaskList] = useState(false);
   const [editingQuota, setEditingQuota] = useState(false);
   const [quotaVal, setQuotaVal]         = useState('');
+  const [editingSubQuotaId, setEditingSubQuotaId] = useState<string | null>(null);
+  const [editingSubQuotaVal, setEditingSubQuotaVal] = useState('');
   const [confirmDeleteCompanyId, setConfirmDeleteCompanyId] = useState<string | null>(null);
 
   // Undo refs for subclient deletion
@@ -256,6 +299,8 @@ export function EmpresasPage() {
   // Monthly quota
   const currentMonthStr  = format(new Date(), 'yyyy-MM');
   const currentMonthDone = companyTasks.filter(t => t.status === 'done' && t.date.startsWith(currentMonthStr)).length;
+  const subMonthDone = (subId: string) =>
+    tasks.filter(t => t.subClientId === subId && t.status === 'done' && t.date.startsWith(currentMonthStr) && !t.archived).length;
 
   // Monthly history
   const monthlyHistory: { month: string; done: number }[] = (() => {
@@ -286,6 +331,12 @@ export function EmpresasPage() {
     const n = parseInt(quotaVal, 10);
     updateCompany(selected.id, { monthlyQuota: isNaN(n) || n <= 0 ? undefined : n });
     setEditingQuota(false);
+  };
+
+  const handleSaveSubQuota = (subId: string) => {
+    const n = parseInt(editingSubQuotaVal, 10);
+    updateSubClient(subId, { monthlyQuota: isNaN(n) || n <= 0 ? undefined : n });
+    setEditingSubQuotaId(null);
   };
 
   const handleAddSub = () => {
@@ -346,6 +397,7 @@ export function EmpresasPage() {
           onClose={() => setSelectedSubForClient(null)}
           onSaveNotes={notes => updateSubClientNotes(clientSub.id, notes)}
           onSaveTips={tips => updateSubClientTips(clientSub.id, tips)}
+          onSavePlatforms={platforms => updateSubClient(clientSub.id, { platforms })}
         />
       )}
 
@@ -656,58 +708,110 @@ export function EmpresasPage() {
                         style={{ borderRadius: 10, marginBottom: 4, overflow: 'hidden' }}
                       >
                         {/* Main row */}
-                        <div
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}
-                          onClick={() => openClientModal(sub.id, 'notas')}
-                          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s1)')}
-                          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
-                        >
-                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: selected.color, flexShrink: 0 }} />
-                          {editingSubId === sub.id ? (
-                            <input autoFocus value={editingSubName} onChange={e => setEditingSubName(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') saveEditSub(); if (e.key === 'Escape') setEditingSubId(null); }}
-                              onBlur={saveEditSub} onClick={e => e.stopPropagation()}
-                              style={{ flex: 1, background: 'var(--ib)', border: '1px solid var(--b3)', borderRadius: 6, padding: '4px 8px', color: 'var(--t1)', fontSize: 13, outline: 'none' }}
-                            />
-                          ) : (
-                            <span style={{ flex: 1, fontSize: 13, color: 'var(--t2)' }}>{sub.name}</span>
-                          )}
-
-                          {/* Indicators */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                            {weekCount > 0 && (
-                              <span title="Tarefas esta semana" style={{ fontSize: 10, fontWeight: 700, color: selected.color, background: `${selected.color}18`, borderRadius: 99, padding: '1px 6px' }}>
-                                {weekCount}
-                              </span>
-                            )}
-                            {sub.notes && sub.notes.trim() && (
-                              <FiFileText size={11} style={{ color: '#64C4FF', opacity: 0.7 }} />
-                            )}
-                            {hasTips && (
-                              <button
-                                onClick={e => { e.stopPropagation(); openClientModal(sub.id, 'dicas'); }}
-                                title={`${sub.tips!.length} dica${sub.tips!.length !== 1 ? 's' : ''}`}
-                                style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.25)', borderRadius: 99, padding: '1px 6px', cursor: 'pointer', color: '#ff9f0a' }}
+                        {(() => {
+                          const sDone  = subMonthDone(sub.id);
+                          const sQuota = sub.monthlyQuota;
+                          const sPct   = sQuota ? Math.min((sDone / sQuota) * 100, 100) : null;
+                          const sColor = sQuota
+                            ? sDone >= sQuota ? '#30d158'
+                              : sDone >= sQuota * 0.8 ? '#ff9f0a'
+                              : selected.color
+                            : selected.color;
+                          return (
+                            <>
+                              <div
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}
+                                onClick={() => openClientModal(sub.id, 'notas')}
+                                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s1)')}
+                                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
                               >
-                                <FiStar size={9} />
-                                <span style={{ fontSize: 9, fontWeight: 700 }}>{sub.tips!.length}</span>
-                              </button>
-                            )}
-                          </div>
+                                <div style={{ width: 7, height: 7, borderRadius: '50%', background: selected.color, flexShrink: 0 }} />
+                                {editingSubId === sub.id ? (
+                                  <input autoFocus value={editingSubName} onChange={e => setEditingSubName(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') saveEditSub(); if (e.key === 'Escape') setEditingSubId(null); }}
+                                    onBlur={saveEditSub} onClick={e => e.stopPropagation()}
+                                    style={{ flex: 1, background: 'var(--ib)', border: '1px solid var(--b3)', borderRadius: 6, padding: '4px 8px', color: 'var(--t1)', fontSize: 13, outline: 'none' }}
+                                  />
+                                ) : (
+                                  <span style={{ flex: 1, fontSize: 13, color: 'var(--t2)' }}>{sub.name}</span>
+                                )}
 
-                          <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                            <button onClick={e => { e.stopPropagation(); startEditSub(sub); }}
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'color .15s' }}
-                              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#64C4FF')}
-                              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
-                            ><FiEdit2 size={11} /></button>
-                            <button onClick={e => { e.stopPropagation(); handleDeleteSubClient(sub); }}
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'color .15s' }}
-                              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#ff453a')}
-                              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
-                            ><FiTrash2 size={11} /></button>
-                          </div>
-                        </div>
+                                {/* Indicators */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                                  {/* Sub quota badge */}
+                                  {editingSubQuotaId === sub.id ? (
+                                    <input
+                                      autoFocus
+                                      type="number" min="1"
+                                      value={editingSubQuotaVal}
+                                      onChange={e => setEditingSubQuotaVal(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleSaveSubQuota(sub.id); if (e.key === 'Escape') setEditingSubQuotaId(null); }}
+                                      onBlur={() => handleSaveSubQuota(sub.id)}
+                                      onClick={e => e.stopPropagation()}
+                                      placeholder="cota"
+                                      style={{ width: 52, background: 'var(--ib)', border: `1px solid ${selected.color}`, borderRadius: 6, padding: '2px 6px', color: 'var(--t1)', fontSize: 11, outline: 'none', textAlign: 'center' }}
+                                    />
+                                  ) : (
+                                    <button
+                                      title={sQuota ? `Cota: ${sDone}/${sQuota} artes — clique para editar` : 'Definir cota do subclient'}
+                                      onClick={e => { e.stopPropagation(); setEditingSubQuotaVal(String(sQuota ?? '')); setEditingSubQuotaId(sub.id); }}
+                                      style={{ display: 'flex', alignItems: 'center', gap: 3, background: sQuota ? `${sColor}18` : 'var(--s1)', border: `1px solid ${sQuota ? `${sColor}40` : 'var(--b1)'}`, borderRadius: 99, padding: '1px 7px', cursor: 'pointer', color: sQuota ? sColor : 'var(--t4)', fontSize: 10, fontWeight: 700, transition: 'all .15s' }}
+                                    >
+                                      {sQuota ? `${sDone}/${sQuota}` : <><FiEdit2 size={8} /><span style={{ marginLeft: 2 }}>cota</span></>}
+                                    </button>
+                                  )}
+                                  {weekCount > 0 && (
+                                    <span title="Tarefas esta semana" style={{ fontSize: 10, fontWeight: 700, color: selected.color, background: `${selected.color}18`, borderRadius: 99, padding: '1px 6px' }}>
+                                      {weekCount}
+                                    </span>
+                                  )}
+                                  {sub.notes && sub.notes.trim() && (
+                                    <FiFileText size={11} style={{ color: '#64C4FF', opacity: 0.7 }} />
+                                  )}
+                                  {hasTips && (
+                                    <button
+                                      onClick={e => { e.stopPropagation(); openClientModal(sub.id, 'dicas'); }}
+                                      title={`${sub.tips!.length} dica${sub.tips!.length !== 1 ? 's' : ''}`}
+                                      style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.25)', borderRadius: 99, padding: '1px 6px', cursor: 'pointer', color: '#ff9f0a' }}
+                                    >
+                                      <FiStar size={9} />
+                                      <span style={{ fontSize: 9, fontWeight: 700 }}>{sub.tips!.length}</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                                  <button onClick={e => { e.stopPropagation(); startEditSub(sub); }}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'color .15s' }}
+                                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#64C4FF')}
+                                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
+                                  ><FiEdit2 size={11} /></button>
+                                  <button onClick={e => { e.stopPropagation(); handleDeleteSubClient(sub); }}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'color .15s' }}
+                                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#ff453a')}
+                                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
+                                  ><FiTrash2 size={11} /></button>
+                                </div>
+                              </div>
+
+                              {/* Sub quota progress bar */}
+                              {sPct !== null && (
+                                <div style={{ padding: '0 12px 8px 28px' }}>
+                                  <div style={{ height: 3, background: 'var(--b1)', borderRadius: 2, overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${sPct}%`, background: sColor, borderRadius: 2, transition: 'width .4s ease' }} />
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                                    <span style={{ fontSize: 9, color: 'var(--t4)' }}>{Math.round(sPct)}% da cota</span>
+                                    {sDone >= (sQuota ?? 0)
+                                      ? <span style={{ fontSize: 9, color: '#30d158', fontWeight: 600 }}>cota atingida!</span>
+                                      : <span style={{ fontSize: 9, color: 'var(--t4)' }}>faltam {(sQuota ?? 0) - sDone}</span>
+                                    }
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
 
                         {/* Tips preview chips */}
                         {hasTips && (

@@ -11,6 +11,10 @@ module.exports = {
     'node_modules/**/*',
     'package.json',
   ],
+  // Empacota o certificado público junto com o app
+  extraResources: [
+    { from: 'certs/cert.cer', to: 'cert.cer' },
+  ],
   mac: {
     target: [
       { target: 'dmg', arch: ['x64', 'arm64'] },
@@ -18,6 +22,9 @@ module.exports = {
     ],
     category: 'public.app-category.productivity',
     icon: 'public/icon.icns',
+    identity: 'Evo Tasks Dev',
+    gatekeeperAssess: false,
+    hardenedRuntime: false,
   },
   dmg: {
     title: 'Evo Tasks',

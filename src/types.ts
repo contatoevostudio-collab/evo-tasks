@@ -1,14 +1,36 @@
 export type TaskStatus = 'todo' | 'doing' | 'done';
 export type TaskType = 'feed' | 'story' | 'carrossel' | 'reels' | 'thumb' | 'outro';
 export type ViewMode = 'kanban' | 'month' | 'week' | 'day';
-export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo';
+export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm';
 export type Priority = 'alta' | 'media' | 'baixa';
 export type Theme = 'dark-blue' | 'dark-pure' | 'dark-warm' | 'light-soft' | 'light-pure';
+export type LeadStage = 'prospeccao' | 'contato' | 'proposta' | 'negociacao' | 'fechado';
 
 export interface SubTask {
   id: string;
   label: string;
   done: boolean;
+}
+
+export interface ArtVersion {
+  id: string;
+  label: string;   // ex: v1, v2, v3
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  contact?: string;   // nome do contato
+  phone?: string;
+  email?: string;
+  instagram?: string;
+  budget?: string;    // estimativa de orçamento
+  notes?: string;
+  stage: LeadStage;
+  createdAt: string;
+  convertedToCompanyId?: string;
 }
 
 export interface Company {
@@ -22,6 +44,12 @@ export interface SubClient {
   id: string;
   name: string;
   companyId: string;
+  monthlyQuota?: number; // artes contratadas por mês (subclient)
+  platforms?: {
+    whatsapp?: string;
+    instagram?: string;
+    email?: string;
+  };
   notes?: string;
   tips?: string[];   // dicas rápidas sobre o cliente
 }
@@ -39,6 +67,10 @@ export interface Task {
   status: TaskStatus;
   priority?: Priority;
   notes?: string;
+  copy?: string;           // legenda/copy do post
+  hookIdea?: string;       // ideia de hook (reels)
+  references?: string[];   // URLs de moodboard/referência
+  versions?: ArtVersion[]; // versionamento da arte
   allDay?: boolean;
   tags?: string[];         // #8
   subtasks?: SubTask[];    // #10

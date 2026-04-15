@@ -7,7 +7,7 @@ import {
 } from 'react-icons/fi';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { Task, TaskStatus, TaskType, Priority, SubTask } from '../types';
+import type { Task, TaskStatus, TaskType, Priority, SubTask, ArtVersion } from '../types';
 import { getTaskTitle } from '../types';
 import { useTaskStore } from '../store/tasks';
 
@@ -92,6 +92,13 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAdvanced, setShowAdvanced]  = useState(false);
   const [newSubtaskLabel, setNewSubtaskLabel] = useState('');
+  // Creative fields
+  const [copy,        setCopy]        = useState(task?.copy ?? '');
+  const [hookIdea,    setHookIdea]    = useState(task?.hookIdea ?? '');
+  const [references,  setReferences]  = useState<string[]>(task?.references ?? []);
+  const [refInput,    setRefInput]    = useState('');
+  const [versions,    setVersions]    = useState(task?.versions ?? []);
+  const [newVerNotes, setNewVerNotes] = useState('');
 
   const filteredSubClients = subClients
     .filter(s => s.companyId === companyId)
@@ -139,6 +146,10 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
     status,
     priority,
     notes: notes.trim() || undefined,
+    copy: copy.trim() || undefined,
+    hookIdea: hookIdea.trim() || undefined,
+    references: references.length > 0 ? references : undefined,
+    versions: versions.length > 0 ? versions : undefined,
     allDay: !time,
     tags: tags.length > 0 ? tags : undefined,
     estimate: estimate !== '' ? Number(estimate) : undefined,
@@ -554,6 +565,106 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
                 >
                   {showAdvanced ? '▲ Ocultar avançado' : '▼ Opções avançadas'}
                 </button>
+
+                {/* Creative fields (copy, hook, refs, versions) */}
+                {showAdvanced && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                    {/* Copy / Legenda */}
+                    <div>
+                      <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        ✏️ Legenda / Copy
+                      </span>
+                      <textarea value={copy} onChange={e => setCopy(e.target.value)}
+                        placeholder="Texto do post, legenda, caption..."
+                        rows={3}
+                        style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 12, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                      />
+                    </div>
+
+                    {/* Hook Idea — only for reels */}
+                    {taskType === 'reels' && (
+                      <div>
+                        <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          🎬 Ideia de Hook
+                        </span>
+                        <textarea value={hookIdea} onChange={e => setHookIdea(e.target.value)}
+                          placeholder="Primeiros segundos do vídeo, gancho de atenção..."
+                          rows={2}
+                          style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 12, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                        />
+                      </div>
+                    )}
+
+                    {/* References / Moodboard URLs */}
+                    <div>
+                      <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        🖼️ Referências / Moodboard
+                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+                        {references.map((url, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 7, padding: '5px 8px' }}>
+                            <span style={{ flex: 1, fontSize: 11, color: '#64C4FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+                            <button onClick={() => setReferences(prev => prev.filter((_, idx) => idx !== i))}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: 2, transition: 'color .15s', flexShrink: 0 }}
+                              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#ff453a')}
+                              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.3)')}
+                            ><FiX size={10} /></button>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <input
+                          value={refInput} onChange={e => setRefInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && refInput.trim()) { e.preventDefault(); setReferences(prev => [...prev, refInput.trim()]); setRefInput(''); } }}
+                          placeholder="Cole uma URL de referência..."
+                          style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 12, outline: 'none' }}
+                        />
+                        <button onClick={() => { if (refInput.trim()) { setReferences(prev => [...prev, refInput.trim()]); setRefInput(''); } }}
+                          style={{ padding: '6px 12px', borderRadius: 8, background: companyColor, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          <FiPlus size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Art versioning */}
+                    {task && (
+                      <div>
+                        <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          📦 Versões da Arte
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+                          {versions.map((v, i) => (
+                            <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.04)', borderRadius: 7, padding: '6px 10px' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: companyColor, flexShrink: 0 }}>{v.label}</span>
+                              <span style={{ flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.notes || '—'}</span>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>
+                                {format(parseISO(v.createdAt), 'd/M')}
+                              </span>
+                              <button onClick={() => setVersions(prev => prev.filter((_, idx) => idx !== i))}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.2)', padding: 2, transition: 'color .15s', flexShrink: 0 }}
+                                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#ff453a')}
+                                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)')}
+                              ><FiX size={10} /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <input value={newVerNotes} onChange={e => setNewVerNotes(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const label = `v${versions.length + 1}`; setVersions(prev => [...prev, { id: crypto.randomUUID(), label, notes: newVerNotes.trim() || undefined, createdAt: new Date().toISOString() } as ArtVersion]); setNewVerNotes(''); } }}
+                            placeholder={`Registrar ${`v${versions.length + 1}`} (notas opcionais)...`}
+                            style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 12, outline: 'none' }}
+                          />
+                          <button onClick={() => { const label = `v${versions.length + 1}`; setVersions(prev => [...prev, { id: crypto.randomUUID(), label, notes: newVerNotes.trim() || undefined, createdAt: new Date().toISOString() } as ArtVersion]); setNewVerNotes(''); }}
+                            style={{ padding: '6px 12px', borderRadius: 8, background: companyColor, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                            <FiPlus size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                  </motion.div>
+                )}
 
                 {/* #12 color override + subtasks */}
                 {showAdvanced && (

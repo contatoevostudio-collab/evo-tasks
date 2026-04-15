@@ -53,6 +53,7 @@ function subClientToDb(s: SubClient, userId: string) {
     id: s.id, user_id: userId, name: s.name,
     company_id: s.companyId, notes: s.notes ?? null,
     tips: s.tips ?? [],
+    monthly_quota: s.monthlyQuota ?? null,
   };
 }
 
@@ -60,6 +61,7 @@ function subClientFromDb(r: Record<string, unknown>): SubClient {
   return {
     id: r.id as string, name: r.name as string,
     companyId: r.company_id as string,
+    monthlyQuota: (r.monthly_quota as number) || undefined,
     notes: (r.notes as string) || undefined,
     tips: (r.tips as string[]) || [],
   };
