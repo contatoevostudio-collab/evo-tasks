@@ -11,41 +11,47 @@ async function buildDockIcon(): Promise<Electron.NativeImage | null> {
   const wds  = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const wd   = wds[now.getDay()];
 
-  // Render at 2× for retina sharpness
-  // macOS arredonda os cantos do ícone do dock automaticamente — não precisa de border-radius manual
+  // Render at 2× for retina — squircle shape com cantos arredondados igual padrão macOS
   const SIZE = 512;
+  const R    = Math.round(SIZE * 0.225); // iOS/macOS squircle radius
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     *{margin:0;padding:0;box-sizing:border-box}
-    html,body{
-      width:${SIZE}px;height:${SIZE}px;overflow:hidden;
+    html,body{width:${SIZE}px;height:${SIZE}px;overflow:hidden;background:transparent}
+    .icon{
+      width:${SIZE}px;height:${SIZE}px;
       background:#ffffff;
+      border-radius:${R}px;
+      overflow:hidden;
       display:flex;flex-direction:column;
       align-items:center;justify-content:center;
       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
     }
     .wd{
       color:#0a84ff;
-      font-size:${Math.round(SIZE*0.13)}px;
+      font-size:${Math.round(SIZE*0.115)}px;
       font-weight:700;
-      letter-spacing:${Math.round(SIZE*0.01)}px;
+      letter-spacing:${Math.round(SIZE*0.008)}px;
       text-transform:uppercase;
-      margin-bottom:${Math.round(SIZE*0.01)}px;
+      margin-bottom:${Math.round(SIZE*0.008)}px;
     }
     .day{
       color:#1a1a1a;
-      font-size:${Math.round(SIZE*0.52)}px;
+      font-size:${Math.round(SIZE*0.44)}px;
       font-weight:900;
       line-height:1;
-      letter-spacing:-${Math.round(SIZE*0.01)}px;
+      letter-spacing:-${Math.round(SIZE*0.008)}px;
     }
   </style></head><body>
-    <div class="wd">${wd}</div>
-    <div class="day">${day}</div>
+    <div class="icon">
+      <div class="wd">${wd}</div>
+      <div class="day">${day}</div>
+    </div>
   </body></html>`;
 
   const win = new BrowserWindow({
     width: SIZE, height: SIZE,
     show: false, frame: false,
+    transparent: true,
     webPreferences: { offscreen: false },
   });
 
