@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
+import { execFile } from 'child_process';
 
 // ─── Dynamic dock icon (Calendar-style) ──────────────────────────────────────
 async function buildDockIcon(): Promise<Electron.NativeImage | null> {
@@ -117,6 +118,8 @@ let mainWindow: BrowserWindow | null = null;
 
 // Guarda eventos que chegaram antes do renderer estar pronto
 let pendingUpdateEvent: { type: 'available' | 'downloaded' | 'error'; payload?: string } | null = null;
+// Caminho do arquivo de update baixado (para remover quarentena antes de instalar)
+let downloadedUpdatePath: string | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -188,6 +191,9 @@ autoUpdater.on('update-available', (info) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
+  // Guarda o path do arquivo baixado para remover quarentena antes de instalar
+  if (info.downloadedFile) downloadedUpdatePath = info.downloadedFile;
+
   if (mainWindow?.webContents.isLoading()) {
     pendingUpdateEvent = { type: 'downloaded' };
   } else {
@@ -204,13 +210,24 @@ autoUpdater.on('error', (err) => {
   }
 });
 
-ipcMain.handle('install-update', () => {
+ipcMain.handle('install-update', async () => {
+  // Remove atributo de quarentena do macOS antes de instalar
+  // (sem isso, o macOS bloqueia a instalação automática de apps baixados da internet)
+  if (process.platform === 'darwin' && downloadedUpdatePath && fs.existsSync(downloadedUpdatePath)) {
+    await new Promise<void>(resolve => {
+      execFile('xattr', ['-d', 'com.apple.quarantine', downloadedUpdatePath!], () => resolve());
+    });
+  }
+
   try {
     autoUpdater.quitAndInstall(false, true);
-  } catch (err) {
-    // Se quitAndInstall falhar (comum em apps sem assinatura no macOS),
-    // abre a página de releases no navegador como fallback
-    shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
+  } catch {
+    // Se quitAndInstall falhar, tenta abrir o arquivo baixado diretamente
+    if (downloadedUpdatePath && fs.existsSync(downloadedUpdatePath)) {
+      shell.openPath(downloadedUpdatePath);
+    } else {
+      shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
+    }
   }
 });
 
