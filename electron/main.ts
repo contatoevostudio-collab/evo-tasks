@@ -1,103 +1,9 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
 import { execFile } from 'child_process';
 
-// ─── Dynamic dock icon (Calendar-style) ──────────────────────────────────────
-// Usa <canvas> com desenho explícito do squircle para garantir alpha correto.
-// app.dock.setIcon() NÃO aplica squircle automaticamente — precisamos fazer isso.
-async function buildDockIcon(): Promise<Electron.NativeImage | null> {
-  const now = new Date();
-  const day = now.getDate();
-  const wds = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  const wd  = wds[now.getDay()];
-
-  // Canvas 512×512 (2× retina) — marcado como scaleFactor:2 para que o macOS
-  // exiba no tamanho lógico correto (256pt), igual aos ícones padrão do dock.
-  const S = 512;
-  const R = Math.round(S * 0.224); // squircle radius padrão Apple (~22.4%)
-
-  // Posições alinhadas ao layout do Calendar da Apple:
-  // weekday ocupa o terço superior, número ocupa os dois terços inferiores
-  const wdSize  = Math.round(S * 0.108); // ~55px
-  const wdY     = Math.round(S * 0.345); // baseline do weekday
-  const daySize = Math.round(S * 0.46);  // ~236px
-  const dayY    = Math.round(S * 0.635); // middle do número
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
-  <body style="margin:0;padding:0;background:transparent;overflow:hidden">
-  <canvas id="c" width="${S}" height="${S}" style="display:block"></canvas>
-  <script>
-    const c = document.getElementById('c');
-    const ctx = c.getContext('2d');
-    const S = ${S}, R = ${R};
-
-    // Squircle path
-    ctx.beginPath();
-    ctx.moveTo(R, 0);
-    ctx.lineTo(S - R, 0);
-    ctx.arcTo(S, 0, S, R, R);
-    ctx.lineTo(S, S - R);
-    ctx.arcTo(S, S, S - R, S, R);
-    ctx.lineTo(R, S);
-    ctx.arcTo(0, S, 0, S - R, R);
-    ctx.lineTo(0, R);
-    ctx.arcTo(0, 0, R, 0, R);
-    ctx.closePath();
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-
-    // Weekday
-    ctx.fillStyle = '#0a84ff';
-    ctx.font = '700 ${wdSize}px -apple-system, "SF Pro Display", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText('${wd}', S / 2, ${wdY});
-
-    // Day number
-    ctx.fillStyle = '#1a1a1a';
-    ctx.font = '900 ${daySize}px -apple-system, "SF Pro Display", sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('${day}', S / 2, ${dayY});
-
-    window.__png = c.toDataURL('image/png');
-  <\/script>
-  </body></html>`;
-
-  const win = new BrowserWindow({
-    width: S, height: S,
-    show: false, frame: false,
-    transparent: true,
-    webPreferences: { offscreen: false },
-  });
-
-  await new Promise<void>(resolve => {
-    win.webContents.once('did-finish-load', () => setTimeout(resolve, 80));
-    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  });
-
-  const dataURL: string = await win.webContents.executeJavaScript('window.__png');
-  win.destroy();
-
-  if (!dataURL || !dataURL.startsWith('data:image/png')) return null;
-
-  // Declara como 2× para que o macOS exiba no tamanho lógico correto (256pt)
-  const img = nativeImage.createEmpty();
-  img.addRepresentation({ scaleFactor: 2.0, dataURL });
-  return img;
-}
-
-function scheduleMidnightIconUpdate() {
-  const now = new Date();
-  const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5).getTime() - now.getTime();
-  setTimeout(async () => {
-    if (process.platform === 'darwin') {
-      try { const ic = await buildDockIcon(); if (ic) app.dock?.setIcon(ic); } catch { /* ignore */ }
-    }
-    scheduleMidnightIconUpdate();
-  }, msUntilMidnight);
-}
 
 const isDev = !app.isPackaged;
 
@@ -183,17 +89,8 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   createWindow();
-
-  // Set dynamic Calendar-style dock icon on macOS
-  if (process.platform === 'darwin') {
-    try {
-      const icon = await buildDockIcon();
-      if (icon) app.dock?.setIcon(icon);
-    } catch { /* ignore */ }
-    scheduleMidnightIconUpdate();
-  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
