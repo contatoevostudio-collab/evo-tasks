@@ -560,7 +560,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
         {!sidebarCollapsed && (
           <div style={{ padding: '6px 12px 2px', textAlign: 'center' }}>
             <span style={{ fontSize: 10, color: 'var(--t4)', letterSpacing: '0.5px' }}>
-              v{window.electronAPI?.appVersion}
+              v{__APP_VERSION__}
             </span>
           </div>
         )}
