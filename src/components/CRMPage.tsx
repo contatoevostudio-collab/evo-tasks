@@ -5,6 +5,19 @@ import {
   FiDollarSign, FiArrowRight, FiCheck, FiUser,
 } from 'react-icons/fi';
 import { parseISO, differenceInDays } from 'date-fns';
+import {
+  DndContext,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  type DraggableAttributes,
+} from '@dnd-kit/core';
+import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import type { Lead, LeadStage } from '../types';
 import { useTaskStore } from '../store/tasks';
 
@@ -19,13 +32,25 @@ const STAGES: { id: LeadStage; label: string; color: string; desc: string }[] = 
 
 const COMPANY_COLORS = ['#30d158','#ff9f0a','#ff453a','#bf5af2','#356BFF','#64C4FF','#ff6b6b','#ffd60a','#ff6b35','#00c7be'];
 
+// ─── Draggable Lead Card ──────────────────────────────────────────────────────
+function DraggableLeadCard(props: Parameters<typeof LeadCard>[0]) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: props.lead.id });
+  return (
+    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
+      <LeadCard {...props} dragHandleListeners={listeners} dragHandleAttributes={attributes} />
+    </div>
+  );
+}
+
 // ─── Lead Card ────────────────────────────────────────────────────────────────
 function LeadCard({
-  lead, stageColor, onEdit, onDelete, onMove, onConvert,
+  lead, stageColor, onEdit, onDelete, onMove, onConvert, dragHandleListeners, dragHandleAttributes,
 }: {
   lead: Lead; stageColor: string;
   onEdit: () => void; onDelete: () => void;
   onMove: (stage: LeadStage) => void; onConvert: () => void;
+  dragHandleListeners?: SyntheticListenerMap;
+  dragHandleAttributes?: DraggableAttributes;
 }) {
   const [showActions, setShowActions] = useState(false);
   const days = differenceInDays(new Date(), parseISO(lead.createdAt));
@@ -46,6 +71,15 @@ function LeadCard({
       onMouseLeave={() => setShowActions(false)}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        {/* Drag handle */}
+        <div
+          {...dragHandleListeners}
+          {...dragHandleAttributes}
+          onClick={e => e.stopPropagation()}
+          style={{ cursor: 'grab', color: 'var(--t4)', flexShrink: 0, marginTop: 2, padding: '0 2px', lineHeight: 1 }}
+        >
+          ⠿
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {lead.name}
@@ -305,12 +339,49 @@ function ConvertModal({ lead, onClose, onConvert }: { lead: Lead; onClose: () =>
   );
 }
 
+// ─── Droppable Column ─────────────────────────────────────────────────────────
+function DroppableColumn({ stageId, children }: { stageId: LeadStage; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: stageId });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        flex: 1, overflowY: 'auto', borderRadius: 12, padding: '10px 10px',
+        background: isOver ? 'color-mix(in srgb, var(--s1) 80%, #356BFF 20%)' : 'var(--s1)',
+        border: isOver ? '1px solid rgba(53,107,255,0.4)' : '1px solid var(--b1)',
+        transition: 'background .15s, border-color .15s',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Main CRMPage ──────────────────────────────────────────────────────────────
 export function CRMPage() {
   const { leads, addLead, updateLead, deleteLead, moveLead, convertLead } = useTaskStore();
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead,   setEditingLead]   = useState<Lead | null>(null);
   const [convertLead_,  setConvertLead_]  = useState<Lead | null>(null);
+  const [activeLead,    setActiveLead]    = useState<Lead | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const lead = leads.find(l => l.id === e.active.id);
+    setActiveLead(lead ?? null);
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveLead(null);
+    const { over, active } = e;
+    if (!over) return;
+    const targetStage = over.id as LeadStage;
+    const lead = leads.find(l => l.id === active.id);
+    if (lead && lead.stage !== targetStage) {
+      moveLead(lead.id, targetStage);
+    }
+  };
 
   const handleSaveLead = (data: Omit<Lead, 'id' | 'createdAt'>) => {
     if (editingLead) {
@@ -352,59 +423,80 @@ export function CRMPage() {
 
       {/* Kanban board */}
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '0 24px 24px' }}>
-        <div style={{ display: 'flex', gap: 14, height: '100%', minWidth: `${STAGES.length * 240}px` }}>
-          {STAGES.map(stage => {
-            const stageLeads = leads.filter(l => l.stage === stage.id);
-            return (
-              <div key={stage.id} style={{ flex: '0 0 230px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-                {/* Column header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '0 2px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: stage.color }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t1)' }}>{stage.label}</span>
-                    {stageLeads.length > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: stage.color, background: `${stage.color}18`, borderRadius: 99, padding: '1px 6px' }}>
-                        {stageLeads.length}
-                      </span>
-                    )}
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div style={{ display: 'flex', gap: 14, height: '100%', minWidth: `${STAGES.length * 240}px` }}>
+            {STAGES.map(stage => {
+              const stageLeads = leads.filter(l => l.stage === stage.id);
+              return (
+                <div key={stage.id} style={{ flex: '0 0 230px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  {/* Column header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '0 2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: stage.color }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t1)' }}>{stage.label}</span>
+                      {stageLeads.length > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: stage.color, background: `${stage.color}18`, borderRadius: 99, padding: '1px 6px' }}>
+                          {stageLeads.length}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { setEditingLead(null); setShowLeadModal(true); }}
+                      title="Adicionar lead nesta etapa"
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', padding: 3, borderRadius: 6, transition: 'color .15s' }}
+                      onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = stage.color)}
+                      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
+                    >
+                      <FiPlus size={13} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => { setEditingLead(null); setShowLeadModal(true); }}
-                    title="Adicionar lead nesta etapa"
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', padding: 3, borderRadius: 6, transition: 'color .15s' }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = stage.color)}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
-                  >
-                    <FiPlus size={13} />
-                  </button>
-                </div>
 
-                {/* Column body */}
-                <div style={{ flex: 1, overflowY: 'auto', background: 'var(--s1)', borderRadius: 12, padding: '10px 10px', border: '1px solid var(--b1)' }}>
-                  <AnimatePresence>
-                    {stageLeads.length === 0 && (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        style={{ textAlign: 'center', padding: '32px 0', color: 'var(--t4)', fontSize: 12 }}>
-                        {stage.desc}
-                      </motion.div>
-                    )}
-                    {stageLeads.map(lead => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        stageColor={stage.color}
-                        onEdit={() => { setEditingLead(lead); setShowLeadModal(true); }}
-                        onDelete={() => deleteLead(lead.id)}
-                        onMove={(s) => moveLead(lead.id, s)}
-                        onConvert={() => setConvertLead_(lead)}
-                      />
-                    ))}
-                  </AnimatePresence>
+                  {/* Column body (droppable) */}
+                  <DroppableColumn stageId={stage.id}>
+                    <AnimatePresence>
+                      {stageLeads.length === 0 && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                          style={{ textAlign: 'center', padding: '32px 0', color: 'var(--t4)', fontSize: 12 }}>
+                          {stage.desc}
+                        </motion.div>
+                      )}
+                      {stageLeads.map(lead => (
+                        <DraggableLeadCard
+                          key={lead.id}
+                          lead={lead}
+                          stageColor={stage.color}
+                          onEdit={() => { setEditingLead(lead); setShowLeadModal(true); }}
+                          onDelete={() => deleteLead(lead.id)}
+                          onMove={(s) => moveLead(lead.id, s)}
+                          onConvert={() => setConvertLead_(lead)}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </DroppableColumn>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {/* Drag overlay */}
+          <DragOverlay>
+            {activeLead && (() => {
+              const stage = STAGES.find(s => s.id === activeLead.stage)!;
+              return (
+                <div style={{
+                  background: 'var(--s1)', border: '1px solid var(--b1)',
+                  borderRadius: 12, padding: '12px 14px',
+                  borderLeft: `3px solid ${stage.color}`,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.4)',
+                  opacity: 0.95,
+                  fontSize: 13, fontWeight: 600, color: 'var(--t1)',
+                }}>
+                  {activeLead.name}
+                </div>
+              );
+            })()}
+          </DragOverlay>
+        </DndContext>
       </div>
 
       {/* Lead modal */}
