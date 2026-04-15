@@ -41,11 +41,11 @@ function taskFromDb(r: Record<string, unknown>): Task {
 }
 
 function companyToDb(c: Company, userId: string) {
-  return { id: c.id, user_id: userId, name: c.name, color: c.color };
+  return { id: c.id, user_id: userId, name: c.name, color: c.color, status: c.status ?? 'ativo' };
 }
 
 function companyFromDb(r: Record<string, unknown>): Company {
-  return { id: r.id as string, name: r.name as string, color: r.color as string };
+  return { id: r.id as string, name: r.name as string, color: r.color as string, status: ((r.status as string) || 'ativo') as Company['status'] };
 }
 
 function subClientToDb(s: SubClient, userId: string) {
@@ -70,6 +70,7 @@ function subClientFromDb(r: Record<string, unknown>): SubClient {
 // ─── Load all data from Supabase ─────────────────────────────────────────────
 
 export async function loadFromSupabase(userId: string): Promise<void> {
+  useTaskStore.getState().setSyncStatus('syncing');
   const [
     { data: companies, error: e1 },
     { data: subClients, error: e2 },
@@ -82,6 +83,7 @@ export async function loadFromSupabase(userId: string): Promise<void> {
 
   if (e1 || e2 || e3) {
     console.error('Supabase load error:', e1 ?? e2 ?? e3);
+    useTaskStore.getState().setSyncStatus('error');
     return;
   }
 
@@ -92,36 +94,49 @@ export async function loadFromSupabase(userId: string): Promise<void> {
       tasks: (tasks as Record<string, unknown>[]).map(taskFromDb),
     });
   }
+  useTaskStore.getState().setSyncStatus('idle');
 }
 
 // ─── Push helpers (called by task store) ────────────────────────────────────
 
 export async function syncTask(task: Task, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('tasks').upsert(taskToDb(task, userId));
-  if (error) console.error('syncTask error:', error);
+  if (error) { console.error('syncTask error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
 }
 
 export async function removeTask(id: string, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('tasks').delete().eq('id', id).eq('user_id', userId);
-  if (error) console.error('removeTask error:', error);
+  if (error) { console.error('removeTask error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
 }
 
 export async function syncCompany(company: Company, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('companies').upsert(companyToDb(company, userId));
-  if (error) console.error('syncCompany error:', error);
+  if (error) { console.error('syncCompany error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
 }
 
 export async function removeCompany(id: string, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('companies').delete().eq('id', id).eq('user_id', userId);
-  if (error) console.error('removeCompany error:', error);
+  if (error) { console.error('removeCompany error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
 }
 
 export async function syncSubClient(sub: SubClient, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('sub_clients').upsert(subClientToDb(sub, userId));
-  if (error) console.error('syncSubClient error:', error);
+  if (error) { console.error('syncSubClient error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
 }
 
 export async function removeSubClient(id: string, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('sub_clients').delete().eq('id', id).eq('user_id', userId);
-  if (error) console.error('removeSubClient error:', error);
+  if (error) { console.error('removeSubClient error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
 }

@@ -4,7 +4,7 @@ import { FiMail, FiLock, FiLoader, FiX } from 'react-icons/fi';
 import { useAuthStore } from '../store/auth';
 
 export function AuthModal({ onClose }: { onClose?: () => void }) {
-  const { signIn, signUp, loading, error, clearError } = useAuthStore();
+  const { signIn, signUp, loading, error, clearError, setGuestMode } = useAuthStore();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -156,6 +156,31 @@ export function AuthModal({ onClose }: { onClose?: () => void }) {
             >
               {mode === 'signin' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}
             </button>
+
+            {/* Divider */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--b2)' }} />
+              <span style={{ fontSize: 11, color: 'var(--t4)' }}>ou</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--b2)' }} />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setGuestMode(true)}
+              style={{
+                padding: '10px', borderRadius: 12,
+                background: 'var(--s2)', border: '1px solid var(--b2)',
+                color: 'var(--t2)', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                transition: 'border-color .15s, color .15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b3)'; (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
+            >
+              Continuar como Convidado
+            </button>
+            <p style={{ fontSize: 11, color: 'var(--t4)', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+              Dados salvos apenas localmente — sem sincronização entre dispositivos.
+            </p>
           </form>
         )}
       </motion.div>

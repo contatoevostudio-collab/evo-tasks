@@ -560,6 +560,36 @@ export function EmpresasPage() {
                           onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#64C4FF')}
                           onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}
                         ><FiEdit2 size={11} /></button>
+                        {/* Status badge — click to cycle */}
+                        {(() => {
+                          const st = selected.status ?? 'ativo';
+                          const statusColors: Record<string, { bg: string; text: string }> = {
+                            ativo:   { bg: 'rgba(48,209,88,0.15)',  text: '#30d158' },
+                            pausado: { bg: 'rgba(255,159,10,0.15)', text: '#ff9f0a' },
+                            inativo: { bg: 'rgba(99,99,102,0.2)',   text: '#636366' },
+                          };
+                          const nextStatus: Record<string, 'ativo' | 'pausado' | 'inativo'> = {
+                            ativo: 'pausado', pausado: 'inativo', inativo: 'ativo',
+                          };
+                          const { bg, text } = statusColors[st];
+                          return (
+                            <button
+                              onClick={() => updateCompany(selected.id, { status: nextStatus[st] })}
+                              title={`Status: ${st} — clique para alterar`}
+                              style={{
+                                padding: '2px 8px', borderRadius: 99,
+                                background: bg, border: 'none', cursor: 'pointer',
+                                fontSize: 10, fontWeight: 700, color: text,
+                                letterSpacing: '0.5px', textTransform: 'uppercase',
+                                transition: 'opacity .15s',
+                              }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                            >
+                              {st}
+                            </button>
+                          );
+                        })()}
                       </div>
                     )}
                     <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>

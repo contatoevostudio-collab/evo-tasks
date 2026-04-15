@@ -14,4 +14,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-error', (_event, msg) => cb(msg));
   },
   openReleasesPage: () => ipcRenderer.invoke('open-releases-page'),
+
+  // Pomodoro
+  pomodoroStart: (config: { work: number; shortBreak: number }) => ipcRenderer.invoke('pomodoro-start', config),
+  pomodoroPause: () => ipcRenderer.invoke('pomodoro-pause'),
+  pomodoroStop: () => ipcRenderer.invoke('pomodoro-stop'),
+  pomodoroGetState: () => ipcRenderer.invoke('pomodoro-get-state'),
+  onPomodoroTick: (cb: (state: unknown) => void) => {
+    ipcRenderer.on('pomodoro-tick', (_event, state) => cb(state));
+  },
 });

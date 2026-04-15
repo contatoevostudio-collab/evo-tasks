@@ -38,6 +38,7 @@ export interface Company {
   name: string;
   color: string;
   monthlyQuota?: number; // artes contratadas por mês
+  status?: 'ativo' | 'pausado' | 'inativo';
 }
 
 export interface SubClient {

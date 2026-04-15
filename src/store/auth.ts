@@ -6,18 +6,21 @@ interface AuthStore {
   user: User | null;
   loading: boolean;
   error: string | null;
+  guestMode: boolean;
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   updatePassword(newPassword: string): Promise<void>;
   initialize(): Promise<void>;
   clearError(): void;
+  setGuestMode(v: boolean): void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   loading: true,
   error: null,
+  guestMode: false,
 
   initialize: async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -55,4 +58,5 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   clearError: () => set({ error: null }),
+  setGuestMode: (v) => set({ guestMode: v }),
 }));

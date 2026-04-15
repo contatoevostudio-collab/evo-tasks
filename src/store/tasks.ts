@@ -93,6 +93,14 @@ interface TaskStore {
   showToast(text: string, undoFn?: () => void): void;
   hideToast(): void;
 
+  // Animations toggle (#43)
+  animationsEnabled: boolean;
+  setAnimationsEnabled(v: boolean): void;
+
+  // Sync indicator (#50)
+  syncStatus: 'idle' | 'syncing' | 'error';
+  setSyncStatus(s: 'idle' | 'syncing' | 'error'): void;
+
   // Navigation
   setViewMode(mode: ViewMode): void;
   setCurrentDate(date: Date): void;
@@ -131,6 +139,8 @@ export const useTaskStore = create<TaskStore>()(
       pin: null,
       toast: null,
       userId: null,
+      animationsEnabled: true,
+      syncStatus: 'idle' as const,
 
       addTask: (task) => {
         const id = crypto.randomUUID();
@@ -332,6 +342,9 @@ export const useTaskStore = create<TaskStore>()(
 
       showToast: (text, undoFn) => set({ toast: { text, undoFn } }),
       hideToast: () => set({ toast: null }),
+
+      setAnimationsEnabled: (v) => set({ animationsEnabled: v }),
+      setSyncStatus: (s) => set({ syncStatus: s }),
 
       setViewMode: (viewMode) => set({ viewMode }),
       setCurrentDate: (currentDate) => set({ currentDate }),

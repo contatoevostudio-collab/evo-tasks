@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, nativeImage } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
@@ -43,11 +43,61 @@ function promptCertTrustIfNeeded() {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 // Guarda eventos que chegaram antes do renderer estar pronto
 let pendingUpdateEvent: { type: 'available' | 'downloaded' | 'error'; payload?: string } | null = null;
 // Caminho do arquivo de update baixado (para remover quarentena antes de instalar)
 let downloadedUpdatePath: string | null = null;
+
+// ─── Pomodoro state ────────────────────────────────────────────────────────────
+interface PomodoroState {
+  workDuration: number;   // seconds
+  breakDuration: number;  // seconds
+  remaining: number;      // seconds
+  isRunning: boolean;
+  isBreak: boolean;
+}
+
+const pomodoroState: PomodoroState = {
+  workDuration: 25 * 60,
+  breakDuration: 5 * 60,
+  remaining: 25 * 60,
+  isRunning: false,
+  isBreak: false,
+};
+let pomodoroIntervalId: ReturnType<typeof setInterval> | null = null;
+
+function formatPomodoroTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function updateTrayTitle() {
+  if (!tray) return;
+  if (pomodoroState.isRunning || pomodoroState.remaining < pomodoroState.workDuration) {
+    const phase = pomodoroState.isBreak ? '◎' : '◉';
+    tray.setTitle(`${phase} ${formatPomodoroTime(pomodoroState.remaining)}`);
+  } else {
+    tray.setTitle('');
+  }
+}
+
+function pomodoroTick() {
+  if (!pomodoroState.isRunning) return;
+  if (pomodoroState.remaining <= 1) {
+    // switch phase
+    pomodoroState.isBreak = !pomodoroState.isBreak;
+    pomodoroState.remaining = pomodoroState.isBreak
+      ? pomodoroState.breakDuration
+      : pomodoroState.workDuration;
+  } else {
+    pomodoroState.remaining -= 1;
+  }
+  updateTrayTitle();
+  mainWindow?.webContents.send('pomodoro-tick', { ...pomodoroState });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -91,6 +141,17 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+
+  // Create a minimal tray (1x1 transparent PNG, rely on title for display)
+  const emptyIcon = nativeImage.createEmpty();
+  tray = new Tray(emptyIcon);
+  tray.setToolTip('Evo Tasks Pomodoro');
+  const trayMenu = Menu.buildFromTemplate([
+    { label: 'Abrir Evo Tasks', click: () => mainWindow?.show() },
+    { type: 'separator' },
+    { label: 'Sair', click: () => app.quit() },
+  ]);
+  tray.setContextMenu(trayMenu);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -156,4 +217,41 @@ ipcMain.on('get-app-version', (event) => {
 
 ipcMain.handle('open-releases-page', () => {
   shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
+});
+
+// ─── Pomodoro IPC handlers ────────────────────────────────────────────────────
+
+ipcMain.handle('pomodoro-start', (_event, config: { work: number; shortBreak: number }) => {
+  pomodoroState.workDuration = config.work * 60;
+  pomodoroState.breakDuration = config.shortBreak * 60;
+  pomodoroState.remaining = pomodoroState.workDuration;
+  pomodoroState.isBreak = false;
+  pomodoroState.isRunning = true;
+
+  if (pomodoroIntervalId) clearInterval(pomodoroIntervalId);
+  pomodoroIntervalId = setInterval(pomodoroTick, 1000);
+  updateTrayTitle();
+});
+
+ipcMain.handle('pomodoro-pause', () => {
+  pomodoroState.isRunning = !pomodoroState.isRunning;
+  if (pomodoroState.isRunning) {
+    if (pomodoroIntervalId) clearInterval(pomodoroIntervalId);
+    pomodoroIntervalId = setInterval(pomodoroTick, 1000);
+  } else {
+    if (pomodoroIntervalId) { clearInterval(pomodoroIntervalId); pomodoroIntervalId = null; }
+  }
+  updateTrayTitle();
+});
+
+ipcMain.handle('pomodoro-stop', () => {
+  pomodoroState.isRunning = false;
+  pomodoroState.isBreak = false;
+  pomodoroState.remaining = pomodoroState.workDuration;
+  if (pomodoroIntervalId) { clearInterval(pomodoroIntervalId); pomodoroIntervalId = null; }
+  if (tray) tray.setTitle('');
+});
+
+ipcMain.handle('pomodoro-get-state', () => {
+  return { ...pomodoroState };
 });

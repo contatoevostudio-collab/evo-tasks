@@ -15,6 +15,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { SearchModal } from './components/SearchModal';
 import { PinModal } from './components/PinModal';
 import { AuthModal } from './components/AuthModal';
+import { PomodoroPanel } from './components/PomodoroPanel';
 import { useTaskStore } from './store/tasks';
 import { useAuthStore } from './store/auth';
 import { loadFromSupabase } from './lib/supabaseSync';
@@ -23,8 +24,8 @@ import type { Task, TaskStatus, PageType } from './types';
 import './index.css';
 
 export default function App() {
-  const { viewMode, theme, toast, setUserId } = useTaskStore();
-  const { user, loading: authLoading, initialize } = useAuthStore();
+  const { viewMode, theme, toast, setUserId, animationsEnabled, setAnimationsEnabled } = useTaskStore();
+  const { user, loading: authLoading, initialize, guestMode, setGuestMode } = useAuthStore();
   const themeVars = THEME_VARS[theme];
 
   useEffect(() => { initialize(); }, []);
@@ -45,6 +46,8 @@ export default function App() {
   const [showSearch,     setShowSearch]     = useState(false);
   const [showAuthModal,  setShowAuthModal]  = useState(false);
   const [pinLocked,      setPinLocked]      = useState(() => !!localStorage.getItem('evo-tasks-pin'));
+  const [showPomodoro,   setShowPomodoro]   = useState(false);
+  const [pomodoroDisplay, setPomodoroDisplay] = useState<string | null>(null);
 
   const openNewTask = (date?: string) => { setModalDate(date); setModalTask(null); };
   const openTask    = (task: Task)    => { setModalTask(task); setModalDate(undefined); };
@@ -80,8 +83,15 @@ export default function App() {
     '--sidebar-bg': themeVars.sidebarBg,
   } as React.CSSProperties;
 
+  const pageTransition = animationsEnabled
+    ? { duration: 0.18, ease: 'easeOut' as const }
+    : { duration: 0 };
+
   return (
-    <div style={{ display: 'flex', height: '100vh', background: themeVars.appBg, overflow: 'hidden', ...cssVars }}>
+    <div
+      className={animationsEnabled ? '' : 'no-animations'}
+      style={{ display: 'flex', height: '100vh', background: themeVars.appBg, overflow: 'hidden', ...cssVars }}
+    >
       {/* Left nav sidebar */}
       <NavSidebar
         currentPage={page}
@@ -93,6 +103,55 @@ export default function App() {
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+        {/* Top bar */}
+        <div style={{
+          height: 36, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          padding: '0 12px', gap: 6,
+          borderBottom: '1px solid var(--b1)',
+          background: 'var(--sidebar-bg)',
+        }}>
+          {/* Animations toggle */}
+          <button
+            onClick={() => setAnimationsEnabled(!animationsEnabled)}
+            title={animationsEnabled ? 'Desativar animações' : 'Ativar animações'}
+            style={{
+              height: 24, padding: '0 8px', borderRadius: 6,
+              background: animationsEnabled ? 'rgba(53,107,255,0.12)' : 'var(--s2)',
+              border: '1px solid var(--b2)', cursor: 'pointer',
+              color: animationsEnabled ? '#64C4FF' : 'var(--t3)',
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.5px',
+              transition: 'all .15s',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            ✦ {animationsEnabled ? 'Anim' : 'Anim off'}
+          </button>
+
+          {/* Pomodoro button */}
+          <button
+            onClick={() => setShowPomodoro(s => !s)}
+            title="Pomodoro Timer"
+            style={{
+              height: 24, padding: '0 8px', borderRadius: 6,
+              background: showPomodoro ? 'rgba(53,107,255,0.15)' : 'var(--s2)',
+              border: `1px solid ${showPomodoro ? 'rgba(53,107,255,0.4)' : 'var(--b2)'}`,
+              cursor: 'pointer',
+              color: showPomodoro ? '#64C4FF' : 'var(--t2)',
+              fontSize: 11, fontWeight: 600,
+              transition: 'all .15s',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            {pomodoroDisplay ?? 'Timer'}
+          </button>
+        </div>
+
         <AnimatePresence mode="wait">
           <motion.main
             key={page}
@@ -100,7 +159,7 @@ export default function App() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            transition={pageTransition}
           >
             {page === 'home' && (
               <HomePage onTaskClick={openTask} onNavigate={(p) => setPage(p)} />
@@ -121,7 +180,7 @@ export default function App() {
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -10 }}
-                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                    transition={animationsEnabled ? { duration: 0.16, ease: 'easeOut' } : { duration: 0 }}
                   >
                     {viewMode === 'month'  && <MonthView onTaskClick={openTask} onDayClick={d => openNewTask(d)} />}
                     {viewMode === 'week'   && <WeekView  onTaskClick={openTask} onDayClick={d => openNewTask(d)} />}
@@ -174,9 +233,43 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Pomodoro panel */}
+      <AnimatePresence>
+        {showPomodoro && (
+          <PomodoroPanel
+            key="pomodoro-panel"
+            onClose={() => setShowPomodoro(false)}
+            onTick={(display) => setPomodoroDisplay(display)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Auth gate */}
-      {!authLoading && import.meta.env.VITE_SUPABASE_URL && (!user || showAuthModal) && (
+      {!authLoading && import.meta.env.VITE_SUPABASE_URL && !guestMode && (!user || showAuthModal) && (
         <AuthModal onClose={user ? () => setShowAuthModal(false) : undefined} />
+      )}
+
+      {/* Guest mode banner */}
+      {guestMode && !user && (
+        <div style={{
+          position: 'fixed', bottom: 16, right: 16, zIndex: 900,
+          background: 'var(--modal-bg)', border: '1px solid var(--b2)',
+          borderRadius: 12, padding: '10px 14px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          fontSize: 12, color: 'var(--t3)',
+        }}>
+          <span>Modo Convidado — dados apenas locais</span>
+          <button
+            onClick={() => setGuestMode(false)}
+            style={{
+              fontSize: 11, fontWeight: 600, color: '#356BFF',
+              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            }}
+          >
+            Entrar
+          </button>
+        </div>
       )}
 
       {/* PIN lock */}
