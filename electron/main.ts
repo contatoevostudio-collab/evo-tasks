@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
@@ -8,14 +8,22 @@ import { execFile } from 'child_process';
 // Usa <canvas> com desenho explícito do squircle para garantir alpha correto.
 // app.dock.setIcon() NÃO aplica squircle automaticamente — precisamos fazer isso.
 async function buildDockIcon(): Promise<Electron.NativeImage | null> {
-  const { nativeImage } = await import('electron');
   const now = new Date();
   const day = now.getDate();
   const wds = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const wd  = wds[now.getDay()];
 
-  const S  = 512;   // tamanho do canvas (2× para retina)
-  const R  = Math.round(S * 0.225); // squircle radius padrão iOS/macOS
+  // Canvas 512×512 (2× retina) — marcado como scaleFactor:2 para que o macOS
+  // exiba no tamanho lógico correto (256pt), igual aos ícones padrão do dock.
+  const S = 512;
+  const R = Math.round(S * 0.224); // squircle radius padrão Apple (~22.4%)
+
+  // Posições alinhadas ao layout do Calendar da Apple:
+  // weekday ocupa o terço superior, número ocupa os dois terços inferiores
+  const wdSize  = Math.round(S * 0.108); // ~55px
+  const wdY     = Math.round(S * 0.345); // baseline do weekday
+  const daySize = Math.round(S * 0.46);  // ~236px
+  const dayY    = Math.round(S * 0.635); // middle do número
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
   <body style="margin:0;padding:0;background:transparent;overflow:hidden">
@@ -40,18 +48,18 @@ async function buildDockIcon(): Promise<Electron.NativeImage | null> {
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
-    // Weekday (azul, bold, uppercase)
+    // Weekday
     ctx.fillStyle = '#0a84ff';
-    ctx.font = '700 ${Math.round(S * 0.115)}px -apple-system, "SF Pro Display", sans-serif';
+    ctx.font = '700 ${wdSize}px -apple-system, "SF Pro Display", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('${wd}', S / 2, Math.round(S * 0.415));
+    ctx.fillText('${wd}', S / 2, ${wdY});
 
-    // Day number (preto, black weight)
+    // Day number
     ctx.fillStyle = '#1a1a1a';
-    ctx.font = '900 ${Math.round(S * 0.42)}px -apple-system, "SF Pro Display", sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.fillText('${day}', S / 2, Math.round(S * 0.435));
+    ctx.font = '900 ${daySize}px -apple-system, "SF Pro Display", sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('${day}', S / 2, ${dayY});
 
     window.__png = c.toDataURL('image/png');
   <\/script>
@@ -73,7 +81,11 @@ async function buildDockIcon(): Promise<Electron.NativeImage | null> {
   win.destroy();
 
   if (!dataURL || !dataURL.startsWith('data:image/png')) return null;
-  return nativeImage.createFromDataURL(dataURL);
+
+  // Declara como 2× para que o macOS exiba no tamanho lógico correto (256pt)
+  const img = nativeImage.createEmpty();
+  img.addRepresentation({ scaleFactor: 2.0, dataURL });
+  return img;
 }
 
 function scheduleMidnightIconUpdate() {
