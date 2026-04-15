@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiPlus, FiX, FiEdit2, FiTrash2, FiPhone, FiMail, FiInstagram,
-  FiDollarSign, FiArrowRight, FiCheck, FiUser,
+  FiDollarSign, FiArrowRight, FiCheck, FiUser, FiMinimize2, FiMaximize2,
 } from 'react-icons/fi';
 import { parseISO, differenceInDays } from 'date-fns';
 import {
@@ -44,9 +44,9 @@ function DraggableLeadCard(props: Parameters<typeof LeadCard>[0]) {
 
 // ─── Lead Card ────────────────────────────────────────────────────────────────
 function LeadCard({
-  lead, stageColor, onEdit, onDelete, onMove, onConvert, dragHandleListeners, dragHandleAttributes,
+  lead, stageColor, compact, onEdit, onDelete, onMove, onConvert, dragHandleListeners, dragHandleAttributes,
 }: {
-  lead: Lead; stageColor: string;
+  lead: Lead; stageColor: string; compact?: boolean;
   onEdit: () => void; onDelete: () => void;
   onMove: (stage: LeadStage) => void; onConvert: () => void;
   dragHandleListeners?: SyntheticListenerMap;
@@ -63,68 +63,69 @@ function LeadCard({
       exit={{ opacity: 0, scale: 0.95 }}
       style={{
         background: 'var(--s1)', border: '1px solid var(--b1)',
-        borderRadius: 12, padding: '12px 14px', marginBottom: 8,
+        borderRadius: compact ? 8 : 12, padding: compact ? '6px 10px' : '12px 14px', marginBottom: compact ? 4 : 8,
         borderLeft: `3px solid ${stageColor}`,
         cursor: 'pointer',
       }}
       onClick={() => setShowActions(s => !s)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {/* Drag handle */}
         <div
           {...dragHandleListeners}
           {...dragHandleAttributes}
           onClick={e => e.stopPropagation()}
-          style={{ cursor: 'grab', color: 'var(--t4)', flexShrink: 0, marginTop: 2, padding: '0 2px', lineHeight: 1 }}
+          style={{ cursor: 'grab', color: 'var(--t4)', flexShrink: 0, lineHeight: 1 }}
         >
           ⠿
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {lead.name}
-          </div>
-          {lead.contact && (
-            <div style={{ fontSize: 11, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-              <FiUser size={9} /> {lead.contact}
-            </div>
-          )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-            {lead.phone && (
-              <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                <FiPhone size={9} /> {lead.phone}
-              </span>
-            )}
-            {lead.instagram && (
-              <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                <FiInstagram size={9} /> {lead.instagram}
-              </span>
-            )}
-            {lead.email && (
-              <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                <FiMail size={9} /> {lead.email}
-              </span>
-            )}
-            {lead.budget && (
-              <span style={{ fontSize: 10, color: '#30d158', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 600 }}>
-                <FiDollarSign size={9} /> {lead.budget}
-              </span>
-            )}
-          </div>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {lead.name}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 9, color: 'var(--t4)', fontWeight: 500 }}>
+        {!compact && lead.convertedToCompanyId && (
+          <span style={{ fontSize: 9, color: '#30d158', fontWeight: 700, background: 'rgba(48,209,88,0.1)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+            cliente
+          </span>
+        )}
+        {!compact && (
+          <span style={{ fontSize: 9, color: 'var(--t4)', fontWeight: 500, flexShrink: 0 }}>
             {days === 0 ? 'hoje' : `${days}d`}
           </span>
-          {lead.convertedToCompanyId && (
-            <span style={{ fontSize: 9, color: '#30d158', fontWeight: 700, background: 'rgba(48,209,88,0.1)', borderRadius: 4, padding: '1px 5px' }}>
-              cliente
+        )}
+      </div>
+
+      {!compact && lead.contact && (
+        <div style={{ fontSize: 11, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <FiUser size={9} /> {lead.contact}
+        </div>
+      )}
+      {!compact && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          {lead.phone && (
+            <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <FiPhone size={9} /> {lead.phone}
+            </span>
+          )}
+          {lead.instagram && (
+            <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <FiInstagram size={9} /> {lead.instagram}
+            </span>
+          )}
+          {lead.email && (
+            <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <FiMail size={9} /> {lead.email}
+            </span>
+          )}
+          {lead.budget && (
+            <span style={{ fontSize: 10, color: '#30d158', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 600 }}>
+              <FiDollarSign size={9} /> {lead.budget}
             </span>
           )}
         </div>
-      </div>
+      )}
 
-      {lead.notes && (
+      {!compact && lead.notes && (
         <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8, lineHeight: 1.5, borderTop: '1px solid var(--b1)', paddingTop: 8 }}>
           {lead.notes}
         </p>
@@ -364,6 +365,7 @@ export function CRMPage() {
   const [editingLead,   setEditingLead]   = useState<Lead | null>(null);
   const [convertLead_,  setConvertLead_]  = useState<Lead | null>(null);
   const [activeLead,    setActiveLead]    = useState<Lead | null>(null);
+  const [compact,       setCompact]       = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -412,12 +414,21 @@ export function CRMPage() {
               {totalLeads} lead{totalLeads !== 1 ? 's' : ''} · {closedLeads} captado{closedLeads !== 1 ? 's' : ''}
             </p>
           </div>
-          <button
-            onClick={() => { setEditingLead(null); setShowLeadModal(true); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, background: 'linear-gradient(135deg, #356BFF, #4F8AFF)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 14px rgba(53,107,255,0.35)' }}
-          >
-            <FiPlus size={14} /> Novo Lead
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setCompact(c => !c)}
+              title={compact ? 'Modo normal' : 'Modo compacto'}
+              style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: compact ? 'rgba(53,107,255,0.12)' : 'var(--s2)', border: `1px solid ${compact ? 'rgba(53,107,255,0.3)' : 'var(--b2)'}`, color: compact ? '#356BFF' : 'var(--t3)', cursor: 'pointer', transition: 'all .15s' }}
+            >
+              {compact ? <FiMaximize2 size={13} /> : <FiMinimize2 size={13} />}
+            </button>
+            <button
+              onClick={() => { setEditingLead(null); setShowLeadModal(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, background: 'linear-gradient(135deg, #356BFF, #4F8AFF)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 14px rgba(53,107,255,0.35)' }}
+            >
+              <FiPlus size={14} /> Novo Lead
+            </button>
+          </div>
         </div>
       </div>
 
@@ -465,6 +476,7 @@ export function CRMPage() {
                           key={lead.id}
                           lead={lead}
                           stageColor={stage.color}
+                          compact={compact}
                           onEdit={() => { setEditingLead(lead); setShowLeadModal(true); }}
                           onDelete={() => deleteLead(lead.id)}
                           onMove={(s) => moveLead(lead.id, s)}
