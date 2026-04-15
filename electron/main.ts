@@ -120,6 +120,8 @@ let mainWindow: BrowserWindow | null = null;
 let pendingUpdateEvent: { type: 'available' | 'downloaded' | 'error'; payload?: string } | null = null;
 // Caminho do arquivo de update baixado (para remover quarentena antes de instalar)
 let downloadedUpdatePath: string | null = null;
+// Timer de fallback do update — cancelado se o app realmente fechar
+let updateFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -182,6 +184,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Se o app vai fechar (quitAndInstall funcionou), cancela o timer de fallback
+app.on('before-quit', () => {
+  if (updateFallbackTimer) {
+    clearTimeout(updateFallbackTimer);
+    updateFallbackTimer = null;
+  }
+});
+
 autoUpdater.on('update-available', (info) => {
   if (mainWindow?.webContents.isLoading()) {
     pendingUpdateEvent = { type: 'available' };
@@ -233,8 +243,9 @@ ipcMain.handle('install-update', async () => {
 
   // No macOS sem notarização, quitAndInstall pode falhar silenciosamente.
   // Se o app ainda estiver rodando após 3s, é porque falhou — abre GitHub.
+  // O timer é cancelado em before-quit se o app realmente fechar.
   if (process.platform === 'darwin') {
-    setTimeout(() => {
+    updateFallbackTimer = setTimeout(() => {
       shell.openExternal('https://github.com/contatoevostudio-collab/evo-tasks/releases/latest');
     }, 3000);
   }
