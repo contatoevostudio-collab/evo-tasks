@@ -41,7 +41,7 @@ export function TaskChip({ task, onClick, compact = false }: Props) {
   // Hover card state
   const [showCard, setShowCard] = useState(false);
   const [cardPos, setCardPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const hoverTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const hasDetails = task.priority || task.deadline || task.notes || (task.subtasks && task.subtasks.length > 0) || task.estimate;
 

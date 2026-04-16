@@ -19,7 +19,7 @@ interface ElectronAPI {
   pomodoroPause?: () => Promise<void>;
   pomodoroStop?: () => Promise<void>;
   pomodoroGetState?: () => Promise<PomodoroState | null>;
-  onPomodoroTick?: (cb: (state: PomodoroState) => void) => void;
+  onPomodoroTick?: (cb: (state: PomodoroState) => void) => () => void;
 }
 
 declare global {

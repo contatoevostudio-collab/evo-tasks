@@ -238,7 +238,7 @@ function Column({
 
 export function KanbanView({ onTaskClick, onAddTask }: Props) {
   const {
-    tasks, selectedCompanies, updateTaskStatus, updateTask, hideDone, filterPriority,
+    tasks, selectedCompanies, updateTaskStatus, hideDone, filterPriority,
     filterSubClient, filterTaskType, companies, subClients,
     kanbanOrder, setKanbanOrder,
   } = useTaskStore();
