@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiRotateCcw, FiTrash2, FiSearch } from 'react-icons/fi';
 import { format, parseISO } from 'date-fns';
@@ -13,6 +13,10 @@ export function ArchivePage() {
   const { tasks, companies, subClients, toggleArchive, deleteTask, showToast, hideToast } = useTaskStore();
   const [search, setSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear pending delete timer on unmount to avoid calling store after component is gone
+  useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
 
   const archived = tasks
     .filter(t => t.archived)
@@ -40,9 +44,10 @@ export function ArchivePage() {
   };
 
   const handleDelete = (id: string) => {
-    const timerRef = { current: setTimeout(() => { deleteTask(id); hideToast(); }, 5000) };
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    deleteTimerRef.current = setTimeout(() => { deleteTask(id); hideToast(); }, 5000);
     showToast('Tarefa deletada permanentemente', () => {
-      clearTimeout(timerRef.current);
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
       hideToast();
     });
     setConfirmDeleteId(null);

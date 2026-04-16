@@ -74,10 +74,10 @@ function SubRow({ sub, onUpdate, onDelete }: { sub: SubClient; onUpdate: (id: st
 
 export function SettingsModal({ onClose }: Props) {
   const {
-    companies, subClients, tasks,
+    companies, subClients, tasks, leads,
     addCompany, updateCompany, deleteCompany,
     addSubClient, updateSubClient, deleteSubClient,
-    theme, setTheme,
+    theme, setTheme, replaceAll,
   } = useTaskStore();
 
   const [selectedId,   setSelectedId]   = useState<string>(companies[0]?.id ?? '');
@@ -97,9 +97,9 @@ export function SettingsModal({ onClose }: Props) {
   const addCo  = () => { const n = newName.trim().toUpperCase(); if (!n) return; addCompany({ name: n, color: newColor }); setNewName(''); setShowNew(false); };
   const addSub = () => { const n = newSub.trim(); if (!n || !selectedId) return; addSubClient({ name: n, companyId: selectedId }); setNewSub(''); setShowNewSub(false); };
 
-  // #58 — export JSON
+  // #58 — export JSON (include leads so they survive backup/restore)
   const handleExport = () => {
-    const data = { companies, subClients, tasks, exportedAt: new Date().toISOString() };
+    const data = { companies, subClients, tasks, leads, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -109,7 +109,8 @@ export function SettingsModal({ onClose }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  // #59 — import JSON
+  // #59 — import JSON (use replaceAll via store instead of writing localStorage directly,
+  // which could corrupt hydration if fields are missing or version mismatches)
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -122,16 +123,12 @@ export function SettingsModal({ onClose }: Props) {
           setImportError('Arquivo inválido — faltam campos obrigatórios.');
           return;
         }
-        // Use zustand's store directly via localStorage key (safe restore)
-        localStorage.setItem('evo-tasks-storage', JSON.stringify({
-          state: {
-            companies: parsed.companies,
-            subClients: parsed.subClients,
-            tasks: parsed.tasks,
-            selectedCompanies: parsed.companies.map((c: { id: string }) => c.id),
-          },
-          version: 0,
-        }));
+        replaceAll({
+          companies: parsed.companies,
+          subClients: parsed.subClients,
+          tasks: parsed.tasks,
+          leads: parsed.leads ?? [],
+        });
         setImportOk(true);
         setTimeout(() => window.location.reload(), 1200);
       } catch {

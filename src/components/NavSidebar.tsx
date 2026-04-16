@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
+import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   FiHome, FiCheckSquare, FiBriefcase, FiSettings,
   FiPlus, FiChevronDown, FiChevronRight, FiChevronLeft,
   FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
   FiUser, FiLogOut, FiLogIn, FiKey, FiX, FiCheck, FiTrendingUp,
-  FiChevronUp, FiMoreHorizontal,
+  FiChevronUp, FiMoreHorizontal, FiEdit3,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
+import { playAdd, playCheck, playDelete } from '../lib/sounds';
 import { useAuthStore } from '../store/auth';
 import type { PageType, Theme, Company } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
@@ -39,6 +43,73 @@ const THEME_LABELS: Record<Theme, string> = {
 const dragRegion: React.CSSProperties = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDragRegion: React.CSSProperties = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
+function SidebarNoteRow({ id, text, checked, onToggle, onDelete }: {
+  id: string; text: string; checked: boolean; onToggle: () => void; onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 6,
+        padding: '4px 6px', borderRadius: 6, marginBottom: 1,
+        background: hovered ? 'var(--s1)' : 'transparent',
+        transition: isDragging ? 'none' : 'background .15s',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        userSelect: 'none',
+      }}
+        {...attributes} {...listeners}
+      >
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onToggle(); }}
+          style={{
+            width: 13, height: 13, borderRadius: 3, flexShrink: 0,
+            border: `1.5px solid ${checked ? '#356BFF' : 'var(--b3)'}`,
+            background: checked ? '#356BFF' : 'transparent',
+            cursor: 'pointer', padding: 0, marginTop: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all .15s',
+          }}
+        >
+          {checked && (
+            <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+              <polyline points="1,3.5 2.8,5.5 6,1.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+        <span style={{
+          flex: 1, fontSize: 11, color: checked ? 'var(--t4)' : 'var(--t2)',
+          textDecoration: checked ? 'line-through' : 'none',
+          lineHeight: 1.4, wordBreak: 'break-word', transition: 'all .15s',
+        }}>
+          {text}
+        </span>
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--t4)', padding: 1, display: 'flex', flexShrink: 0,
+            opacity: hovered ? 1 : 0, transition: 'opacity .15s',
+            pointerEvents: hovered ? 'auto' : 'none',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+        >
+          <FiX size={10} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type CompanyStatus = 'ativo' | 'pausado' | 'inativo';
 
 function getCompanyStatus(c: Company): CompanyStatus {
@@ -55,6 +126,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
     updateCompany,
     moveCompanyUp, moveCompanyDown,
     syncStatus,
+    quickNotes, addQuickNote, toggleQuickNote, deleteQuickNote, reorderQuickNotes,
   } = useTaskStore();
 
   const { user, signOut, updatePassword } = useAuthStore();
@@ -105,6 +177,28 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showProfile]);
+
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesInput, setNotesInput] = useState('');
+
+  // Reset notes panel when sidebar collapses
+  useEffect(() => {
+    if (sidebarCollapsed) setNotesOpen(false);
+  }, [sidebarCollapsed]);
+
+  const handleAddNote = () => {
+    const text = notesInput.trim();
+    if (!text) return;
+    addQuickNote(text);
+    playAdd();
+    setNotesInput('');
+  };
+
+  const notesSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const handleNotesDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) reorderQuickNotes(active.id as string, over.id as string);
+  };
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hoveredCompany, setHoveredCompany] = useState<string | null>(null);
@@ -191,6 +285,11 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
     const open = expanded[company.id];
     const pending = countFor(company.id);
     const isActive = selectedCompanies.includes(company.id);
+
+    const companyTasks = tasks.filter(t => t.companyId === company.id && !t.archived && !t.inbox);
+    const doneTasks = companyTasks.filter(t => t.status === 'done').length;
+    const totalTasks = companyTasks.length;
+    const pct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
     const companyIdx = companies.findIndex(c => c.id === company.id);
     const groupIdx = groupList.findIndex(c => c.id === company.id);
 
@@ -308,6 +407,17 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
           )}
         </div>
 
+        {totalTasks > 0 && (
+          <div style={{ height: 2, borderRadius: 1, background: 'var(--b1)', marginTop: -2, marginLeft: 10, marginRight: 10, overflow: 'hidden', opacity: isActive ? 1 : 0.35 }}>
+            <div style={{
+              height: '100%', borderRadius: 1,
+              width: `${pct}%`,
+              background: pct === 100 ? '#30d158' : company.color,
+              transition: 'width 0.4s ease',
+            }} />
+          </div>
+        )}
+
         {open && subs.map(sub => {
           const isSubActive = filterSubClient === sub.id;
           return (
@@ -377,6 +487,22 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
             )}
           </div>
         ))}
+
+        {/* Notas Rápidas icon */}
+        <button
+          onClick={() => { toggleSidebar(); setNotesOpen(true); }}
+          title="Notas Rápidas"
+          style={{
+            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 10, background: notesOpen ? 'rgba(53,107,255,0.2)' : 'transparent',
+            border: 'none', cursor: 'pointer', transition: 'background .15s',
+            color: notesOpen ? '#64C4FF' : 'var(--t3)',
+          }}
+          onMouseEnter={e => { if (!notesOpen) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+          onMouseLeave={e => { if (!notesOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <FiEdit3 size={16} />
+        </button>
 
         <div style={{ flex: 1 }} />
 
@@ -574,6 +700,91 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
 
       {/* Empresas tree — status groups */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+
+        {/* Notas Rápidas section */}
+        <div style={{ marginBottom: 4 }}>
+          <button
+            onClick={() => setNotesOpen(o => !o)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px', borderRadius: 6, marginBottom: 2,
+              background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+              transition: 'background .15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s1)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <FiEdit3 size={9} style={{ color: '#64C4FF', flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: '#64C4FF' }}>
+              Notas Rápidas
+            </span>
+            {quickNotes.length > 0 && (
+              <span style={{ fontSize: 9, color: 'var(--t4)', marginRight: 4 }}>{quickNotes.length}</span>
+            )}
+            {notesOpen
+              ? <FiChevronDown size={10} style={{ color: 'var(--t4)', flexShrink: 0 }} />
+              : <FiChevronRight size={10} style={{ color: 'var(--t4)', flexShrink: 0 }} />
+            }
+          </button>
+
+          {notesOpen && (
+            <div style={{ padding: '0 4px 6px' }}>
+              {/* Add input */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                <input
+                  value={notesInput}
+                  onChange={e => setNotesInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddNote(); }}
+                  placeholder="Nova nota..."
+                  style={{
+                    flex: 1, padding: '5px 8px', borderRadius: 6,
+                    border: '1px solid var(--b2)',
+                    background: 'var(--ib)', color: 'var(--t1)',
+                    fontSize: 11, outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={handleAddNote}
+                  disabled={!notesInput.trim()}
+                  style={{
+                    width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                    background: notesInput.trim() ? '#356BFF' : 'var(--s2)',
+                    border: 'none', cursor: notesInput.trim() ? 'pointer' : 'default',
+                    color: notesInput.trim() ? '#fff' : 'var(--t4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all .15s',
+                  }}
+                >
+                  <FiPlus size={12} />
+                </button>
+              </div>
+
+              {quickNotes.length === 0 ? (
+                <div style={{ fontSize: 11, color: 'var(--t4)', textAlign: 'center', padding: '6px 0' }}>
+                  Nenhuma nota
+                </div>
+              ) : (
+                <DndContext sensors={notesSensors} collisionDetection={closestCenter} onDragEnd={handleNotesDragEnd}>
+                  <SortableContext items={quickNotes.map(n => n.id)} strategy={verticalListSortingStrategy}>
+                    {quickNotes.map(note => (
+                      <SidebarNoteRow
+                        key={note.id}
+                        id={note.id}
+                        text={note.text}
+                        checked={note.checked}
+                        onToggle={() => { toggleQuickNote(note.id); playCheck(); }}
+                        onDelete={() => { deleteQuickNote(note.id); playDelete(); }}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ margin: '0 4px 8px', height: 1, background: 'var(--b1)' }} />
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px', marginBottom: 6 }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)' }}>
             Clientes

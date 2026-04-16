@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Company, SubClient, Lead, LeadStage, TaskStatus, TaskType, ViewMode, Priority, Theme } from '../types';
+import type { Task, Company, SubClient, Lead, LeadStage, TaskStatus, TaskType, ViewMode, Priority, Theme, QuickNote } from '../types';
 import { format } from 'date-fns';
-import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient } from '../lib/supabaseSync';
+import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient, syncLead, removeLead, syncQuickNote, removeQuickNote } from '../lib/supabaseSync';
 
 const DEFAULT_COMPANIES: Company[] = [
   { id: 'imperio',    name: 'IMPERIO',      color: '#30d158' },
@@ -86,7 +86,7 @@ interface TaskStore {
   // Auth / sync
   userId: string | null;
   setUserId(id: string | null): void;
-  replaceAll(data: { companies: Company[]; subClients: SubClient[]; tasks: Task[] }): void;
+  replaceAll(data: { companies: Company[]; subClients: SubClient[]; tasks: Task[]; leads: Lead[]; quickNotes?: QuickNote[] }): void;
 
   // Toast / undo
   toast: { text: string; undoFn?: () => void } | null;
@@ -115,6 +115,13 @@ interface TaskStore {
   toggleSidebar(): void;         // #5
   setTheme(t: Theme): void;      // #60
 
+  // Quick Notes
+  quickNotes: QuickNote[];
+  addQuickNote(text: string): void;
+  toggleQuickNote(id: string): void;
+  deleteQuickNote(id: string): void;
+  reorderQuickNotes(activeId: string, overId: string): void;
+
   // Helper
   nextSequence(companyId: string, subClientId: string, taskType: TaskType): number;
 }
@@ -126,7 +133,7 @@ export const useTaskStore = create<TaskStore>()(
       subClients: DEFAULT_SUB_CLIENTS,
       tasks: SAMPLE_TASKS,
       leads: [],
-      viewMode: 'month',
+      viewMode: 'kanban',
       currentDate: new Date(),
       selectedCompanies: DEFAULT_COMPANIES.map((c) => c.id),
       hideDone: false,
@@ -141,6 +148,7 @@ export const useTaskStore = create<TaskStore>()(
       userId: null,
       animationsEnabled: true,
       syncStatus: 'idle' as const,
+      quickNotes: [],
 
       addTask: (task) => {
         const id = crypto.randomUUID();
@@ -187,33 +195,39 @@ export const useTaskStore = create<TaskStore>()(
         if (userId) { const t = tasks.find(x => x.id === id); if (t) syncTask(t, userId).catch(console.error); }
       },
 
-      addSubTask: (taskId, label) =>
+      addSubTask: (taskId, label) => {
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t;
             const st = t.subtasks ?? [];
             return { ...t, subtasks: [...st, { id: crypto.randomUUID(), label, done: false }] };
           }),
-        })),
+        }));
+        const { userId, tasks } = get();
+        if (userId) { const t = tasks.find(x => x.id === taskId); if (t) syncTask(t, userId).catch(console.error); }
+      },
 
-      toggleSubTask: (taskId, subId) =>
+      toggleSubTask: (taskId, subId) => {
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t;
-            return {
-              ...t,
-              subtasks: (t.subtasks ?? []).map((s) => s.id === subId ? { ...s, done: !s.done } : s),
-            };
+            return { ...t, subtasks: (t.subtasks ?? []).map((s) => s.id === subId ? { ...s, done: !s.done } : s) };
           }),
-        })),
+        }));
+        const { userId, tasks } = get();
+        if (userId) { const t = tasks.find(x => x.id === taskId); if (t) syncTask(t, userId).catch(console.error); }
+      },
 
-      deleteSubTask: (taskId, subId) =>
+      deleteSubTask: (taskId, subId) => {
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t;
             return { ...t, subtasks: (t.subtasks ?? []).filter((s) => s.id !== subId) };
           }),
-        })),
+        }));
+        const { userId, tasks } = get();
+        if (userId) { const t = tasks.find(x => x.id === taskId); if (t) syncTask(t, userId).catch(console.error); }
+      },
 
       addCompany: (company) => {
         const full = { ...company, id: crypto.randomUUID() };
@@ -295,17 +309,28 @@ export const useTaskStore = create<TaskStore>()(
         const id = crypto.randomUUID();
         const full: Lead = { ...lead, id, createdAt: new Date().toISOString() };
         set((state) => ({ leads: [...state.leads, full] }));
+        const userId = get().userId;
+        if (userId) syncLead(full, userId).catch(console.error);
         return id;
       },
 
-      updateLead: (id, updates) =>
-        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, ...updates } : l)) })),
+      updateLead: (id, updates) => {
+        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, ...updates } : l)) }));
+        const { userId, leads } = get();
+        if (userId) { const l = leads.find(x => x.id === id); if (l) syncLead(l, userId).catch(console.error); }
+      },
 
-      deleteLead: (id) =>
-        set((state) => ({ leads: state.leads.filter((l) => l.id !== id) })),
+      deleteLead: (id) => {
+        const userId = get().userId;
+        set((state) => ({ leads: state.leads.filter((l) => l.id !== id) }));
+        if (userId) removeLead(id, userId).catch(console.error);
+      },
 
-      moveLead: (id, stage) =>
-        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, stage } : l)) })),
+      moveLead: (id, stage) => {
+        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, stage } : l)) }));
+        const { userId, leads } = get();
+        if (userId) { const l = leads.find(x => x.id === id); if (l) syncLead(l, userId).catch(console.error); }
+      },
 
       convertLead: (id, companyName, color) => {
         const companyId = crypto.randomUUID();
@@ -317,7 +342,12 @@ export const useTaskStore = create<TaskStore>()(
           leads: state.leads.map((l) => l.id === id ? { ...l, convertedToCompanyId: companyId, stage: 'fechado' as LeadStage } : l),
         }));
         const userId = get().userId;
-        if (userId) syncCompany(company, userId).catch(console.error);
+        if (userId) {
+          syncCompany(company, userId).catch(console.error);
+          const { leads } = get();
+          const l = leads.find(x => x.id === id);
+          if (l) syncLead(l, userId).catch(console.error);
+        }
       },
 
       setKanbanOrder: (status, ids) =>
@@ -327,18 +357,27 @@ export const useTaskStore = create<TaskStore>()(
 
       setUserId: (userId) => set({ userId }),
 
-      replaceAll: ({ companies, subClients, tasks }) =>
-        set((state) => ({
-          companies,
-          subClients,
-          tasks,
-          selectedCompanies: companies.map(c => c.id),
-          kanbanOrder: { todo: [], doing: [], done: [] },
-          // preserve UI state
-          viewMode: state.viewMode,
-          theme: state.theme,
-          sidebarCollapsed: state.sidebarCollapsed,
-        })),
+      replaceAll: ({ companies, subClients, tasks, leads, quickNotes }) =>
+        set((state) => {
+          // Preserve existing selection; auto-select any brand-new companies
+          const prev = new Set(state.selectedCompanies);
+          const selectedCompanies = state.selectedCompanies.length === 0
+            ? companies.map(c => c.id)
+            : companies.map(c => c.id).filter(id => prev.has(id) || !state.companies.some(x => x.id === id));
+          return {
+            companies,
+            subClients,
+            tasks,
+            leads,
+            quickNotes: quickNotes ?? state.quickNotes,
+            selectedCompanies,
+            kanbanOrder: state.kanbanOrder,
+            // preserve UI state
+            viewMode: state.viewMode,
+            theme: state.theme,
+            sidebarCollapsed: state.sidebarCollapsed,
+          };
+        }),
 
       showToast: (text, undoFn) => set({ toast: { text, undoFn } }),
       hideToast: () => set({ toast: null }),
@@ -380,6 +419,34 @@ export const useTaskStore = create<TaskStore>()(
 
       setTheme: (theme) => set({ theme }),
 
+      addQuickNote: (text) => {
+        const note: QuickNote = { id: crypto.randomUUID(), text, checked: false, createdAt: new Date().toISOString() };
+        set(state => ({ quickNotes: [...state.quickNotes, note] }));
+        const userId = get().userId;
+        if (userId) syncQuickNote(note, userId).catch(console.error);
+      },
+      toggleQuickNote: (id) => {
+        set(state => ({ quickNotes: state.quickNotes.map(n => n.id === id ? { ...n, checked: !n.checked } : n) }));
+        const { userId, quickNotes } = get();
+        if (userId) { const n = quickNotes.find(x => x.id === id); if (n) syncQuickNote(n, userId).catch(console.error); }
+      },
+      deleteQuickNote: (id) => {
+        const userId = get().userId;
+        set(state => ({ quickNotes: state.quickNotes.filter(n => n.id !== id) }));
+        if (userId) removeQuickNote(id, userId).catch(console.error);
+      },
+      reorderQuickNotes: (activeId, overId) => {
+        set(state => {
+          const from = state.quickNotes.findIndex(n => n.id === activeId);
+          const to   = state.quickNotes.findIndex(n => n.id === overId);
+          if (from === -1 || to === -1 || from === to) return state;
+          const arr = [...state.quickNotes];
+          const [item] = arr.splice(from, 1);
+          arr.splice(to, 0, item);
+          return { quickNotes: arr };
+        });
+      },
+
       nextSequence: (companyId, subClientId, taskType) => {
         const { tasks } = get();
         const count = tasks.filter(
@@ -396,10 +463,12 @@ export const useTaskStore = create<TaskStore>()(
         tasks: state.tasks,
         leads: state.leads,
         selectedCompanies: state.selectedCompanies,
+        viewMode: state.viewMode,
         sidebarCollapsed: state.sidebarCollapsed,
         theme: state.theme,
         kanbanOrder: state.kanbanOrder,
         pin: state.pin,
+        quickNotes: state.quickNotes,
       }),
     }
   )

@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addDays, isSameMonth, isToday, getISOWeek, getDay,
 } from 'date-fns';
+import { playDrop } from '../../lib/sounds';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { FiPlus } from 'react-icons/fi';
@@ -59,6 +60,14 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
   const [dragOver, setDragOver] = useState<string | null>(null);
   const dragTaskId = useRef<string | null>(null);
 
+  // Close overflow popup on outside click
+  useEffect(() => {
+    if (!overflow) return;
+    const handler = () => setOverflow(null);
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, [overflow]);
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd   = endOfMonth(currentDate);
   const calStart   = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -92,7 +101,7 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
   const handleDrop = (e: React.DragEvent, dateStr: string) => {
     e.preventDefault();
     const id = dragTaskId.current ?? e.dataTransfer.getData('taskId');
-    if (id) updateTask(id, { date: dateStr });
+    if (id) { updateTask(id, { date: dateStr }); playDrop(); }
     setDragOver(null);
     dragTaskId.current = null;
   };

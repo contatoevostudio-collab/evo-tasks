@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, parseISO, isToday } from 'date-fns';
+import { format, parseISO, isToday, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiPlus, FiLayers, FiMinimize2 } from 'react-icons/fi';
@@ -24,6 +24,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Task, TaskStatus, Priority } from '../../types';
 import { getTaskTitle } from '../../types';
 import { useTaskStore } from '../../store/tasks';
+import { playDrop } from '../../lib/sounds';
 
 interface Props {
   onTaskClick: (task: Task) => void;
@@ -37,6 +38,7 @@ const COLUMNS: { id: TaskStatus; label: string; Icon: React.ElementType; color: 
 ];
 
 const PRIORITY_ORDER: Record<Priority | 'none', number> = { alta: 0, media: 1, baixa: 2, none: 3 };
+const PRIORITY_COLOR: Record<Priority, string> = { alta: '#ff453a', media: '#ff9f0a', baixa: '#64C4FF' };
 function sortByPriority(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) =>
     PRIORITY_ORDER[a.priority ?? 'none'] - PRIORITY_ORDER[b.priority ?? 'none']
@@ -53,12 +55,16 @@ function KanbanCard({ task, onClick, compact }: { task: Task; onClick: (task: Ta
   const color = task.colorOverride ?? company?.color ?? '#636366';
   const title = getTaskTitle(task, companies, subClients);
   const today = format(new Date(), 'yyyy-MM-dd');
-  const isOverdue = task.date < today && task.status !== 'done';
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  const done = task.status === 'done';
+  const isOverdue = task.date < today && !done;
   const isTaskToday = isToday(parseISO(task.date));
+  const isDeadlineSoon = task.deadline && !done && task.deadline <= tomorrow;
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={isDragging ? 'opacity-30' : ''}>
       <motion.div
+        className={isDeadlineSoon ? 'deadline-pulse' : ''}
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -94,6 +100,16 @@ function KanbanCard({ task, onClick, compact }: { task: Task; onClick: (task: Ta
               <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 600, background: `${color}22`, color }}>
                 {company?.name ?? '?'}
               </span>
+              {task.priority && (
+                <span style={{
+                  fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 700,
+                  background: `${PRIORITY_COLOR[task.priority]}20`,
+                  color: PRIORITY_COLOR[task.priority],
+                  textTransform: 'uppercase', letterSpacing: '0.5px',
+                }}>
+                  {task.priority === 'media' ? 'MED' : task.priority === 'alta' ? 'ALT' : 'BAI'}
+                </span>
+              )}
               {!compact && (
                 <span style={{
                   fontSize: 10,
@@ -195,8 +211,24 @@ function Column({
         </SortableContext>
 
         {tasks.length === 0 && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--t4)', borderRadius: 10, border: '1.5px dashed var(--b2)', minHeight: 80 }}>
-            Arraste tarefas aqui
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 11, color: 'var(--t4)', borderRadius: 10, border: '1.5px dashed var(--b2)', minHeight: 80, padding: 16 }}>
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ opacity: 0.35 }}>
+              {status === 'todo' && <>
+                <rect x="6" y="8" width="20" height="3" rx="1.5" fill="currentColor" />
+                <rect x="6" y="14" width="14" height="3" rx="1.5" fill="currentColor" opacity="0.6" />
+                <rect x="6" y="20" width="18" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              </>}
+              {status === 'doing' && <>
+                <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="2.5" opacity="0.3" />
+                <path d="M16 6a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </>}
+              {status === 'done' && <>
+                <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="2.5" opacity="0.3" />
+                <path d="M11 16.5l3.5 3.5 7-7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </>}
+            </svg>
+            <span>{status === 'todo' ? 'Nenhuma pendência' : status === 'doing' ? 'Nada em progresso' : 'Nenhuma concluída'}</span>
+            <span style={{ fontSize: 10, opacity: 0.6 }}>Arraste tarefas aqui</span>
           </div>
         )}
       </div>
@@ -243,36 +275,48 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
     const { active, over } = e;
     setActiveTask(null);
     if (!over) return;
+    playDrop();
+    const activeId = active.id as string;
     const overId = over.id as string;
     const validStatuses: TaskStatus[] = ['todo', 'doing', 'done'];
 
+    const activeTaskObj = tasks.find(t => t.id === activeId);
+    if (!activeTaskObj) return;
+
     if (validStatuses.includes(overId as TaskStatus)) {
       // Dropped on column droppable
-      const activeTaskObj = tasks.find(t => t.id === active.id);
-      if (activeTaskObj && activeTaskObj.status !== overId) {
-        updateTaskStatus(active.id as string, overId as TaskStatus);
-        // Add to end of new column order
-        setKanbanOrder(overId as TaskStatus, [...(kanbanOrder[overId as TaskStatus] ?? []), active.id as string]);
-      }
+      const newStatus = overId as TaskStatus;
+      if (activeTaskObj.status === newStatus) return;
+
+      updateTaskStatus(activeId, newStatus);
+      // Remove from old column, deduplicate then append to new column
+      setKanbanOrder(activeTaskObj.status, kanbanOrder[activeTaskObj.status].filter(id => id !== activeId));
+      setKanbanOrder(newStatus, [...kanbanOrder[newStatus].filter(id => id !== activeId), activeId]);
     } else {
-      // Dropped on another task card
-      const activeTaskObj = tasks.find(t => t.id === active.id);
+      // Dropped on a task card
       const overTaskObj = tasks.find(t => t.id === overId);
-      if (!activeTaskObj || !overTaskObj) return;
+      if (!overTaskObj) return;
 
       if (activeTaskObj.status === overTaskObj.status) {
-        // Same column reorder
+        // Same column — reorder
         const colTasks = getColumnTasks(activeTaskObj.status);
-        const oldIdx = colTasks.findIndex(t => t.id === active.id);
+        const oldIdx = colTasks.findIndex(t => t.id === activeId);
         const newIdx = colTasks.findIndex(t => t.id === overId);
         if (oldIdx !== -1 && newIdx !== -1) {
-          const newOrder = arrayMove(colTasks.map(t => t.id), oldIdx, newIdx);
-          setKanbanOrder(activeTaskObj.status, newOrder);
+          setKanbanOrder(activeTaskObj.status, arrayMove(colTasks.map(t => t.id), oldIdx, newIdx));
         }
       } else {
-        // Move to different column
-        updateTaskStatus(active.id as string, overTaskObj.status);
-        updateTask(active.id as string, { status: overTaskObj.status });
+        // Different column — change status and insert near the target card
+        const newStatus = overTaskObj.status;
+        updateTaskStatus(activeId, newStatus);
+        // Remove from old column
+        setKanbanOrder(activeTaskObj.status, kanbanOrder[activeTaskObj.status].filter(id => id !== activeId));
+        // Insert at position of over card in new column (deduplicated)
+        const colTasks = getColumnTasks(newStatus);
+        const insertIdx = colTasks.findIndex(t => t.id === overId);
+        const newOrder = colTasks.map(t => t.id).filter(id => id !== activeId);
+        newOrder.splice(insertIdx !== -1 ? insertIdx : newOrder.length, 0, activeId);
+        setKanbanOrder(newStatus, newOrder);
       }
     }
   };

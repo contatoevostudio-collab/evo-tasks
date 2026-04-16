@@ -3,6 +3,7 @@ import { format, startOfWeek, addDays, isToday, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { useTaskStore } from '../../store/tasks';
+import { playStatusChange } from '../../lib/sounds';
 import { getTaskTitle } from '../../types';
 import type { Task, Priority } from '../../types';
 
@@ -179,7 +180,7 @@ export function WeekView({ onTaskClick, onDayClick }: Props) {
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <motion.button
-                            onClick={(e) => { e.stopPropagation(); cycleTaskStatus(task.id); }}
+                            onClick={(e) => { e.stopPropagation(); cycleTaskStatus(task.id); playStatusChange(); }}
                             whileTap={{ scale: 1.5 }}
                             title={`Status: ${task.status} → ${STATUS_NEXT[task.status]}`}
                             style={{

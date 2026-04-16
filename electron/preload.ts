@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pomodoroStop: () => ipcRenderer.invoke('pomodoro-stop'),
   pomodoroGetState: () => ipcRenderer.invoke('pomodoro-get-state'),
   onPomodoroTick: (cb: (state: unknown) => void) => {
-    ipcRenderer.on('pomodoro-tick', (_event, state) => cb(state));
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => cb(state);
+    ipcRenderer.on('pomodoro-tick', handler);
+    return () => { ipcRenderer.removeListener('pomodoro-tick', handler); };
   },
 });

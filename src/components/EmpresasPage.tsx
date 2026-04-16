@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiPlus, FiEdit2, FiTrash2, FiCheck, FiX,
@@ -263,7 +263,7 @@ export function EmpresasPage() {
   const [newCompanyNameVal, setNewCompanyNameVal]   = useState('');
   const [selectedSubForClient, setSelectedSubForClient] = useState<string | null>(null);
   const [clientModalTab, setClientModalTab] = useState<'notas' | 'dicas'>('notas');
-  const [showTaskList, setShowTaskList] = useState(false);
+  const [showTaskList, setShowTaskList] = useState(true);
   const [editingQuota, setEditingQuota] = useState(false);
   const [quotaVal, setQuotaVal]         = useState('');
   const [editingSubQuotaId, setEditingSubQuotaId] = useState<string | null>(null);
@@ -272,6 +272,9 @@ export function EmpresasPage() {
 
   // Undo refs for subclient deletion
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear pending undo timer on unmount
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
 
   const selected     = companies.find(c => c.id === selectedId);
   const companySubs  = subClients.filter(s => s.companyId === selectedId);

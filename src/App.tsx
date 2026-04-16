@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { FiSun, FiMoon, FiZap } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
 import { NavSidebar } from './components/NavSidebar';
 import { BottomBar } from './components/BottomBar';
@@ -15,26 +16,48 @@ import { SettingsModal } from './components/SettingsModal';
 import { SearchModal } from './components/SearchModal';
 import { PinModal } from './components/PinModal';
 import { AuthModal } from './components/AuthModal';
-import { PomodoroPanel } from './components/PomodoroPanel';
+import { PomodoroPanel, INITIAL_POMODORO, type PomodoroState } from './components/PomodoroPanel';
+import { RightSidebar } from './components/RightSidebar';
 import { useTaskStore } from './store/tasks';
 import { useAuthStore } from './store/auth';
 import { loadFromSupabase } from './lib/supabaseSync';
+import { playChime } from './lib/sounds';
 import { THEME_VARS } from './types';
 import type { Task, TaskStatus, PageType } from './types';
 import './index.css';
 
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 export default function App() {
-  const { viewMode, theme, toast, setUserId, animationsEnabled, setAnimationsEnabled } = useTaskStore();
+  const { viewMode, theme, setTheme, toast, setUserId, animationsEnabled, setAnimationsEnabled } = useTaskStore();
+  const isLight = theme.startsWith('light');
+  const toggleTheme = () => {
+    document.documentElement.classList.add('theme-transitioning');
+    setTheme(isLight ? 'dark-blue' : 'light-soft');
+    setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 350);
+  };
   const { user, loading: authLoading, initialize, guestMode, setGuestMode } = useAuthStore();
   const themeVars = THEME_VARS[theme];
 
   useEffect(() => { initialize(); }, []);
 
+  // Only reload from Supabase when the user ID actually changes (sign in / sign out),
+  // NOT on every auth event (e.g. token refresh creates a new user object reference
+  // which would trigger replaceAll and could cause data loss mid-session).
+  const prevUserIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (user) {
       setUserId(user.id);
-      loadFromSupabase(user.id).catch(console.error);
+      if (user.id !== prevUserIdRef.current) {
+        prevUserIdRef.current = user.id;
+        loadFromSupabase(user.id).catch(console.error);
+      }
     } else {
+      prevUserIdRef.current = null;
       setUserId(null);
     }
   }, [user]);
@@ -47,7 +70,90 @@ export default function App() {
   const [showAuthModal,  setShowAuthModal]  = useState(false);
   const [pinLocked,      setPinLocked]      = useState(() => !!localStorage.getItem('evo-tasks-pin'));
   const [showPomodoro,   setShowPomodoro]   = useState(false);
-  const [pomodoroDisplay, setPomodoroDisplay] = useState<string | null>(null);
+
+  // ─── Pomodoro timer (lives at App level so it survives panel close) ───
+  const [pomo, setPomo] = useState<PomodoroState>(INITIAL_POMODORO);
+  const pomoInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevPhaseRef = useRef(pomo.isBreak);
+
+  // Sync with Electron main process once on mount
+  useEffect(() => {
+    const sync = async () => {
+      if (window.electronAPI?.pomodoroGetState) {
+        const s = await window.electronAPI.pomodoroGetState();
+        if (s) setPomo(s);
+      }
+    };
+    sync();
+
+    // Listen for ticks from Electron main process (authoritative when running in Electron)
+    const cleanup = window.electronAPI?.onPomodoroTick?.((s: PomodoroState) => {
+      setPomo(s);
+    });
+    return () => { cleanup?.(); };
+  }, []);
+
+  // Local interval fallback (web / dev mode without Electron)
+  useEffect(() => {
+    if (pomoInterval.current) clearInterval(pomoInterval.current);
+
+    if (pomo.isRunning) {
+      pomoInterval.current = setInterval(() => {
+        setPomo(prev => {
+          if (!prev.isRunning) return prev;
+          if (prev.remaining <= 1) {
+            const newIsBreak = !prev.isBreak;
+            const newRemaining = newIsBreak ? prev.breakDuration : prev.workDuration;
+            return { ...prev, remaining: newRemaining, isBreak: newIsBreak };
+          }
+          return { ...prev, remaining: prev.remaining - 1 };
+        });
+      }, 1000);
+    }
+
+    return () => { if (pomoInterval.current) clearInterval(pomoInterval.current); };
+  }, [pomo.isRunning]);
+
+  // Play chime when phase switches
+  useEffect(() => {
+    if (pomo.isBreak !== prevPhaseRef.current && (pomo.isRunning || pomo.remaining < (pomo.isBreak ? pomo.breakDuration : pomo.workDuration))) {
+      playChime();
+    }
+    prevPhaseRef.current = pomo.isBreak;
+  }, [pomo.isBreak]);
+
+  const pomodoroDisplay = pomo.isRunning || pomo.remaining < (pomo.isBreak ? pomo.breakDuration : pomo.workDuration)
+    ? formatTime(pomo.remaining)
+    : null;
+
+  const handlePomoStart = useCallback(async (workMin: number, breakMin: number) => {
+    if (window.electronAPI?.pomodoroStart) {
+      await window.electronAPI.pomodoroStart({ work: workMin, shortBreak: breakMin });
+    }
+    setPomo(prev => ({
+      ...prev,
+      isRunning: true,
+      workDuration: workMin * 60,
+      breakDuration: breakMin * 60,
+      remaining: prev.isRunning ? prev.remaining : workMin * 60,
+      isBreak: false,
+    }));
+  }, []);
+
+  const handlePomoPause = useCallback(async () => {
+    if (window.electronAPI?.pomodoroPause) await window.electronAPI.pomodoroPause();
+    setPomo(prev => ({ ...prev, isRunning: !prev.isRunning }));
+  }, []);
+
+  const handlePomoStop = useCallback(async () => {
+    if (window.electronAPI?.pomodoroStop) await window.electronAPI.pomodoroStop();
+    setPomo(prev => ({
+      ...prev,
+      isRunning: false,
+      isBreak: false,
+      remaining: prev.workDuration,
+    }));
+  }, []);
 
   const openNewTask = (date?: string) => { setModalDate(date); setModalTask(null); };
   const openTask    = (task: Task)    => { setModalTask(task); setModalDate(undefined); };
@@ -112,33 +218,53 @@ export default function App() {
           borderBottom: '1px solid var(--b1)',
           background: 'var(--sidebar-bg)',
         }}>
-          {/* Animations toggle */}
+          {/* Animations toggle — icon only */}
           <button
             onClick={() => setAnimationsEnabled(!animationsEnabled)}
             title={animationsEnabled ? 'Desativar animações' : 'Ativar animações'}
             style={{
-              height: 24, padding: '0 8px', borderRadius: 6,
+              width: 28, height: 28, borderRadius: 7, padding: 0,
               background: animationsEnabled ? 'rgba(53,107,255,0.12)' : 'var(--s2)',
               border: '1px solid var(--b2)', cursor: 'pointer',
               color: animationsEnabled ? '#64C4FF' : 'var(--t3)',
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.5px',
               transition: 'all .15s',
-              display: 'flex', alignItems: 'center', gap: 4,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            ✦ {animationsEnabled ? 'Anim' : 'Anim off'}
+            <FiZap size={13} />
           </button>
 
-          {/* Pomodoro button */}
+          {/* Theme toggle — dark/light */}
+          <button
+            onClick={toggleTheme}
+            title={isLight ? 'Mudar para escuro' : 'Mudar para claro'}
+            style={{
+              width: 28, height: 28, borderRadius: 7, padding: 0,
+              background: 'var(--s2)', border: '1px solid var(--b2)',
+              cursor: 'pointer', color: 'var(--t2)',
+              transition: 'all .15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {isLight ? <FiMoon size={13} /> : <FiSun size={13} />}
+          </button>
+
+          {/* Pomodoro button — always shows time when running */}
           <button
             onClick={() => setShowPomodoro(s => !s)}
             title="Pomodoro Timer"
             style={{
               height: 24, padding: '0 8px', borderRadius: 6,
-              background: showPomodoro ? 'rgba(53,107,255,0.15)' : 'var(--s2)',
-              border: `1px solid ${showPomodoro ? 'rgba(53,107,255,0.4)' : 'var(--b2)'}`,
+              background: pomodoroDisplay
+                ? (pomo.isBreak ? 'rgba(48,209,88,0.15)' : 'rgba(100,196,255,0.15)')
+                : showPomodoro ? 'rgba(53,107,255,0.15)' : 'var(--s2)',
+              border: `1px solid ${pomodoroDisplay
+                ? (pomo.isBreak ? 'rgba(48,209,88,0.4)' : 'rgba(100,196,255,0.4)')
+                : showPomodoro ? 'rgba(53,107,255,0.4)' : 'var(--b2)'}`,
               cursor: 'pointer',
-              color: showPomodoro ? '#64C4FF' : 'var(--t2)',
+              color: pomodoroDisplay
+                ? (pomo.isBreak ? '#30d158' : '#64C4FF')
+                : showPomodoro ? '#64C4FF' : 'var(--t2)',
               fontSize: 11, fontWeight: 600,
               transition: 'all .15s',
               display: 'flex', alignItems: 'center', gap: 4,
@@ -202,6 +328,9 @@ export default function App() {
         {page === 'tarefas' && <BottomBar />}
       </div>
 
+      {/* Right sidebar — Notas Rápidas */}
+      <RightSidebar />
+
       {/* Task modal */}
       <AnimatePresence>
         {isModalOpen && (
@@ -238,8 +367,11 @@ export default function App() {
         {showPomodoro && (
           <PomodoroPanel
             key="pomodoro-panel"
+            state={pomo}
+            onStart={handlePomoStart}
+            onPause={handlePomoPause}
+            onStop={handlePomoStop}
             onClose={() => setShowPomodoro(false)}
-            onTick={(display) => setPomodoroDisplay(display)}
           />
         )}
       </AnimatePresence>

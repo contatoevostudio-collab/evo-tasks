@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { useTaskStore } from '../store/tasks';
-import type { Task, Company, SubClient } from '../types';
+import type { Task, Company, SubClient, Lead, QuickNote } from '../types';
 
 // ─── Mappers ────────────────────────────────────────────────────────────────
 
@@ -67,6 +67,51 @@ function subClientFromDb(r: Record<string, unknown>): SubClient {
   };
 }
 
+function leadToDb(l: Lead, userId: string) {
+  return {
+    id: l.id, user_id: userId,
+    name: l.name,
+    contact: l.contact ?? null,
+    phone: l.phone ?? null,
+    email: l.email ?? null,
+    instagram: l.instagram ?? null,
+    budget: l.budget ?? null,
+    notes: l.notes ?? null,
+    stage: l.stage,
+    converted_to_company_id: l.convertedToCompanyId ?? null,
+    created_at: l.createdAt,
+  };
+}
+
+function quickNoteToDb(n: QuickNote, userId: string) {
+  return { id: n.id, user_id: userId, text: n.text, checked: n.checked, created_at: n.createdAt };
+}
+
+function quickNoteFromDb(r: Record<string, unknown>): QuickNote {
+  return {
+    id: r.id as string,
+    text: r.text as string,
+    checked: r.checked as boolean,
+    createdAt: r.created_at as string,
+  };
+}
+
+function leadFromDb(r: Record<string, unknown>): Lead {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    contact: (r.contact as string) || undefined,
+    phone: (r.phone as string) || undefined,
+    email: (r.email as string) || undefined,
+    instagram: (r.instagram as string) || undefined,
+    budget: (r.budget as string) || undefined,
+    notes: (r.notes as string) || undefined,
+    stage: r.stage as Lead['stage'],
+    convertedToCompanyId: (r.converted_to_company_id as string) || undefined,
+    createdAt: r.created_at as string,
+  };
+}
+
 // ─── Load all data from Supabase ─────────────────────────────────────────────
 
 export async function loadFromSupabase(userId: string): Promise<void> {
@@ -75,25 +120,29 @@ export async function loadFromSupabase(userId: string): Promise<void> {
     { data: companies, error: e1 },
     { data: subClients, error: e2 },
     { data: tasks, error: e3 },
+    { data: leads, error: e4 },
+    { data: quickNotes, error: e5 },
   ] = await Promise.all([
     supabase.from('companies').select('*').eq('user_id', userId),
     supabase.from('sub_clients').select('*').eq('user_id', userId),
     supabase.from('tasks').select('*').eq('user_id', userId),
+    supabase.from('leads').select('*').eq('user_id', userId),
+    supabase.from('quick_notes').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
   ]);
 
-  if (e1 || e2 || e3) {
-    console.error('Supabase load error:', e1 ?? e2 ?? e3);
+  if (e1 || e2 || e3 || e4 || e5) {
+    console.error('Supabase load error:', e1 ?? e2 ?? e3 ?? e4 ?? e5);
     useTaskStore.getState().setSyncStatus('error');
     return;
   }
 
-  if (companies && subClients && tasks) {
-    useTaskStore.getState().replaceAll({
-      companies: (companies as Record<string, unknown>[]).map(companyFromDb),
-      subClients: (subClients as Record<string, unknown>[]).map(subClientFromDb),
-      tasks: (tasks as Record<string, unknown>[]).map(taskFromDb),
-    });
-  }
+  useTaskStore.getState().replaceAll({
+    companies: (companies ?? []).map(r => companyFromDb(r as Record<string, unknown>)),
+    subClients: (subClients ?? []).map(r => subClientFromDb(r as Record<string, unknown>)),
+    tasks: (tasks ?? []).map(r => taskFromDb(r as Record<string, unknown>)),
+    leads: (leads ?? []).map(r => leadFromDb(r as Record<string, unknown>)),
+    quickNotes: (quickNotes ?? []).map(r => quickNoteFromDb(r as Record<string, unknown>)),
+  });
   useTaskStore.getState().setSyncStatus('idle');
 }
 
@@ -138,5 +187,33 @@ export async function removeSubClient(id: string, userId: string) {
   useTaskStore.getState().setSyncStatus('syncing');
   const { error } = await supabase.from('sub_clients').delete().eq('id', id).eq('user_id', userId);
   if (error) { console.error('removeSubClient error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
+}
+
+export async function syncLead(lead: Lead, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
+  const { error } = await supabase.from('leads').upsert(leadToDb(lead, userId));
+  if (error) { console.error('syncLead error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
+}
+
+export async function removeLead(id: string, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
+  const { error } = await supabase.from('leads').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeLead error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
+}
+
+export async function syncQuickNote(note: QuickNote, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
+  const { error } = await supabase.from('quick_notes').upsert(quickNoteToDb(note, userId));
+  if (error) { console.error('syncQuickNote error:', error); useTaskStore.getState().setSyncStatus('error'); }
+  else useTaskStore.getState().setSyncStatus('idle');
+}
+
+export async function removeQuickNote(id: string, userId: string) {
+  useTaskStore.getState().setSyncStatus('syncing');
+  const { error } = await supabase.from('quick_notes').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeQuickNote error:', error); useTaskStore.getState().setSyncStatus('error'); }
   else useTaskStore.getState().setSyncStatus('idle');
 }

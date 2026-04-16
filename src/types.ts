@@ -12,6 +12,13 @@ export interface SubTask {
   done: boolean;
 }
 
+export interface QuickNote {
+  id: string;
+  text: string;
+  checked: boolean;
+  createdAt: string;
+}
+
 export interface ArtVersion {
   id: string;
   label: string;   // ex: v1, v2, v3

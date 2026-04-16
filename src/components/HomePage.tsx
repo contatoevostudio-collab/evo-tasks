@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format, parseISO, isAfter, isBefore, startOfToday, addDays, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
-import { FiCheckCircle, FiCircle, FiClock, FiTrendingUp, FiAlertTriangle, FiPlus, FiZap, FiInbox } from 'react-icons/fi';
+import { FiCheckCircle, FiCircle, FiClock, FiTrendingUp, FiAlertTriangle, FiPlus, FiZap, FiInbox, FiEdit3, FiX } from 'react-icons/fi';
+import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { playCheck, playAdd, playDelete, playChime } from '../lib/sounds';
 import { useTaskStore } from '../store/tasks';
 import { getTaskTitle } from '../types';
 import type { Task, TaskStatus, PageType, TaskType } from '../types';
@@ -56,8 +60,87 @@ const TASK_TYPES: { id: TaskType; label: string }[] = [
   { id: 'outro',     label: 'Outro' },
 ];
 
+function HomeNoteRow({ id, text, checked, onToggle, onDelete }: {
+  id: string; text: string; checked: boolean; onToggle: () => void; onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          padding: '6px 10px 6px 8px',
+          borderRadius: 99,
+          border: `1px solid ${checked ? 'var(--b1)' : 'var(--b2)'}`,
+          background: checked ? 'var(--s1)' : hovered ? 'var(--s2)' : 'var(--s1)',
+          transition: isDragging ? 'none' : 'all .15s',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          maxWidth: 280,
+          userSelect: 'none',
+        }}
+        {...attributes}
+        {...listeners}
+      >
+        {/* Checkbox */}
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onToggle(); }}
+          style={{
+            width: 15, height: 15, borderRadius: 4, flexShrink: 0,
+            border: `1.5px solid ${checked ? '#356BFF' : 'var(--b3)'}`,
+            background: checked ? '#356BFF' : 'transparent',
+            cursor: 'pointer', padding: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all .15s',
+          }}
+        >
+          {checked && (
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <polyline points="1,4 3,6.5 7,1.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+
+        {/* Text */}
+        <span style={{
+          fontSize: 12, color: checked ? 'var(--t4)' : 'var(--t1)',
+          textDecoration: checked ? 'line-through' : 'none',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          transition: 'all .15s',
+        }}>
+          {text}
+        </span>
+
+        {/* Delete */}
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--t4)', padding: 0, display: 'flex', flexShrink: 0,
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity .15s',
+            pointerEvents: hovered ? 'auto' : 'none',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+        >
+          <FiX size={11} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function HomePage({ onTaskClick, onNavigate }: Props) {
-  const { tasks, companies, subClients, selectedCompanies, setFilterPriority, setViewMode, addTask, nextSequence, showToast, hideToast } = useTaskStore();
+  const { tasks, companies, subClients, selectedCompanies, setFilterPriority, setViewMode, addTask, nextSequence, showToast, hideToast, quickNotes, addQuickNote, toggleQuickNote, deleteQuickNote, reorderQuickNotes } = useTaskStore();
 
   const filtered = tasks.filter(t => selectedCompanies.includes(t.companyId) && !t.archived && !t.inbox);
   const inboxTasks = tasks.filter(t => selectedCompanies.includes(t.companyId) && !t.archived && t.inbox);
@@ -86,6 +169,34 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
 
   const companyColor = (companyId: string) => companies.find(c => c.id === companyId)?.color ?? '#356BFF';
+
+  // Confetti celebration
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevAllDoneRef = useRef(false);
+  useEffect(() => {
+    const allDone = todayTasks.length > 0 && todayTasks.every(t => t.status === 'done');
+    if (allDone && !prevAllDoneRef.current) {
+      playChime();
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2500);
+    }
+    prevAllDoneRef.current = allDone;
+  }, [todayTasks]);
+
+  // Quick notes
+  const [noteInput, setNoteInput] = useState('');
+  const handleAddNote = () => {
+    const text = noteInput.trim();
+    if (!text) return;
+    addQuickNote(text);
+    playAdd();
+    setNoteInput('');
+  };
+  const noteSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const handleNoteDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) reorderQuickNotes(active.id as string, over.id as string);
+  };
 
   // Quick-add state
   const [qaCompany, setQaCompany]   = useState(companies[0]?.id ?? '');
@@ -274,6 +385,87 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
         )}
       </div>
 
+      {/* Notas Rápidas */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        style={{ background: 'var(--s1)', border: '1px solid var(--b1)', borderRadius: 16, padding: 20, marginBottom: 20 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <FiEdit3 size={12} style={{ color: '#64C4FF' }} />
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#64C4FF' }}>
+            Notas Rápidas
+          </span>
+          {quickNotes.length > 0 && (() => {
+            const pending = quickNotes.filter(n => !n.checked).length;
+            return (
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--t4)', background: 'var(--s2)', borderRadius: 99, padding: '1px 6px' }}>
+                {pending} pendente{pending !== 1 ? 's' : ''}
+              </span>
+            );
+          })()}
+        </div>
+
+        {/* Input + chips numa linha só */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <input
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddNote(); }}
+              placeholder="Nova nota..."
+              style={{
+                width: 180, padding: '6px 10px', borderRadius: 99,
+                border: '1px solid var(--b2)', background: 'var(--ib)',
+                color: 'var(--t1)', fontSize: 12, outline: 'none',
+              }}
+            />
+            <button
+              onClick={handleAddNote}
+              disabled={!noteInput.trim()}
+              style={{
+                width: 28, height: 28, borderRadius: 99, flexShrink: 0,
+                background: noteInput.trim() ? '#356BFF' : 'var(--s2)',
+                border: 'none', cursor: noteInput.trim() ? 'pointer' : 'default',
+                color: noteInput.trim() ? '#fff' : 'var(--t4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all .15s',
+              }}
+            >
+              <FiPlus size={13} />
+            </button>
+          </div>
+
+          {/* Divisor vertical */}
+          {quickNotes.length > 0 && (
+            <div style={{ width: 1, height: 20, background: 'var(--b2)', flexShrink: 0 }} />
+          )}
+
+          {/* Chips — sortable */}
+          <DndContext sensors={noteSensors} collisionDetection={closestCenter} onDragEnd={handleNoteDragEnd}>
+            <SortableContext items={quickNotes.map(n => n.id)} strategy={rectSortingStrategy}>
+              {quickNotes.map(note => (
+                <HomeNoteRow
+                  key={note.id}
+                  id={note.id}
+                  text={note.text}
+                  checked={note.checked}
+                  onToggle={() => { toggleQuickNote(note.id); playCheck(); }}
+                  onDelete={() => { deleteQuickNote(note.id); playDelete(); }}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {quickNotes.length === 0 && (
+            <span style={{ fontSize: 12, color: 'var(--t4)' }}>
+              Nenhuma nota ainda
+            </span>
+          )}
+        </div>
+      </motion.div>
+
       <div style={{ display: 'grid', gridTemplateColumns: overdue.length > 0 ? '1fr 1fr 1fr' : '1fr 1fr', gap: 20 }}>
         {/* Overdue */}
         {overdue.length > 0 && (
@@ -396,6 +588,24 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
           )}
         </div>
       </div>
+
+      {showConfetti && (
+        <div className="confetti-container">
+          {Array.from({ length: 30 }).map((_, i) => (
+            <div
+              key={i}
+              className="confetti-piece"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${50 + Math.random() * 30}%`,
+                background: ['#ff453a', '#ff9f0a', '#30d158', '#64C4FF', '#bf5af2', '#356BFF'][i % 6],
+                animationDelay: `${Math.random() * 0.5}s`,
+                animationDuration: `${1.5 + Math.random() * 1}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

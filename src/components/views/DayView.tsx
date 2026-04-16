@@ -3,6 +3,7 @@ import { format, isToday, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { FiPlus } from 'react-icons/fi';
+import { playStatusChange } from '../../lib/sounds';
 import { useTaskStore } from '../../store/tasks';
 import { getTaskTitle } from '../../types';
 import type { Task, Priority } from '../../types';
@@ -48,6 +49,7 @@ export function DayView({ onTaskClick, onDayClick }: Props) {
       t.date === dateStr &&
       selectedCompanies.includes(t.companyId) &&
       !t.archived &&
+      !t.inbox &&
       (!hideDone || t.status !== 'done') &&
       (!filterPriority || t.priority === filterPriority) &&
       (!filterSubClient || t.subClientId === filterSubClient) &&
@@ -128,9 +130,18 @@ export function DayView({ onTaskClick, onDayClick }: Props) {
       {/* Tasks */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 28px' }}>
         {dayTasks.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', gap: 10, color: 'var(--t4)' }}>
-            <div style={{ fontSize: 36 }}>○</div>
-            <span style={{ fontSize: 13 }}>Nenhuma tarefa para {todayDay ? 'hoje' : 'este dia'}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', gap: 12, color: 'var(--t4)' }}>
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ opacity: 0.3 }}>
+              <rect x="10" y="8" width="28" height="32" rx="4" stroke="currentColor" strokeWidth="2" />
+              <line x1="16" y1="18" x2="32" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+              <line x1="16" y1="24" x2="28" y2="24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.35" />
+              <line x1="16" y1="30" x2="25" y2="30" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.2" />
+              <circle cx="36" cy="36" r="8" fill="var(--bg)" stroke="currentColor" strokeWidth="2" />
+              <line x1="33" y1="36" x2="39" y2="36" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="36" y1="33" x2="36" y2="39" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Nenhuma tarefa para {todayDay ? 'hoje' : 'este dia'}</span>
+            <span style={{ fontSize: 11, opacity: 0.5 }}>Clique em + para adicionar uma tarefa</span>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 720 }}>
@@ -176,7 +187,7 @@ export function DayView({ onTaskClick, onDayClick }: Props) {
                           onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = STATUS_BG[task.status])}
                         >
                           <motion.button
-                            onClick={(e) => { e.stopPropagation(); cycleTaskStatus(task.id); }}
+                            onClick={(e) => { e.stopPropagation(); cycleTaskStatus(task.id); playStatusChange(); }}
                             whileTap={{ scale: 1.4 }}
                             title={`${STATUS_LABEL[task.status]} → ${STATUS_LABEL[STATUS_NEXT[task.status]]}`}
                             style={{

@@ -46,3 +46,58 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   50%       { opacity: 0.5; transform: scale(0.75); }
 }
 .sync-pulse { animation: syncPulse 1.2s ease-in-out infinite; }
+
+/* Deadline pulse — urgent tasks */
+@keyframes deadlinePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,69,58,0); }
+  50%      { box-shadow: 0 0 0 3px rgba(255,69,58,0.15); }
+}
+.deadline-pulse { animation: deadlinePulse 2s ease-in-out infinite; }
+
+/* Confetti burst */
+@keyframes confettiPop {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-120px) rotate(360deg); opacity: 0; }
+}
+@keyframes confettiFade {
+  0%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.confetti-container {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  animation: confettiFade 2.5s ease-out forwards;
+}
+.confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  animation: confettiPop 2s cubic-bezier(.15,.9,.3,1) forwards;
+}
+
+/* Theme transition */
+.theme-transitioning,
+.theme-transitioning * {
+  transition: background-color 0.3s ease, color 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+/* Glassmorphism modal backdrop */
+.glass-backdrop {
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+}
+
+/* Tooltip (hover card) */
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.hover-tooltip {
+  animation: tooltipIn 0.15s ease-out both;
+  pointer-events: none;
+}

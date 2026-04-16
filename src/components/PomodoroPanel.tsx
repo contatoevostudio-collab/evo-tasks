@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiX, FiPlay, FiPause, FiSquare } from 'react-icons/fi';
+import { FiMinus, FiPlay, FiPause, FiSquare } from 'react-icons/fi';
 
-interface PomodoroState {
+export interface PomodoroState {
   isRunning: boolean;
   isBreak: boolean;
   remaining: number; // seconds
@@ -10,9 +10,20 @@ interface PomodoroState {
   breakDuration: number; // seconds
 }
 
+export const INITIAL_POMODORO: PomodoroState = {
+  isRunning: false,
+  isBreak: false,
+  remaining: 25 * 60,
+  workDuration: 25 * 60,
+  breakDuration: 5 * 60,
+};
+
 interface Props {
+  state: PomodoroState;
+  onStart: (workMin: number, breakMin: number) => void;
+  onPause: () => void;
+  onStop: () => void;
   onClose: () => void;
-  onTick: (display: string | null) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -21,113 +32,15 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function PomodoroPanel({ onClose, onTick }: Props) {
-  const [state, setState] = useState<PomodoroState>({
-    isRunning: false,
-    isBreak: false,
-    remaining: 25 * 60,
-    workDuration: 25 * 60,
-    breakDuration: 5 * 60,
-  });
-
-  const [workMinutes, setWorkMinutes] = useState(25);
-  const [breakMinutes, setBreakMinutes] = useState(5);
-
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Sync with main process on mount
-  useEffect(() => {
-    const syncState = async () => {
-      if (window.electronAPI?.pomodoroGetState) {
-        const s = await window.electronAPI.pomodoroGetState();
-        if (s) {
-          setState(s);
-          setWorkMinutes(Math.round(s.workDuration / 60));
-          setBreakMinutes(Math.round(s.breakDuration / 60));
-        }
-      }
-    };
-    syncState();
-
-    // Listen for ticks from main process
-    window.electronAPI?.onPomodoroTick?.((s: PomodoroState) => {
-      setState(s);
-    });
-  }, []);
-
-  // Local tick when running (fallback when no electron IPC ticks arrive)
-  useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-
-    if (state.isRunning) {
-      intervalRef.current = setInterval(() => {
-        setState(prev => {
-          if (!prev.isRunning) return prev;
-          if (prev.remaining <= 1) {
-            // switch phase
-            const newIsBreak = !prev.isBreak;
-            const newRemaining = newIsBreak ? prev.breakDuration : prev.workDuration;
-            return { ...prev, remaining: newRemaining, isBreak: newIsBreak };
-          }
-          return { ...prev, remaining: prev.remaining - 1 };
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [state.isRunning]);
-
-  // Update top bar display
-  useEffect(() => {
-    if (state.isRunning || state.remaining < (state.isBreak ? state.breakDuration : state.workDuration)) {
-      onTick(formatTime(state.remaining));
-    } else {
-      onTick(null);
-    }
-  }, [state.remaining, state.isRunning]);
-
-  const handleStart = async () => {
-    const config = { work: workMinutes, shortBreak: breakMinutes };
-    if (window.electronAPI?.pomodoroStart) {
-      await window.electronAPI.pomodoroStart(config);
-    }
-    setState(prev => ({
-      ...prev,
-      isRunning: true,
-      workDuration: workMinutes * 60,
-      breakDuration: breakMinutes * 60,
-      remaining: prev.isRunning ? prev.remaining : workMinutes * 60,
-      isBreak: false,
-    }));
-  };
-
-  const handlePause = async () => {
-    if (window.electronAPI?.pomodoroPause) {
-      await window.electronAPI.pomodoroPause();
-    }
-    setState(prev => ({ ...prev, isRunning: !prev.isRunning }));
-  };
-
-  const handleStop = async () => {
-    if (window.electronAPI?.pomodoroStop) {
-      await window.electronAPI.pomodoroStop();
-    }
-    setState(prev => ({
-      ...prev,
-      isRunning: false,
-      isBreak: false,
-      remaining: workMinutes * 60,
-    }));
-    onTick(null);
-  };
+export function PomodoroPanel({ state, onStart, onPause, onStop, onClose }: Props) {
+  const [workMinutes, setWorkMinutes] = useState(Math.round(state.workDuration / 60));
+  const [breakMinutes, setBreakMinutes] = useState(Math.round(state.breakDuration / 60));
 
   const progress = state.isBreak
     ? 1 - state.remaining / state.breakDuration
     : 1 - state.remaining / state.workDuration;
 
-  const accentColor = state.isBreak ? '#30d158' : '#ff453a';
+  const accentColor = state.isBreak ? '#30d158' : '#64C4FF';
   const phaseLabel = state.isBreak ? 'Pausa' : 'Foco';
 
   const circumference = 2 * Math.PI * 54;
@@ -157,17 +70,15 @@ export function PomodoroPanel({ onClose, onTick }: Props) {
       <div style={{ padding: '18px 20px 20px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🍅</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--t1)' }}>Pomodoro</span>
-          </div>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--t1)' }}>Timer</span>
           <button
             onClick={onClose}
+            title="Minimizar (timer continua rodando)"
             style={{ background: 'var(--s2)', border: 'none', cursor: 'pointer', color: 'var(--t2)', padding: 7, borderRadius: 8, display: 'flex', alignItems: 'center', transition: 'all .15s' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--b2)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
           >
-            <FiX size={14} />
+            <FiMinus size={14} />
           </button>
         </div>
 
@@ -207,7 +118,7 @@ export function PomodoroPanel({ onClose, onTick }: Props) {
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {!state.isRunning ? (
             <button
-              onClick={handleStart}
+              onClick={() => onStart(workMinutes, breakMinutes)}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 padding: '9px 0', borderRadius: 10,
@@ -222,7 +133,7 @@ export function PomodoroPanel({ onClose, onTick }: Props) {
             </button>
           ) : (
             <button
-              onClick={handlePause}
+              onClick={onPause}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 padding: '9px 0', borderRadius: 10,
@@ -237,7 +148,7 @@ export function PomodoroPanel({ onClose, onTick }: Props) {
             </button>
           )}
           <button
-            onClick={handleStop}
+            onClick={onStop}
             style={{
               width: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
               borderRadius: 10, background: 'var(--s2)', border: '1px solid var(--b2)',
@@ -263,10 +174,7 @@ export function PomodoroPanel({ onClose, onTick }: Props) {
                 value={workMinutes}
                 onChange={e => {
                   const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v > 0) {
-                    setWorkMinutes(v);
-                    if (!state.isRunning) setState(prev => ({ ...prev, remaining: v * 60, workDuration: v * 60 }));
-                  }
+                  if (!isNaN(v) && v > 0) setWorkMinutes(v);
                 }}
                 style={{
                   width: '100%', boxSizing: 'border-box',
@@ -287,10 +195,7 @@ export function PomodoroPanel({ onClose, onTick }: Props) {
                 value={breakMinutes}
                 onChange={e => {
                   const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v > 0) {
-                    setBreakMinutes(v);
-                    setState(prev => ({ ...prev, breakDuration: v * 60 }));
-                  }
+                  if (!isNaN(v) && v > 0) setBreakMinutes(v);
                 }}
                 style={{
                   width: '100%', boxSizing: 'border-box',
