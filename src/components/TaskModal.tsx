@@ -63,10 +63,10 @@ const COLOR_PRESETS = [
 
 export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
   const {
-    companies, subClients, addTask, updateTask, deleteTask,
+    companies, subClients, addTask, updateTask, deleteTask, restoreTask,
     nextSequence, addSubClient, toggleArchive,
     addSubTask, toggleSubTask, deleteSubTask,
-    tasks, theme,
+    tasks, theme, showToast, hideToast,
   } = useTaskStore();
 
   const isLight = theme.startsWith('light');
@@ -105,7 +105,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
   const [newVerNotes, setNewVerNotes] = useState('');
 
   const filteredSubClients = subClients
-    .filter(s => s.companyId === companyId)
+    .filter(s => !s.deletedAt && s.companyId === companyId)
     .filter(s => subSearch === '' || s.name.toLowerCase().includes(subSearch.toLowerCase()));
 
   const company = companies.find(c => c.id === companyId);
@@ -206,7 +206,14 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
   };
 
   const handleDelete = () => {
-    if (task) { deleteTask(task.id); playDelete(); onClose(); }
+    if (task) {
+      const id = task.id;
+      deleteTask(id);
+      playDelete();
+      showToast('Tarefa movida para a lixeira', () => { restoreTask(id); hideToast(); });
+      setTimeout(hideToast, 5000);
+      onClose();
+    }
   };
 
   const handleAddSubClient = () => {
@@ -256,7 +263,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
 
   // Sequence count info (#19)
   const existingCount = (companyId && subClientId && taskType)
-    ? tasks.filter(t => t.companyId === companyId && t.subClientId === subClientId && t.taskType === taskType && t.id !== task?.id).length
+    ? tasks.filter(t => !t.deletedAt && t.companyId === companyId && t.subClientId === subClientId && t.taskType === taskType && t.id !== task?.id).length
     : 0;
 
   return (
@@ -318,7 +325,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
             <div>
               <span style={labelStyle}>1 · Empresa</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {companies.map((c) => (
+                {companies.filter(c => !c.deletedAt).map((c) => (
                   <button key={c.id} onClick={() => setCompanyId(c.id)} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '5px 12px', borderRadius: 999, fontSize: 11, fontWeight: 500,
@@ -339,7 +346,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
               <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
                 <span style={labelStyle}>2 · Subclient</span>
                 {/* #15 — search */}
-                {subClients.filter(s => s.companyId === companyId).length > 4 && (
+                {subClients.filter(s => !s.deletedAt && s.companyId === companyId).length > 4 && (
                   <input
                     value={subSearch}
                     onChange={e => setSubSearch(e.target.value)}

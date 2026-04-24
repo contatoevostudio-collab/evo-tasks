@@ -48,6 +48,7 @@ export function WeekView({ onTaskClick, onDayClick }: Props) {
   const getTasksForDay = (day: Date) => {
     const dateStr = format(day, 'yyyy-MM-dd');
     return sortTasks(tasks.filter(t =>
+      !t.deletedAt &&
       t.date === dateStr &&
       selectedCompanies.includes(t.companyId) &&
       !t.archived &&

@@ -59,7 +59,7 @@ export function BottomBar() {
   };
 
   const periodCount = (() => {
-    let base = tasks.filter(t => selectedCompanies.includes(t.companyId) && !t.archived);
+    let base = tasks.filter(t => !t.deletedAt && selectedCompanies.includes(t.companyId) && !t.archived);
     if (viewMode === 'day') {
       const ds = format(currentDate, 'yyyy-MM-dd');
       base = base.filter(t => t.date === ds);

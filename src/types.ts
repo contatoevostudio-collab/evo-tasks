@@ -38,6 +38,7 @@ export interface Lead {
   stage: LeadStage;
   createdAt: string;
   convertedToCompanyId?: string;
+  deletedAt?: string;       // ISO — soft-delete (lixeira de 30 dias)
 }
 
 export interface Company {
@@ -46,6 +47,7 @@ export interface Company {
   color: string;
   monthlyQuota?: number; // artes contratadas por mês
   status?: 'ativo' | 'pausado' | 'inativo';
+  deletedAt?: string;    // ISO — soft-delete (lixeira de 30 dias)
 }
 
 export interface SubClient {
@@ -60,6 +62,7 @@ export interface SubClient {
   };
   notes?: string;
   tips?: string[];   // dicas rápidas sobre o cliente
+  deletedAt?: string; // ISO — soft-delete (lixeira de 30 dias)
 }
 
 export interface Task {
@@ -87,6 +90,7 @@ export interface Task {
   archived?: boolean;      // #13
   createdAt?: string;      // #17 — ISO string
   inbox?: boolean;         // sem data — caixa de entrada
+  deletedAt?: string;      // ISO — soft-delete (lixeira de 30 dias)
 }
 
 // sequence=0 means no number in title

@@ -239,9 +239,12 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
     setExpanded(p => ({ ...p, [id]: !p[id] }));
 
   const countFor = (companyId: string) =>
-    tasks.filter(t => t.companyId === companyId && t.status !== 'done' && !t.archived).length;
+    tasks.filter(t => !t.deletedAt && t.companyId === companyId && t.status !== 'done' && !t.archived).length;
 
-  const allSelected = selectedCompanies.length === companies.length;
+  // Group companies by status (excluindo deletadas / na lixeira)
+  const activeCompanies = companies.filter(c => !c.deletedAt);
+
+  const allSelected = selectedCompanies.length === activeCompanies.length;
 
   const openStatusMenu = (e: React.MouseEvent, companyId: string) => {
     e.stopPropagation();
@@ -251,11 +254,10 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
     setStatusMenuCompanyId(companyId);
   };
 
-  // Group companies by status
   const groupedCompanies: Record<CompanyStatus, Company[]> = {
-    ativo: companies.filter(c => getCompanyStatus(c) === 'ativo'),
-    pausado: companies.filter(c => getCompanyStatus(c) === 'pausado'),
-    inativo: companies.filter(c => getCompanyStatus(c) === 'inativo'),
+    ativo: activeCompanies.filter(c => getCompanyStatus(c) === 'ativo'),
+    pausado: activeCompanies.filter(c => getCompanyStatus(c) === 'pausado'),
+    inativo: activeCompanies.filter(c => getCompanyStatus(c) === 'inativo'),
   };
 
   const STATUS_GROUP_LABELS: Record<CompanyStatus, string> = {
@@ -281,12 +283,12 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask, onOpenSetting
   const syncDotTitle = syncStatus === 'syncing' ? 'Sincronizando...' : syncStatus === 'error' ? 'Erro de sincronização' : 'Sincronizado';
 
   function renderCompanyRow(company: Company, groupList: Company[]) {
-    const subs = subClients.filter(s => s.companyId === company.id);
+    const subs = subClients.filter(s => !s.deletedAt && s.companyId === company.id);
     const open = expanded[company.id];
     const pending = countFor(company.id);
     const isActive = selectedCompanies.includes(company.id);
 
-    const companyTasks = tasks.filter(t => t.companyId === company.id && !t.archived && !t.inbox);
+    const companyTasks = tasks.filter(t => !t.deletedAt && t.companyId === company.id && !t.archived && !t.inbox);
     const doneTasks = companyTasks.filter(t => t.status === 'done').length;
     const totalTasks = companyTasks.length;
     const pct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;

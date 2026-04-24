@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiPlus, FiX, FiEdit2, FiTrash2, FiPhone, FiMail, FiInstagram,
   FiDollarSign, FiArrowRight, FiCheck, FiUser, FiMinimize2, FiMaximize2,
+  FiRotateCcw, FiArchive, FiAlertTriangle,
 } from 'react-icons/fi';
 import { parseISO, differenceInDays } from 'date-fns';
 import {
@@ -360,17 +361,31 @@ function DroppableColumn({ stageId, children }: { stageId: LeadStage; children: 
 
 // ─── Main CRMPage ──────────────────────────────────────────────────────────────
 export function CRMPage() {
-  const { leads, addLead, updateLead, deleteLead, moveLead, convertLead } = useTaskStore();
+  const {
+    leads, addLead, updateLead, deleteLead, moveLead, convertLead,
+    restoreLead, permanentlyDeleteLead, showToast, hideToast,
+  } = useTaskStore();
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead,   setEditingLead]   = useState<Lead | null>(null);
   const [convertLead_,  setConvertLead_]  = useState<Lead | null>(null);
   const [activeLead,    setActiveLead]    = useState<Lead | null>(null);
   const [compact,       setCompact]       = useState(false);
+  const [showTrash,     setShowTrash]     = useState(false);
+  const [confirmPermaId, setConfirmPermaId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
+  // Active leads (not in trash)
+  const activeLeads = leads.filter(l => !l.deletedAt);
+
+  // Trash: only items deleted within last 30 days
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const trashedLeads = leads
+    .filter(l => l.deletedAt && new Date(l.deletedAt).getTime() >= cutoff)
+    .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
+
   const handleDragStart = (e: DragStartEvent) => {
-    const lead = leads.find(l => l.id === e.active.id);
+    const lead = activeLeads.find(l => l.id === e.active.id);
     setActiveLead(lead ?? null);
   };
 
@@ -379,7 +394,7 @@ export function CRMPage() {
     const { over, active } = e;
     if (!over) return;
     const targetStage = over.id as LeadStage;
-    const lead = leads.find(l => l.id === active.id);
+    const lead = activeLeads.find(l => l.id === active.id);
     if (lead && lead.stage !== targetStage) {
       moveLead(lead.id, targetStage);
     }
@@ -395,8 +410,30 @@ export function CRMPage() {
     setEditingLead(null);
   };
 
-  const totalLeads = leads.length;
-  const closedLeads = leads.filter(l => l.stage === 'fechado').length;
+  const handleSoftDelete = (id: string) => {
+    deleteLead(id);
+    showToast('Lead movido para a lixeira', () => {
+      restoreLead(id);
+      hideToast();
+    });
+    setTimeout(hideToast, 5000);
+  };
+
+  const handleRestore = (id: string) => {
+    restoreLead(id);
+    showToast('Lead restaurado');
+    setTimeout(hideToast, 3000);
+  };
+
+  const handlePermaDelete = (id: string) => {
+    permanentlyDeleteLead(id);
+    setConfirmPermaId(null);
+    showToast('Lead deletado permanentemente');
+    setTimeout(hideToast, 3000);
+  };
+
+  const totalLeads = activeLeads.length;
+  const closedLeads = activeLeads.filter(l => l.stage === 'fechado').length;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -416,6 +453,13 @@ export function CRMPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
+              onClick={() => setShowTrash(t => !t)}
+              title={showTrash ? 'Voltar para o pipeline' : `Lixeira (${trashedLeads.length})`}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10, background: showTrash ? 'rgba(255,69,58,0.12)' : 'var(--s2)', border: `1px solid ${showTrash ? 'rgba(255,69,58,0.3)' : 'var(--b2)'}`, color: showTrash ? '#ff453a' : 'var(--t3)', cursor: 'pointer', transition: 'all .15s', fontSize: 12, fontWeight: 600 }}
+            >
+              <FiArchive size={12} /> Lixeira{trashedLeads.length > 0 ? ` (${trashedLeads.length})` : ''}
+            </button>
+            <button
               onClick={() => setCompact(c => !c)}
               title={compact ? 'Modo normal' : 'Modo compacto'}
               style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: compact ? 'rgba(53,107,255,0.12)' : 'var(--s2)', border: `1px solid ${compact ? 'rgba(53,107,255,0.3)' : 'var(--b2)'}`, color: compact ? '#356BFF' : 'var(--t3)', cursor: 'pointer', transition: 'all .15s' }}
@@ -432,12 +476,95 @@ export function CRMPage() {
         </div>
       </div>
 
-      {/* Kanban board */}
+      {/* Trash view */}
+      {showTrash ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 24px' }}>
+          {trashedLeads.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--t4)', fontSize: 14 }}>
+              Lixeira vazia
+              <div style={{ fontSize: 11, marginTop: 6 }}>Leads ficam aqui por 30 dias antes de serem removidos definitivamente.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 }}>
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 4 }}>
+                {trashedLeads.length} lead{trashedLeads.length !== 1 ? 's' : ''} na lixeira · removido{trashedLeads.length !== 1 ? 's' : ''} automaticamente após 30 dias
+              </div>
+              {trashedLeads.map(lead => {
+                const stage = STAGES.find(s => s.id === lead.stage);
+                const days = lead.deletedAt ? differenceInDays(new Date(), parseISO(lead.deletedAt)) : 0;
+                const isConfirming = confirmPermaId === lead.id;
+                return (
+                  <motion.div
+                    key={lead.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    style={{
+                      background: 'var(--s1)', border: '1px solid var(--b2)',
+                      borderLeft: `3px solid ${stage?.color ?? '#636366'}55`,
+                      borderRadius: 10, padding: '10px 14px',
+                      display: 'flex', alignItems: 'center', gap: 12,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {lead.name}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                        {stage && (
+                          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: `${stage.color}18`, color: stage.color, fontWeight: 600 }}>
+                            {stage.label}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 10, color: 'var(--t4)' }}>
+                          deletado há {days === 0 ? 'menos de 1 dia' : `${days} dia${days !== 1 ? 's' : ''}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isConfirming ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <FiAlertTriangle size={11} style={{ color: '#ff453a' }} />
+                        <span style={{ fontSize: 11, color: 'var(--t3)' }}>Excluir permanentemente?</span>
+                        <button
+                          onClick={() => handlePermaDelete(lead.id)}
+                          style={{ padding: '4px 10px', borderRadius: 6, background: '#ff453a', border: 'none', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                        >Excluir</button>
+                        <button
+                          onClick={() => setConfirmPermaId(null)}
+                          style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, cursor: 'pointer' }}
+                        >Cancelar</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleRestore(lead.id)}
+                          title="Restaurar lead"
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 6, borderRadius: 7, transition: 'all .15s', display: 'flex' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; (e.currentTarget as HTMLElement).style.color = '#30d158'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                        ><FiRotateCcw size={13} /></button>
+                        <button
+                          onClick={() => setConfirmPermaId(lead.id)}
+                          title="Excluir permanentemente"
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 6, borderRadius: 7, transition: 'all .15s', display: 'flex' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                        ><FiTrash2 size={13} /></button>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+      /* Kanban board */
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '0 24px 24px' }}>
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div style={{ display: 'flex', gap: 14, height: '100%', minWidth: `${STAGES.length * 240}px` }}>
             {STAGES.map(stage => {
-              const stageLeads = leads.filter(l => l.stage === stage.id);
+              const stageLeads = activeLeads.filter(l => l.stage === stage.id);
               return (
                 <div key={stage.id} style={{ flex: '0 0 230px', display: 'flex', flexDirection: 'column', height: '100%' }}>
                   {/* Column header */}
@@ -478,7 +605,7 @@ export function CRMPage() {
                           stageColor={stage.color}
                           compact={compact}
                           onEdit={() => { setEditingLead(lead); setShowLeadModal(true); }}
-                          onDelete={() => deleteLead(lead.id)}
+                          onDelete={() => handleSoftDelete(lead.id)}
                           onMove={(s) => moveLead(lead.id, s)}
                           onConvert={() => setConvertLead_(lead)}
                         />
@@ -510,6 +637,7 @@ export function CRMPage() {
           </DragOverlay>
         </DndContext>
       </div>
+      )}
 
       {/* Lead modal */}
       <AnimatePresence>

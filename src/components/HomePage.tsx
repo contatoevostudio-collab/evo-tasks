@@ -142,8 +142,8 @@ function HomeNoteRow({ id, text, checked, onToggle, onDelete }: {
 export function HomePage({ onTaskClick, onNavigate }: Props) {
   const { tasks, companies, subClients, selectedCompanies, setFilterPriority, setViewMode, addTask, nextSequence, showToast, hideToast, quickNotes, addQuickNote, toggleQuickNote, deleteQuickNote, reorderQuickNotes } = useTaskStore();
 
-  const filtered = tasks.filter(t => selectedCompanies.includes(t.companyId) && !t.archived && !t.inbox);
-  const inboxTasks = tasks.filter(t => selectedCompanies.includes(t.companyId) && !t.archived && t.inbox);
+  const filtered = tasks.filter(t => !t.deletedAt && selectedCompanies.includes(t.companyId) && !t.archived && !t.inbox);
+  const inboxTasks = tasks.filter(t => !t.deletedAt && selectedCompanies.includes(t.companyId) && !t.archived && t.inbox);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayTasks = filtered.filter(t => t.date === todayStr);
   const doneTodayCnt = todayTasks.filter(t => t.status === 'done').length;
@@ -204,7 +204,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   const [qaType, setQaType]         = useState<TaskType>('feed');
   const [qaOpen, setQaOpen]         = useState(false);
 
-  const qaSubs = subClients.filter(s => s.companyId === qaCompany);
+  const qaSubs = subClients.filter(s => !s.deletedAt && s.companyId === qaCompany);
 
   const handleQuickAdd = () => {
     const subId = qaSubClient || qaSubs[0]?.id;
@@ -216,7 +216,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   };
 
   const companyStats = companies
-    .filter(c => selectedCompanies.includes(c.id))
+    .filter(c => !c.deletedAt && selectedCompanies.includes(c.id))
     .map(c => ({
       company: c,
       total: filtered.filter(t => t.companyId === c.id).length,
@@ -231,7 +231,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   const DOW_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
   const heatmapCounts = DOW_LABELS.map((_, i) => {
     return tasks.filter(t => {
-      if (t.status !== 'done' || t.inbox) return false;
+      if (t.deletedAt || t.status !== 'done' || t.inbox) return false;
       try { const d = parseISO(t.date); const dow = getDay(d); return (dow === 0 ? 6 : dow - 1) === i; }
       catch { return false; }
     }).length;
@@ -286,7 +286,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
             {/* Company */}
             <select value={qaCompany} onChange={e => { setQaCompany(e.target.value); setQaSub(''); }}
               style={{ background: 'var(--ib)', border: '1px solid var(--b2)', borderRadius: 7, padding: '5px 8px', color: 'var(--t1)', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.filter(c => !c.deletedAt).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             {/* Subclient */}
             <select value={qaSubClient || (qaSubs[0]?.id ?? '')} onChange={e => setQaSub(e.target.value)}

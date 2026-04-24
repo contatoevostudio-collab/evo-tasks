@@ -10,7 +10,7 @@ const STATUS_COLOR: Record<string, string> = { todo: '#ff9f0a', doing: '#64C4FF'
 const STATUS_LABEL: Record<string, string> = { todo: 'A Fazer', doing: 'Fazendo', done: 'Feito' };
 
 export function ArchivePage() {
-  const { tasks, companies, subClients, toggleArchive, deleteTask, showToast, hideToast } = useTaskStore();
+  const { tasks, companies, subClients, toggleArchive, permanentlyDeleteTask, showToast, hideToast } = useTaskStore();
   const [search, setSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -19,7 +19,7 @@ export function ArchivePage() {
   useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
 
   const archived = tasks
-    .filter(t => t.archived)
+    .filter(t => t.archived && !t.deletedAt)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const filtered = search.trim()
@@ -45,7 +45,7 @@ export function ArchivePage() {
 
   const handleDelete = (id: string) => {
     if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-    deleteTimerRef.current = setTimeout(() => { deleteTask(id); hideToast(); }, 5000);
+    deleteTimerRef.current = setTimeout(() => { permanentlyDeleteTask(id); hideToast(); }, 5000);
     showToast('Tarefa deletada permanentemente', () => {
       if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
       hideToast();

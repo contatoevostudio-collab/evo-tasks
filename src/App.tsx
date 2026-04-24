@@ -33,7 +33,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function App() {
-  const { viewMode, theme, setTheme, toast, setUserId, animationsEnabled, setAnimationsEnabled } = useTaskStore();
+  const { viewMode, theme, setTheme, toast, setUserId, animationsEnabled, setAnimationsEnabled, purgeOldTrash } = useTaskStore();
   const isLight = theme.startsWith('light');
   const toggleTheme = () => {
     document.documentElement.classList.add('theme-transitioning');
@@ -44,6 +44,9 @@ export default function App() {
   const themeVars = THEME_VARS[theme];
 
   useEffect(() => { initialize(); }, []);
+
+  // Lixeira: remove permanentemente itens com mais de 30 dias na startup
+  useEffect(() => { purgeOldTrash(); }, []);
 
   // Only reload from Supabase when the user ID actually changes (sign in / sign out),
   // NOT on every auth event (e.g. token refresh creates a new user object reference

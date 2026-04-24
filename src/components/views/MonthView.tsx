@@ -85,6 +85,7 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
   const getTasksForDay = (day: Date) =>
     sortByPriority(
       tasks.filter(t =>
+        !t.deletedAt &&
         t.date === format(day, 'yyyy-MM-dd') &&
         selectedCompanies.includes(t.companyId) &&
         !t.archived &&

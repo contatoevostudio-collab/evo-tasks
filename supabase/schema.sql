@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS companies (
   name TEXT NOT NULL,
   color TEXT NOT NULL,
   status TEXT DEFAULT 'ativo',          -- v1.3.0
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ                 -- soft-delete (lixeira de 30 dias)
 );
 
 CREATE TABLE IF NOT EXISTS sub_clients (
@@ -18,7 +19,8 @@ CREATE TABLE IF NOT EXISTS sub_clients (
   notes TEXT,
   tips TEXT[] DEFAULT '{}',
   monthly_quota INTEGER,                -- v1.2.0
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ                 -- soft-delete (lixeira de 30 dias)
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -40,7 +42,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   color_override TEXT,
   subtasks JSONB DEFAULT '[]'::JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ                 -- soft-delete (lixeira de 30 dias)
 );
 
 CREATE TABLE IF NOT EXISTS quick_notes (
@@ -63,8 +66,15 @@ CREATE TABLE IF NOT EXISTS leads (
   notes TEXT,
   stage TEXT NOT NULL DEFAULT 'prospeccao',
   converted_to_company_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ                 -- soft-delete (lixeira de 30 dias)
 );
+
+-- Migrations for existing DBs (lixeira / soft-delete)
+ALTER TABLE companies   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE sub_clients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE tasks       ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE leads       ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- Enable Row Level Security
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;

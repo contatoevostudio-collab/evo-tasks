@@ -30,7 +30,7 @@ export function SearchModal({ onClose, onTaskClick }: Props) {
   const results = query.trim().length === 0
     ? []
     : tasks
-        .filter(t => !t.archived)
+        .filter(t => !t.archived && !t.deletedAt)
         .filter(t => {
           const title = getTaskTitle(t, companies, subClients).toLowerCase();
           const q = query.toLowerCase();

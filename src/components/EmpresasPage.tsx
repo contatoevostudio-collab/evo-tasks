@@ -4,9 +4,9 @@ import {
   FiPlus, FiEdit2, FiTrash2, FiCheck, FiX,
   FiUsers, FiFileText, FiChevronUp, FiChevronDown,
   FiTarget, FiAlertTriangle, FiStar, FiLink,
-  FiPhone, FiMail, FiInstagram,
+  FiPhone, FiMail, FiInstagram, FiArchive, FiRotateCcw,
 } from 'react-icons/fi';
-import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { SubClient } from '../types';
 import { getTaskTitle } from '../types';
@@ -245,13 +245,25 @@ export function EmpresasPage() {
   const {
     companies, subClients, tasks,
     addCompany, updateCompany, deleteCompany,
+    permanentlyDeleteCompany, restoreCompany,
     moveCompanyUp, moveCompanyDown,
     addSubClient, updateSubClient, deleteSubClient,
+    restoreSubClient,
+    permanentlyDeleteTask, restoreTask,
     updateSubClientNotes, updateSubClientTips,
     showToast, hideToast,
   } = useTaskStore();
 
-  const [selectedId, setSelectedId]   = useState<string>(companies[0]?.id ?? '');
+  // Active (non-trashed) lists
+  const activeCompanies = companies.filter(c => !c.deletedAt);
+
+  // Trash window: items deleted within last 30 days
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const trashedCompanies = companies
+    .filter(c => c.deletedAt && new Date(c.deletedAt).getTime() >= cutoff)
+    .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
+
+  const [selectedId, setSelectedId]   = useState<string>(activeCompanies[0]?.id ?? '');
   const [newName, setNewName]         = useState('');
   const [newColor, setNewColor]       = useState(PRESET_COLORS[5]);
   const [showNew, setShowNew]         = useState(false);
@@ -269,6 +281,10 @@ export function EmpresasPage() {
   const [editingSubQuotaId, setEditingSubQuotaId] = useState<string | null>(null);
   const [editingSubQuotaVal, setEditingSubQuotaVal] = useState('');
   const [confirmDeleteCompanyId, setConfirmDeleteCompanyId] = useState<string | null>(null);
+  const [showCompanyTrash, setShowCompanyTrash] = useState(false);
+  const [confirmPermaCompanyId, setConfirmPermaCompanyId] = useState<string | null>(null);
+  const [showTaskTrash, setShowTaskTrash] = useState(false);
+  const [confirmPermaTaskId, setConfirmPermaTaskId] = useState<string | null>(null);
 
   // Undo refs for subclient deletion
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -276,18 +292,21 @@ export function EmpresasPage() {
   // Clear pending undo timer on unmount
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
 
-  const selected     = companies.find(c => c.id === selectedId);
-  const companySubs  = subClients.filter(s => s.companyId === selectedId);
-  const companyTasks = tasks.filter(t => t.companyId === selectedId && !t.archived);
+  const selected     = activeCompanies.find(c => c.id === selectedId);
+  const companySubs  = subClients.filter(s => !s.deletedAt && s.companyId === selectedId);
+  const companyTasks = tasks.filter(t => !t.deletedAt && t.companyId === selectedId && !t.archived);
+  const trashedCompanyTasks = tasks
+    .filter(t => t.deletedAt && t.companyId === selectedId && new Date(t.deletedAt).getTime() >= cutoff)
+    .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
 
-  const taskCountFor = (id: string) => tasks.filter(t => t.companyId === id && !t.archived).length;
+  const taskCountFor = (id: string) => tasks.filter(t => !t.deletedAt && t.companyId === id && !t.archived).length;
 
   // Workload: tasks this week per subclient
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd   = endOfWeek(new Date(), { weekStartsOn: 1 });
   const weekTasksFor = (subId: string) =>
     tasks.filter(t =>
-      t.subClientId === subId && !t.archived &&
+      !t.deletedAt && t.subClientId === subId && !t.archived &&
       isWithinInterval(parseISO(t.date), { start: weekStart, end: weekEnd })
     ).length;
 
@@ -303,7 +322,7 @@ export function EmpresasPage() {
   const currentMonthStr  = format(new Date(), 'yyyy-MM');
   const currentMonthDone = companyTasks.filter(t => t.status === 'done' && t.date.startsWith(currentMonthStr)).length;
   const subMonthDone = (subId: string) =>
-    tasks.filter(t => t.subClientId === subId && t.status === 'done' && t.date.startsWith(currentMonthStr) && !t.archived).length;
+    tasks.filter(t => !t.deletedAt && t.subClientId === subId && t.status === 'done' && t.date.startsWith(currentMonthStr) && !t.archived).length;
 
   // Monthly history
   const monthlyHistory: { month: string; done: number }[] = (() => {
@@ -356,32 +375,53 @@ export function EmpresasPage() {
   };
 
   const handleDeleteCompany = (companyId: string) => {
-    deleteCompany(companyId);
-    if (selectedId === companyId) setSelectedId(companies.find(c => c.id !== companyId)?.id ?? '');
+    deleteCompany(companyId); // soft-delete → vai para a lixeira
+    if (selectedId === companyId) setSelectedId(activeCompanies.find(c => c.id !== companyId)?.id ?? '');
     setConfirmDeleteCompanyId(null);
-    showToast('Empresa deletada');
+    showToast('Empresa movida para a lixeira', () => {
+      restoreCompany(companyId);
+      hideToast();
+    });
+    setTimeout(hideToast, 5000);
+  };
+
+  const handleRestoreCompany = (companyId: string) => {
+    restoreCompany(companyId);
+    showToast('Empresa restaurada');
+    setTimeout(hideToast, 3000);
+  };
+
+  const handlePermaDeleteCompany = (companyId: string) => {
+    permanentlyDeleteCompany(companyId);
+    setConfirmPermaCompanyId(null);
+    showToast('Empresa deletada permanentemente');
     setTimeout(hideToast, 3000);
   };
 
   const handleDeleteSubClient = (sub: SubClient) => {
-    // Save a snapshot for undo
-    const snapshot = { ...sub };
-    const subTasks = tasks.filter(t => t.subClientId === sub.id);
-
+    // Soft-delete imediato com toast de undo (5s)
+    deleteSubClient(sub.id);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => { hideToast(); }, 5000);
 
-    // Schedule actual deletion
-    undoTimerRef.current = setTimeout(() => {
-      deleteSubClient(sub.id);
-      hideToast();
-    }, 5000);
-
-    showToast(`"${sub.name}" deletado`, () => {
-      // Undo: cancel the timer, nothing was actually deleted yet
+    showToast(`"${sub.name}" movido para a lixeira`, () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-      void snapshot; void subTasks; // the subclient hasn't been deleted yet, so nothing to restore
+      restoreSubClient(sub.id);
       hideToast();
     });
+  };
+
+  const handleRestoreTask = (id: string) => {
+    restoreTask(id);
+    showToast('Tarefa restaurada');
+    setTimeout(hideToast, 3000);
+  };
+
+  const handlePermaDeleteTask = (id: string) => {
+    permanentlyDeleteTask(id);
+    setConfirmPermaTaskId(null);
+    showToast('Tarefa deletada permanentemente');
+    setTimeout(hideToast, 3000);
   };
 
   const openClientModal = (subId: string, tab: 'notas' | 'dicas' = 'notas') => {
@@ -409,7 +449,10 @@ export function EmpresasPage() {
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6 }}>Gestão</div>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.5px' }}>Empresas & Clientes</h1>
         <p style={{ fontSize: 13, color: 'var(--t3)', marginTop: 4 }}>
-          {companies.length} empresa{companies.length !== 1 ? 's' : ''} · {subClients.length} subclient{subClients.length !== 1 ? 's' : ''}
+          {activeCompanies.length} empresa{activeCompanies.length !== 1 ? 's' : ''} · {subClients.filter(s => !s.deletedAt).length} subclient{subClients.filter(s => !s.deletedAt).length !== 1 ? 's' : ''}
+          {trashedCompanies.length > 0 && (
+            <> · <span style={{ color: '#ff453a' }}>{trashedCompanies.length} na lixeira</span></>
+          )}
         </p>
       </motion.div>
 
@@ -417,16 +460,112 @@ export function EmpresasPage() {
         {/* Left: Companies list */}
         <div>
           <div style={{ ...CARD, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid var(--b1)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)' }}>Empresas</span>
+            <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)' }}>
+                {showCompanyTrash ? 'Lixeira' : 'Empresas'}
+              </span>
+              <button
+                onClick={() => setShowCompanyTrash(s => !s)}
+                title={showCompanyTrash ? 'Voltar para empresas' : 'Ver lixeira'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '3px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                  background: showCompanyTrash ? 'rgba(255,69,58,0.12)' : 'transparent',
+                  border: `1px solid ${showCompanyTrash ? 'rgba(255,69,58,0.3)' : 'var(--b2)'}`,
+                  color: showCompanyTrash ? '#ff453a' : 'var(--t3)',
+                  cursor: 'pointer', transition: 'all .15s',
+                }}
+              >
+                <FiArchive size={9} />
+                {showCompanyTrash ? 'Voltar' : `Lixeira${trashedCompanies.length > 0 ? ` (${trashedCompanies.length})` : ''}`}
+              </button>
             </div>
+
+            {showCompanyTrash ? (
+              /* Trash list */
+              <div style={{ padding: '8px 8px' }}>
+                {trashedCompanies.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px 8px', color: 'var(--t4)', fontSize: 12 }}>
+                    Lixeira vazia
+                    <div style={{ fontSize: 10, marginTop: 4 }}>Itens são removidos após 30 dias</div>
+                  </div>
+                ) : (
+                  trashedCompanies.map((company, i) => {
+                    const days = company.deletedAt ? differenceInDays(new Date(), parseISO(company.deletedAt)) : 0;
+                    const isConfirmPerma = confirmPermaCompanyId === company.id;
+                    return (
+                      <motion.div key={company.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
+                        style={{ marginBottom: 4, padding: '8px 10px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b1)' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: company.color, flexShrink: 0, opacity: 0.5 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through', opacity: 0.7 }}>
+                              {company.name}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 2 }}>
+                              há {days === 0 ? 'menos de 1 dia' : `${days} dia${days !== 1 ? 's' : ''}`}
+                            </div>
+                          </div>
+                          {!isConfirmPerma && (
+                            <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                              <button
+                                onClick={() => handleRestoreCompany(company.id)}
+                                title="Restaurar"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'all .15s', display: 'flex' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#30d158'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                              ><FiRotateCcw size={11} /></button>
+                              <button
+                                onClick={() => setConfirmPermaCompanyId(company.id)}
+                                title="Excluir permanentemente"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'all .15s', display: 'flex' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                              ><FiTrash2 size={11} /></button>
+                            </div>
+                          )}
+                        </div>
+                        <AnimatePresence>
+                          {isConfirmPerma && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              style={{ overflow: 'hidden', marginTop: 6 }}
+                            >
+                              <div style={{ padding: '6px 8px', borderRadius: 7, background: 'rgba(255,69,58,0.06)', border: '1px solid rgba(255,69,58,0.2)' }}>
+                                <div style={{ fontSize: 10, color: '#ff453a', marginBottom: 6 }}>
+                                  <FiAlertTriangle size={9} style={{ marginRight: 3, verticalAlign: 'middle' }} />
+                                  Excluir permanentemente? Esta ação não pode ser desfeita.
+                                </div>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  <button onClick={() => handlePermaDeleteCompany(company.id)}
+                                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: '#ff453a', border: 'none', color: '#fff', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                                    Excluir
+                                  </button>
+                                  <button onClick={() => setConfirmPermaCompanyId(null)}
+                                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 10, cursor: 'pointer' }}>
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
             <div style={{ padding: '8px 8px' }}>
-              {companies.map((company, i) => {
+              {activeCompanies.map((company, i) => {
                 const active      = selectedId === company.id;
                 const count       = taskCountFor(company.id);
                 const isConfirm   = confirmDeleteCompanyId === company.id;
-                const subsCount   = subClients.filter(s => s.companyId === company.id).length;
-                const tasksCount  = tasks.filter(t => t.companyId === company.id).length;
+                const subsCount   = subClients.filter(s => !s.deletedAt && s.companyId === company.id).length;
+                const tasksCount  = tasks.filter(t => !t.deletedAt && t.companyId === company.id).length;
                 return (
                   <motion.div key={company.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                     style={{ marginBottom: isConfirm ? 6 : 2 }}
@@ -486,15 +625,15 @@ export function EmpresasPage() {
                           <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(255,69,58,0.06)', border: '1px solid rgba(255,69,58,0.2)', marginLeft: 4 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
                               <FiAlertTriangle size={10} style={{ color: '#ff453a', flexShrink: 0 }} />
-                              <span style={{ fontSize: 11, color: '#ff453a', fontWeight: 600 }}>Deletar "{company.name}"?</span>
+                              <span style={{ fontSize: 11, color: '#ff453a', fontWeight: 600 }}>Mover "{company.name}" para a lixeira?</span>
                             </div>
                             <p style={{ fontSize: 10, color: 'var(--t3)', marginBottom: 8, lineHeight: 1.4 }}>
-                              Isso vai remover <strong>{subsCount}</strong> subclient{subsCount !== 1 ? 's' : ''} e <strong>{tasksCount}</strong> tarefa{tasksCount !== 1 ? 's' : ''} permanentemente.
+                              <strong>{subsCount}</strong> subclient{subsCount !== 1 ? 's' : ''} e <strong>{tasksCount}</strong> tarefa{tasksCount !== 1 ? 's' : ''} ficarão ocultos. Você pode restaurar pela lixeira (30 dias).
                             </p>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button onClick={() => handleDeleteCompany(company.id)}
                                 style={{ flex: 1, padding: '5px 0', borderRadius: 7, background: '#ff453a', border: 'none', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                                Deletar
+                                Mover p/ lixeira
                               </button>
                               <button onClick={() => setConfirmDeleteCompanyId(null)}
                                 style={{ flex: 1, padding: '5px 0', borderRadius: 7, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, cursor: 'pointer' }}>
@@ -532,6 +671,7 @@ export function EmpresasPage() {
                 ><FiPlus size={13} /> Nova Empresa</button>
               )}
             </div>
+            )}
           </div>
         </div>
 
@@ -886,17 +1026,34 @@ export function EmpresasPage() {
 
               {/* Task list per company */}
               <div style={CARD}>
-                <button
-                  onClick={() => setShowTaskList(s => !s)}
-                  style={{ width: '100%', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer' }}
-                >
-                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)' }}>
-                    Tarefas ({totalTasks})
-                  </span>
-                  {showTaskList ? <FiChevronUp size={12} style={{ color: 'var(--t4)' }} /> : <FiChevronDown size={12} style={{ color: 'var(--t4)' }} />}
-                </button>
+                <div style={{ width: '100%', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button
+                    onClick={() => setShowTaskList(s => !s)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)' }}>
+                      {showTaskTrash ? `Lixeira (${trashedCompanyTasks.length})` : `Tarefas (${totalTasks})`}
+                    </span>
+                    {showTaskList ? <FiChevronUp size={12} style={{ color: 'var(--t4)' }} /> : <FiChevronDown size={12} style={{ color: 'var(--t4)' }} />}
+                  </button>
+                  <button
+                    onClick={() => setShowTaskTrash(s => !s)}
+                    title={showTaskTrash ? 'Voltar para tarefas ativas' : `Lixeira (${trashedCompanyTasks.length})`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '3px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                      background: showTaskTrash ? 'rgba(255,69,58,0.12)' : 'transparent',
+                      border: `1px solid ${showTaskTrash ? 'rgba(255,69,58,0.3)' : 'var(--b2)'}`,
+                      color: showTaskTrash ? '#ff453a' : 'var(--t4)',
+                      cursor: 'pointer', transition: 'all .15s',
+                    }}
+                  >
+                    <FiArchive size={9} />
+                    {showTaskTrash ? 'Voltar' : `Lixeira${trashedCompanyTasks.length > 0 ? ` (${trashedCompanyTasks.length})` : ''}`}
+                  </button>
+                </div>
 
-                {showTaskList && (
+                {showTaskList && !showTaskTrash && (
                   <div style={{ padding: '0 12px 12px', maxHeight: 320, overflowY: 'auto' }}>
                     {companyTasks.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--t4)', fontSize: 13 }}>Nenhuma tarefa</div>
@@ -917,6 +1074,86 @@ export function EmpresasPage() {
                               <span style={{ fontSize: 10, color: 'var(--t4)', flexShrink: 0 }}>
                                 {format(parseISO(task.date), "d MMM", { locale: ptBR })}
                               </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {showTaskList && showTaskTrash && (
+                  <div style={{ padding: '0 12px 12px', maxHeight: 320, overflowY: 'auto' }}>
+                    {trashedCompanyTasks.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--t4)', fontSize: 13 }}>
+                        Lixeira vazia
+                        <div style={{ fontSize: 10, marginTop: 4 }}>Tarefas são removidas após 30 dias</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {trashedCompanyTasks.map(task => {
+                          const title = getTaskTitle(task, companies, subClients);
+                          const sub   = subClients.find(s => s.id === task.subClientId);
+                          const days  = task.deletedAt ? differenceInDays(new Date(), parseISO(task.deletedAt)) : 0;
+                          const isConfirm = confirmPermaTaskId === task.id;
+                          return (
+                            <div key={task.id} style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--s1)', border: '1px solid var(--b1)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[task.status], flexShrink: 0, opacity: 0.5 }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through', opacity: 0.7 }}>
+                                    {title}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 1 }}>
+                                    {sub ? `${sub.name} · ` : ''}há {days === 0 ? 'menos de 1 dia' : `${days} dia${days !== 1 ? 's' : ''}`}
+                                  </div>
+                                </div>
+                                {!isConfirm && (
+                                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                    <button
+                                      onClick={() => handleRestoreTask(task.id)}
+                                      title="Restaurar tarefa"
+                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, display: 'flex' }}
+                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#30d158'; }}
+                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                                    ><FiRotateCcw size={11} /></button>
+                                    <button
+                                      onClick={() => setConfirmPermaTaskId(task.id)}
+                                      title="Excluir permanentemente"
+                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, display: 'flex' }}
+                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                                    ><FiTrash2 size={11} /></button>
+                                  </div>
+                                )}
+                              </div>
+                              <AnimatePresence>
+                                {isConfirm && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    style={{ overflow: 'hidden', marginTop: 6 }}
+                                  >
+                                    <div style={{ padding: '6px 8px', borderRadius: 7, background: 'rgba(255,69,58,0.06)', border: '1px solid rgba(255,69,58,0.2)' }}>
+                                      <div style={{ fontSize: 10, color: '#ff453a', marginBottom: 6 }}>
+                                        <FiAlertTriangle size={9} style={{ marginRight: 3, verticalAlign: 'middle' }} />
+                                        Excluir permanentemente?
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <button onClick={() => handlePermaDeleteTask(task.id)}
+                                          style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: '#ff453a', border: 'none', color: '#fff', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                                          Excluir
+                                        </button>
+                                        <button onClick={() => setConfirmPermaTaskId(null)}
+                                          style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 10, cursor: 'pointer' }}>
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
                           );
                         })}

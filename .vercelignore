@@ -1,0 +1,7 @@
+node_modules
+dist-electron
+certs
+release
+.claude
+.env
+*.log

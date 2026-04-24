@@ -46,6 +46,7 @@ export function DayView({ onTaskClick, onDayClick }: Props) {
 
   const dayTasks = sortTasks(
     tasks.filter(t =>
+      !t.deletedAt &&
       t.date === dateStr &&
       selectedCompanies.includes(t.companyId) &&
       !t.archived &&
@@ -73,7 +74,7 @@ export function DayView({ onTaskClick, onDayClick }: Props) {
   }, [currentDate, setCurrentDate]);
 
   const companiesWithTasks = companies
-    .filter(c => dayTasks.some(t => t.companyId === c.id))
+    .filter(c => !c.deletedAt && dayTasks.some(t => t.companyId === c.id))
     .filter(c => selectedCompanies.includes(c.id));
 
   return (

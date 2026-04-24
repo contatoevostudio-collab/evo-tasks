@@ -15,6 +15,7 @@ function taskToDb(t: Task, userId: string) {
     deadline: t.deadline ?? null, archived: t.archived ?? false,
     inbox: t.inbox ?? false, color_override: t.colorOverride ?? null,
     subtasks: t.subtasks ?? [], created_at: t.createdAt,
+    deleted_at: t.deletedAt ?? null,
   };
 }
 
@@ -37,15 +38,24 @@ function taskFromDb(r: Record<string, unknown>): Task {
     colorOverride: (r.color_override as string) || undefined,
     subtasks: (r.subtasks as Task['subtasks']) || [],
     createdAt: r.created_at as string,
+    deletedAt: (r.deleted_at as string) || undefined,
   };
 }
 
 function companyToDb(c: Company, userId: string) {
-  return { id: c.id, user_id: userId, name: c.name, color: c.color, status: c.status ?? 'ativo' };
+  return {
+    id: c.id, user_id: userId, name: c.name, color: c.color,
+    status: c.status ?? 'ativo',
+    deleted_at: c.deletedAt ?? null,
+  };
 }
 
 function companyFromDb(r: Record<string, unknown>): Company {
-  return { id: r.id as string, name: r.name as string, color: r.color as string, status: ((r.status as string) || 'ativo') as Company['status'] };
+  return {
+    id: r.id as string, name: r.name as string, color: r.color as string,
+    status: ((r.status as string) || 'ativo') as Company['status'],
+    deletedAt: (r.deleted_at as string) || undefined,
+  };
 }
 
 function subClientToDb(s: SubClient, userId: string) {
@@ -54,6 +64,7 @@ function subClientToDb(s: SubClient, userId: string) {
     company_id: s.companyId, notes: s.notes ?? null,
     tips: s.tips ?? [],
     monthly_quota: s.monthlyQuota ?? null,
+    deleted_at: s.deletedAt ?? null,
   };
 }
 
@@ -64,6 +75,7 @@ function subClientFromDb(r: Record<string, unknown>): SubClient {
     monthlyQuota: (r.monthly_quota as number) || undefined,
     notes: (r.notes as string) || undefined,
     tips: (r.tips as string[]) || [],
+    deletedAt: (r.deleted_at as string) || undefined,
   };
 }
 
@@ -80,6 +92,7 @@ function leadToDb(l: Lead, userId: string) {
     stage: l.stage,
     converted_to_company_id: l.convertedToCompanyId ?? null,
     created_at: l.createdAt,
+    deleted_at: l.deletedAt ?? null,
   };
 }
 
@@ -109,6 +122,7 @@ function leadFromDb(r: Record<string, unknown>): Lead {
     stage: r.stage as Lead['stage'],
     convertedToCompanyId: (r.converted_to_company_id as string) || undefined,
     createdAt: r.created_at as string,
+    deletedAt: (r.deleted_at as string) || undefined,
   };
 }
 

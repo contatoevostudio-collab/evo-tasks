@@ -249,6 +249,7 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const filteredTasks = tasks.filter(t =>
+    !t.deletedAt &&
     selectedCompanies.includes(t.companyId) &&
     !t.archived &&
     !t.inbox &&
@@ -321,9 +322,9 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
     }
   };
 
-  // Active companies with tasks for swimlane mode
+  // Active companies with tasks for swimlane mode (excluindo lixeira)
   const activeCompanies = companies.filter(c =>
-    selectedCompanies.includes(c.id) && filteredTasks.some(t => t.companyId === c.id)
+    !c.deletedAt && selectedCompanies.includes(c.id) && filteredTasks.some(t => t.companyId === c.id)
   );
 
   const toggleBtn = (active: boolean, onClick: () => void, title: string, Icon: React.ElementType, label: string) => (

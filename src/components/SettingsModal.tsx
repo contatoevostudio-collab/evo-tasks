@@ -92,7 +92,7 @@ export function SettingsModal({ onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selected    = companies.find(c => c.id === selectedId);
-  const companySubs = subClients.filter(s => s.companyId === selectedId);
+  const companySubs = subClients.filter(s => !s.deletedAt && s.companyId === selectedId);
 
   const addCo  = () => { const n = newName.trim().toUpperCase(); if (!n) return; addCompany({ name: n, color: newColor }); setNewName(''); setShowNew(false); };
   const addSub = () => { const n = newSub.trim(); if (!n || !selectedId) return; addSubClient({ name: n, companyId: selectedId }); setNewSub(''); setShowNewSub(false); };
@@ -143,7 +143,7 @@ export function SettingsModal({ onClose }: Props) {
     const lines = [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EvoTasks//EN', 'CALSCALE:GREGORIAN',
     ];
-    tasks.filter(t => !t.inbox).forEach(t => {
+    tasks.filter(t => !t.inbox && !t.deletedAt).forEach(t => {
       const sub = subClients.find(s => s.id === t.subClientId);
       const comp = companies.find(c => c.id === t.companyId);
       const dateStr = t.date.replace(/-/g, '');
@@ -234,7 +234,7 @@ export function SettingsModal({ onClose }: Props) {
                 <div style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', padding: '0 8px', marginBottom: 6 }}>Empresas</div>
-                    {companies.map(c => (
+                    {companies.filter(c => !c.deletedAt).map(c => (
                       <button key={c.id} onClick={() => setSelectedId(c.id)} style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px', borderRadius: 10, marginBottom: 2,
                         background: selectedId === c.id ? `${c.color}18` : 'transparent',
@@ -396,9 +396,9 @@ export function SettingsModal({ onClose }: Props) {
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 8 }}>Resumo dos dados</div>
                   <div style={{ display: 'flex', gap: 16 }}>
                     {[
-                      { label: 'Empresas', value: companies.length },
-                      { label: 'Subclients', value: companies.reduce((sum, c) => sum + subClients.filter(s => s.companyId === c.id).length, 0) },
-                      { label: 'Tarefas', value: tasks.length },
+                      { label: 'Empresas', value: companies.filter(c => !c.deletedAt).length },
+                      { label: 'Subclients', value: subClients.filter(s => !s.deletedAt).length },
+                      { label: 'Tarefas', value: tasks.filter(t => !t.deletedAt).length },
                     ].map(({ label, value }) => (
                       <div key={label}>
                         <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t1)' }}>{value}</div>

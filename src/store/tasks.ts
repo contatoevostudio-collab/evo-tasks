@@ -49,7 +49,9 @@ interface TaskStore {
   // Task CRUD
   addTask(t: Omit<Task, 'id'>): string;
   updateTask(id: string, updates: Partial<Task>): void;
-  deleteTask(id: string): void;
+  deleteTask(id: string): void;                     // soft-delete → lixeira
+  permanentlyDeleteTask(id: string): void;          // remove de vez (lixeira)
+  restoreTask(id: string): void;                    // restaurar da lixeira
   updateTaskStatus(id: string, status: TaskStatus): void;
   cycleTaskStatus(id: string): void;       // #34/#37 todo→doing→done→todo
   toggleArchive(id: string): void;         // #13
@@ -62,23 +64,32 @@ interface TaskStore {
   // Company CRUD
   addCompany(c: Omit<Company, 'id'>): void;
   updateCompany(id: string, updates: Partial<Company>): void;
-  deleteCompany(id: string): void;
+  deleteCompany(id: string): void;                  // soft-delete → lixeira
+  permanentlyDeleteCompany(id: string): void;       // remove de vez
+  restoreCompany(id: string): void;                 // restaurar da lixeira
   moveCompanyUp(id: string): void;    // #55
   moveCompanyDown(id: string): void;  // #55
 
   // SubClient CRUD
   addSubClient(s: Omit<SubClient, 'id'>): void;
   updateSubClient(id: string, updates: Partial<SubClient>): void;
-  deleteSubClient(id: string): void;
+  deleteSubClient(id: string): void;                // soft-delete → lixeira
+  permanentlyDeleteSubClient(id: string): void;     // remove de vez
+  restoreSubClient(id: string): void;               // restaurar da lixeira
   updateSubClientNotes(id: string, notes: string): void;
   updateSubClientTips(id: string, tips: string[]): void;
 
   // Lead CRM CRUD
   addLead(l: Omit<Lead, 'id' | 'createdAt'>): string;
   updateLead(id: string, updates: Partial<Lead>): void;
-  deleteLead(id: string): void;
+  deleteLead(id: string): void;                     // soft-delete → lixeira
+  permanentlyDeleteLead(id: string): void;          // remove de vez
+  restoreLead(id: string): void;                    // restaurar da lixeira
   moveLead(id: string, stage: LeadStage): void;
   convertLead(id: string, companyName: string, color: string): void;
+
+  // Lixeira (30 dias)
+  purgeOldTrash(): void;
 
   setKanbanOrder(status: TaskStatus, ids: string[]): void;
   setPin(p: string | null): void;
@@ -166,9 +177,23 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       deleteTask: (id) => {
+        // Soft-delete → marca como deletado (vai para a lixeira por 30 dias)
+        const deletedAt = new Date().toISOString();
+        set((state) => ({ tasks: state.tasks.map((t) => (t.id === id ? { ...t, deletedAt } : t)) }));
+        const { userId, tasks } = get();
+        if (userId) { const t = tasks.find(x => x.id === id); if (t) syncTask(t, userId).catch(console.error); }
+      },
+
+      permanentlyDeleteTask: (id) => {
         const userId = get().userId;
         set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) }));
         if (userId) removeTask(id, userId).catch(console.error);
+      },
+
+      restoreTask: (id) => {
+        set((state) => ({ tasks: state.tasks.map((t) => (t.id === id ? { ...t, deletedAt: undefined } : t)) }));
+        const { userId, tasks } = get();
+        if (userId) { const t = tasks.find(x => x.id === id); if (t) syncTask(t, userId).catch(console.error); }
       },
 
       updateTaskStatus: (id, status) => {
@@ -243,14 +268,41 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       deleteCompany: (id) => {
+        // Soft-delete → marca como deletado (vai para a lixeira por 30 dias)
+        const deletedAt = new Date().toISOString();
+        set((state) => ({
+          companies: state.companies.map((c) => (c.id === id ? { ...c, deletedAt } : c)),
+          selectedCompanies: state.selectedCompanies.filter((cid) => cid !== id),
+        }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === id); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
+      permanentlyDeleteCompany: (id) => {
         const userId = get().userId;
+        // Coleta IDs de subclients e tarefas para também remover do Supabase
+        const subIds = get().subClients.filter(s => s.companyId === id).map(s => s.id);
+        const taskIds = get().tasks.filter(t => t.companyId === id).map(t => t.id);
         set((state) => ({
           companies: state.companies.filter((c) => c.id !== id),
           subClients: state.subClients.filter((s) => s.companyId !== id),
           tasks: state.tasks.filter((t) => t.companyId !== id),
           selectedCompanies: state.selectedCompanies.filter((cid) => cid !== id),
         }));
-        if (userId) removeCompany(id, userId).catch(console.error);
+        if (userId) {
+          removeCompany(id, userId).catch(console.error);
+          subIds.forEach(sid => removeSubClient(sid, userId).catch(console.error));
+          taskIds.forEach(tid => removeTask(tid, userId).catch(console.error));
+        }
+      },
+
+      restoreCompany: (id) => {
+        set((state) => ({
+          companies: state.companies.map((c) => (c.id === id ? { ...c, deletedAt: undefined } : c)),
+          selectedCompanies: state.selectedCompanies.includes(id) ? state.selectedCompanies : [...state.selectedCompanies, id],
+        }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === id); if (c) syncCompany(c, userId).catch(console.error); }
       },
 
       moveCompanyUp: (id) =>
@@ -285,12 +337,34 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       deleteSubClient: (id) => {
+        // Soft-delete → marca como deletado (vai para a lixeira por 30 dias)
+        const deletedAt = new Date().toISOString();
+        set((state) => ({
+          subClients: state.subClients.map((s) => (s.id === id ? { ...s, deletedAt } : s)),
+        }));
+        const { userId, subClients } = get();
+        if (userId) { const s = subClients.find(x => x.id === id); if (s) syncSubClient(s, userId).catch(console.error); }
+      },
+
+      permanentlyDeleteSubClient: (id) => {
         const userId = get().userId;
+        const taskIds = get().tasks.filter(t => t.subClientId === id).map(t => t.id);
         set((state) => ({
           subClients: state.subClients.filter((s) => s.id !== id),
           tasks: state.tasks.filter((t) => t.subClientId !== id),
         }));
-        if (userId) removeSubClient(id, userId).catch(console.error);
+        if (userId) {
+          removeSubClient(id, userId).catch(console.error);
+          taskIds.forEach(tid => removeTask(tid, userId).catch(console.error));
+        }
+      },
+
+      restoreSubClient: (id) => {
+        set((state) => ({
+          subClients: state.subClients.map((s) => (s.id === id ? { ...s, deletedAt: undefined } : s)),
+        }));
+        const { userId, subClients } = get();
+        if (userId) { const s = subClients.find(x => x.id === id); if (s) syncSubClient(s, userId).catch(console.error); }
       },
 
       updateSubClientNotes: (id, notes) => {
@@ -321,9 +395,23 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       deleteLead: (id) => {
+        // Soft-delete → marca como deletado (vai para a lixeira por 30 dias)
+        const deletedAt = new Date().toISOString();
+        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, deletedAt } : l)) }));
+        const { userId, leads } = get();
+        if (userId) { const l = leads.find(x => x.id === id); if (l) syncLead(l, userId).catch(console.error); }
+      },
+
+      permanentlyDeleteLead: (id) => {
         const userId = get().userId;
         set((state) => ({ leads: state.leads.filter((l) => l.id !== id) }));
         if (userId) removeLead(id, userId).catch(console.error);
+      },
+
+      restoreLead: (id) => {
+        set((state) => ({ leads: state.leads.map((l) => (l.id === id ? { ...l, deletedAt: undefined } : l)) }));
+        const { userId, leads } = get();
+        if (userId) { const l = leads.find(x => x.id === id); if (l) syncLead(l, userId).catch(console.error); }
       },
 
       moveLead: (id, stage) => {
@@ -356,6 +444,43 @@ export const useTaskStore = create<TaskStore>()(
       setPin: (pin) => set({ pin }),
 
       setUserId: (userId) => set({ userId }),
+
+      purgeOldTrash: () => {
+        // Remove permanentemente itens que estão na lixeira há mais de 30 dias
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const isExpired = (iso?: string) => !!iso && new Date(iso).getTime() < cutoff;
+
+        const { userId, tasks, leads, companies, subClients } = get();
+
+        const expiredTaskIds   = tasks.filter(t => isExpired(t.deletedAt)).map(t => t.id);
+        const expiredLeadIds   = leads.filter(l => isExpired(l.deletedAt)).map(l => l.id);
+        const expiredCompIds   = companies.filter(c => isExpired(c.deletedAt)).map(c => c.id);
+        const expiredSubIds    = subClients.filter(s => isExpired(s.deletedAt)).map(s => s.id);
+
+        if (expiredTaskIds.length === 0 && expiredLeadIds.length === 0 && expiredCompIds.length === 0 && expiredSubIds.length === 0) return;
+
+        // Quando uma empresa expira, também removemos seus subclients e tarefas
+        // (mesmo que o deletedAt deles seja diferente — limpeza em cascata)
+        const cascadeSubIds  = subClients.filter(s => expiredCompIds.includes(s.companyId)).map(s => s.id);
+        const cascadeTaskIds = tasks.filter(t => expiredCompIds.includes(t.companyId) || expiredSubIds.includes(t.subClientId)).map(t => t.id);
+
+        const allTaskIds = Array.from(new Set([...expiredTaskIds, ...cascadeTaskIds]));
+        const allSubIds  = Array.from(new Set([...expiredSubIds, ...cascadeSubIds]));
+
+        set((state) => ({
+          tasks: state.tasks.filter(t => !allTaskIds.includes(t.id)),
+          leads: state.leads.filter(l => !expiredLeadIds.includes(l.id)),
+          subClients: state.subClients.filter(s => !allSubIds.includes(s.id)),
+          companies: state.companies.filter(c => !expiredCompIds.includes(c.id)),
+        }));
+
+        if (userId) {
+          allTaskIds.forEach(id => removeTask(id, userId).catch(console.error));
+          expiredLeadIds.forEach(id => removeLead(id, userId).catch(console.error));
+          allSubIds.forEach(id => removeSubClient(id, userId).catch(console.error));
+          expiredCompIds.forEach(id => removeCompany(id, userId).catch(console.error));
+        }
+      },
 
       replaceAll: ({ companies, subClients, tasks, leads, quickNotes }) =>
         set((state) => {
@@ -396,7 +521,7 @@ export const useTaskStore = create<TaskStore>()(
         })),
 
       selectAllCompanies: () =>
-        set((state) => ({ selectedCompanies: state.companies.map(c => c.id) })),
+        set((state) => ({ selectedCompanies: state.companies.filter(c => !c.deletedAt).map(c => c.id) })),
 
       deselectAllCompanies: () =>
         set({ selectedCompanies: [] }),
