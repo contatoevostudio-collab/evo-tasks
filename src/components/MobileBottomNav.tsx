@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiHome, FiCalendar, FiBriefcase, FiTrendingUp, FiList,
-  FiDollarSign, FiZap, FiMoreHorizontal, FiX, FiFileText,
+  FiPieChart, FiZap, FiMoreHorizontal, FiX, FiFileText,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import type { PageType } from '../types';
@@ -16,7 +16,7 @@ interface NavItem {
 const PRIMARY: NavItem[] = [
   { id: 'home',     label: 'Home',      Icon: FiHome },
   { id: 'tarefas',  label: 'Calendário', Icon: FiCalendar },
-  { id: 'financas', label: 'Finanças',  Icon: FiDollarSign },
+  { id: 'financas', label: 'Finanças',  Icon: FiPieChart },
   { id: 'empresas', label: 'Empresas',  Icon: FiBriefcase },
 ];
 

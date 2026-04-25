@@ -5,7 +5,7 @@ import {
   FiHome, FiCalendar, FiBriefcase, FiSettings,
   FiChevronDown, FiChevronRight, FiChevronLeft,
   FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
-  FiUser, FiTrendingUp, FiList, FiLock, FiDollarSign, FiZap, FiFileText, FiInbox,
+  FiUser, FiTrendingUp, FiList, FiLock, FiPieChart, FiZap, FiFileText, FiInbox,
   FiCheckCircle, FiGrid, FiClipboard, FiMessageSquare, FiLayers, FiCopy, FiBarChart2, FiRepeat, FiClock,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
@@ -43,7 +43,7 @@ const NAV_ITEMS: { id: PageType; label: string; Icon: React.ElementType; beta?: 
   { id: 'snippets',   label: 'Snippets',      Icon: FiCopy },
   { id: 'habitos',      label: 'Hábitos',       Icon: FiRepeat },
   { id: 'timetracking', label: 'Time Tracking', Icon: FiClock },
-  { id: 'financas',   label: 'Finanças',      Icon: FiDollarSign },
+  { id: 'financas',   label: 'Finanças',      Icon: FiPieChart },
   { id: 'faturas',    label: 'Faturas',       Icon: FiClipboard },
   { id: 'kpis',       label: 'KPIs',          Icon: FiBarChart2 },
   { id: 'arquivo',   label: 'Arquivo',       Icon: FiArchive },
