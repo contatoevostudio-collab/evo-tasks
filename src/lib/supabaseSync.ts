@@ -328,28 +328,31 @@ export function resetLoadFromSupabaseCache() {
 async function _loadFromSupabaseImpl(userId: string): Promise<void> {
   useTaskStore.getState().setSyncStatus('syncing');
   beginSync();
-  const [
-    { data: companies, error: e1 },
-    { data: subClients, error: e2 },
-    { data: tasks, error: e3 },
-    { data: leads, error: e4 },
-    { data: quickNotes, error: e5 },
-    { data: todoItems, error: e6 },
-    { data: calendarEvents, error: e7 },
-    { data: ideas, error: e8 },
-    { data: transactions, error: e9 },
-    { data: financialGoals, error: e10 },
-    { data: recurringBills, error: e11 },
-  ] = await Promise.all([
+
+  // Carrega em chunks sequenciais (3 paralelas por vez) com pequeno delay entre chunks.
+  // Evita disparar 11 requests simultâneas que o Cloudflare bot management interpreta
+  // como burst de bot e desafia (challenge sem CORS headers → browser bloqueia).
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  const [{ data: companies, error: e1 }, { data: subClients, error: e2 }, { data: tasks, error: e3 }] = await Promise.all([
     supabase.from('companies').select('*').eq('user_id', userId),
     supabase.from('sub_clients').select('*').eq('user_id', userId),
     supabase.from('tasks').select('*').eq('user_id', userId),
+  ]);
+  await sleep(80);
+  const [{ data: leads, error: e4 }, { data: quickNotes, error: e5 }, { data: todoItems, error: e6 }] = await Promise.all([
     supabase.from('leads').select('*').eq('user_id', userId),
     supabase.from('quick_notes').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
     supabase.from('todo_items').select('*').eq('user_id', userId),
+  ]);
+  await sleep(80);
+  const [{ data: calendarEvents, error: e7 }, { data: ideas, error: e8 }, { data: transactions, error: e9 }] = await Promise.all([
     supabase.from('calendar_events').select('*').eq('user_id', userId),
     supabase.from('ideas').select('*').eq('user_id', userId),
     supabase.from('transactions').select('*').eq('user_id', userId),
+  ]);
+  await sleep(80);
+  const [{ data: financialGoals, error: e10 }, { data: recurringBills, error: e11 }] = await Promise.all([
     supabase.from('financial_goals').select('*').eq('user_id', userId),
     supabase.from('recurring_bills').select('*').eq('user_id', userId),
   ]);
