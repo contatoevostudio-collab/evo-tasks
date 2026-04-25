@@ -24,6 +24,7 @@ import {
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import type { Lead, LeadStage, LeadInteraction } from '../types';
 import { useTaskStore } from '../store/tasks';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 
 // ─── Stages config ────────────────────────────────────────────────────────────
 const STAGES: { id: LeadStage; label: string; color: string; desc: string }[] = [
@@ -768,7 +769,8 @@ export function CRMPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   // Active leads (not in trash)
-  const activeLeads = leads.filter(l => !l.deletedAt);
+  const visibleIds = useVisibleWorkspaceIds();
+  const activeLeads = leads.filter(l => !l.deletedAt && isInLens(l, visibleIds));
 
   // Trash: only items deleted within last 30 days
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { FiPlus } from 'react-icons/fi';
 import { playStatusChange } from '../../lib/sounds';
 import { useTaskStore } from '../../store/tasks';
+import { useVisibleWorkspaceIds, isInLens } from '../../store/workspaces';
 import { getTaskTitle } from '../../types';
 import type { Task, Priority, TaskCategory } from '../../types';
 
@@ -60,9 +61,11 @@ export function DayView({ onTaskClick, onDayClick }: Props) {
   const dateStr  = format(currentDate, 'yyyy-MM-dd');
   const todayDay = isToday(currentDate);
 
+  const visibleIds = useVisibleWorkspaceIds();
   const dayTasks = sortTasks(
     tasks.filter(t =>
       !t.deletedAt &&
+      isInLens(t, visibleIds) &&
       t.date === dateStr &&
       selectedCompanies.includes(t.companyId) &&
       !t.archived &&

@@ -8,6 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { FiPlus } from 'react-icons/fi';
 import { useTaskStore } from '../../store/tasks';
+import { useVisibleWorkspaceIds, isInLens } from '../../store/workspaces';
 import { TaskChip } from '../TaskChip';
 import type { Task, Priority, TaskCategory } from '../../types';
 
@@ -93,11 +94,13 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
 
   const showTasks = calendarCategoryFilter === 'todos' || calendarCategoryFilter === 'agencia';
 
+  const visibleIds = useVisibleWorkspaceIds();
   const getTasksForDay = (day: Date) => {
     if (!showTasks) return [];
     return sortByPriority(
       tasks.filter(t =>
         !t.deletedAt &&
+        isInLens(t, visibleIds) &&
         t.date === format(day, 'yyyy-MM-dd') &&
         selectedCompanies.includes(t.companyId) &&
         !t.archived &&

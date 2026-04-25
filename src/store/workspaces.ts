@@ -54,6 +54,30 @@ interface WorkspacesStore {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+/**
+ * Hook reativo: retorna ids visíveis pela lente atual. Usa selector pra
+ * recomputar apenas quando workspaces/activeWorkspaceId/lens mudam.
+ */
+export function useVisibleWorkspaceIds(): string[] {
+  return useWorkspacesStore(s => {
+    if (s.workspaces.length === 0) return [];
+    if (s.lens.mode === 'all') return s.workspaces.map(w => w.id);
+    if ((s.lens.mode === 'multi' || s.lens.mode === 'other') && s.lens.selectedWorkspaceIds && s.lens.selectedWorkspaceIds.length > 0) {
+      return s.lens.selectedWorkspaceIds;
+    }
+    return s.activeWorkspaceId ? [s.activeWorkspaceId] : [];
+  });
+}
+
+/**
+ * Helper: item passa na lente se não tem workspaceId (legacy/global) OU
+ * o id está em visibleIds.
+ */
+export function isInLens(item: { workspaceId?: string }, visibleIds: string[]): boolean {
+  if (!item.workspaceId) return true;
+  return visibleIds.includes(item.workspaceId);
+}
+
 export const useWorkspacesStore = create<WorkspacesStore>()(
   persist(
     (set, get) => ({

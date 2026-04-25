@@ -4,6 +4,7 @@ import { FiChevronLeft, FiChevronRight, FiX, FiCheck, FiCalendar, FiColumns, FiL
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTaskStore } from '../store/tasks';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import type { TodoItemStatus, TodoContext, Priority, TodoItem } from '../types';
 
@@ -497,7 +498,8 @@ export function TodoPage() {
   ];
 
   // Stat chips data (used in header)
-  const activeAll = todoItems.filter(t => !t.archived);
+  const visibleIds = useVisibleWorkspaceIds();
+  const activeAll = todoItems.filter(t => !t.archived && isInLens(t, visibleIds));
   const todoCount = activeAll.filter(t => t.status === 'todo').length;
   const doingCount = activeAll.filter(t => t.status === 'doing').length;
   const doneCount = activeAll.filter(t => t.status === 'done').length;

@@ -4,6 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { FiCopy } from 'react-icons/fi';
 import { useTaskStore } from '../../store/tasks';
+import { useVisibleWorkspaceIds, isInLens } from '../../store/workspaces';
 import { playStatusChange, playAdd } from '../../lib/sounds';
 import { getTaskTitle } from '../../types';
 import type { Task, Priority, CalendarEvent, TaskCategory } from '../../types';
@@ -96,11 +97,13 @@ export function WeekView({ onTaskClick, onDayClick }: Props) {
       .flatMap(t => t.tags ?? [])
   ));
 
+  const visibleIds = useVisibleWorkspaceIds();
   const getTasksForDay = (day: Date) => {
     if (!showTasks) return [];
     const dateStr = format(day, 'yyyy-MM-dd');
     return sortTasks(tasks.filter(t =>
       !t.deletedAt &&
+      isInLens(t, visibleIds) &&
       t.date === dateStr &&
       selectedCompanies.includes(t.companyId) &&
       !t.archived &&

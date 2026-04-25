@@ -18,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useIdeasStore, TAG_CONFIG, STATUS_CONFIG } from '../store/ideas';
 import { useTaskStore } from '../store/tasks';
 import { useProposalsStore } from '../store/proposals';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import type { Idea, IdeaTag, IdeaStatus } from '../types';
 
 const TAGS = Object.entries(TAG_CONFIG) as [IdeaTag, { label: string; color: string }][];
@@ -981,7 +982,8 @@ export function IdeiasPage() {
   };
 
   // Active (non-deleted) ideas
-  const activeIdeas = useMemo(() => ideas.filter((i) => !i.deletedAt), [ideas]);
+  const visibleIds = useVisibleWorkspaceIds();
+  const activeIdeas = useMemo(() => ideas.filter((i) => !i.deletedAt && isInLens(i, visibleIds)), [ideas, visibleIds]);
   const trashedIdeas = useMemo(() => ideas.filter((i) => i.deletedAt), [ideas]);
 
   const sortIdeas = useCallback((list: Idea[]) => {

@@ -10,6 +10,7 @@ import {
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useFinanceStore } from '../store/finance';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { useTaskStore } from '../store/tasks';
 import { useCardsStore } from '../store/cards';
 import { TransactionModal } from './finance/TransactionModal';
@@ -568,11 +569,16 @@ function SubscriptionsList({
 
 export function FinancePage() {
   const {
-    transactions, goals, recurringBills,
+    transactions: allTransactions, goals: allGoals, recurringBills: allRecurringBills,
     addToGoal, deleteGoal, deleteTransaction, toggleRecurringPaid, deleteRecurringBill,
   } = useFinanceStore();
   const { accentColor } = useTaskStore();
-  const { cards, deleteCard } = useCardsStore();
+  const { cards: allCards, deleteCard } = useCardsStore();
+  const visibleIds = useVisibleWorkspaceIds();
+  const transactions   = allTransactions.filter(t => isInLens(t, visibleIds));
+  const goals          = allGoals.filter(g => isInLens(g, visibleIds));
+  const recurringBills = allRecurringBills.filter(b => isInLens(b, visibleIds));
+  const cards          = allCards.filter(c => isInLens(c, visibleIds));
 
   const accentRgb = hexToRgb(accentColor);
 

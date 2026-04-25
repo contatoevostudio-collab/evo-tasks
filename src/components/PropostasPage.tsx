@@ -7,6 +7,7 @@ import {
   FiStar, FiMessageSquare, FiDownload,
 } from 'react-icons/fi';
 import { useProposalsStore, getDefaultPricingOptions } from '../store/proposals';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { useTaskStore } from '../store/tasks';
 import type { Proposal, ProposalService, ProposalStatus, PricingOption, PortfolioSection, BentoSlot, ProposalTheme } from '../types';
 
@@ -2023,8 +2024,10 @@ function ProposalCard({ proposal, onEdit, onView, onDelete, onCopyLink, onStatus
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export function PropostasPage() {
-  const { proposals, updateProposal, deleteProposal } = useProposalsStore();
+  const { proposals: allProposals, updateProposal, deleteProposal } = useProposalsStore();
   const accentColor = useTaskStore(s => s.accentColor);
+  const visibleIds = useVisibleWorkspaceIds();
+  const proposals = allProposals.filter(p => isInLens(p, visibleIds));
   const [showNew, setShowNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);

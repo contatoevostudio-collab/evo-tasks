@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore } from '../store/ideas';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { useAuthStore } from '../store/auth';
 import { getTaskTitle } from '../types';
 import type { Task, TaskStatus, PageType, LeadStage } from '../types';
@@ -228,7 +229,8 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   }, [user, userName]);
 
   // ─── Tasks ───
-  const activeTasks = tasks.filter(t => !t.archived && !t.inbox);
+  const visibleIds = useVisibleWorkspaceIds();
+  const activeTasks = tasks.filter(t => !t.archived && !t.inbox && isInLens(t, visibleIds));
   const todayTasks = activeTasks.filter(t => t.date === todayStr);
   const todayCount = todayTasks.length;
   const openTasks = activeTasks.filter(t => t.status !== 'done');
@@ -259,7 +261,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   }, [activeTasks, todayDate]);
 
   // ─── Leads ───
-  const openLeads = leads.filter(l => l.stage !== 'fechado');
+  const openLeads = leads.filter(l => l.stage !== 'fechado' && isInLens(l, visibleIds));
   const sortedOpenLeads = useMemo(() => {
     const stageOrder: Record<LeadStage, number> = { negociacao: 0, proposta: 1, contato: 2, prospeccao: 3, fechado: 4 };
     return [...openLeads].sort((a, b) => stageOrder[a.stage] - stageOrder[b.stage]).slice(0, 5);
@@ -269,15 +271,15 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   const ideasThisWeek = useMemo(() => {
     const start = startOfWeek(new Date(), { weekStartsOn: 1 });
     return ideas.filter(i => {
-      try { return !i.deletedAt && parseISO(i.createdAt) >= start; } catch { return false; }
+      try { return !i.deletedAt && isInLens(i, visibleIds) && parseISO(i.createdAt) >= start; } catch { return false; }
     });
-  }, [ideas]);
+  }, [ideas, visibleIds]);
 
   // Idea of the week — deterministic by week-of-year
   const ideaOfWeek = useMemo(() => {
-    const candidates = ideas.filter(i => !i.deletedAt);
+    const candidates = ideas.filter(i => !i.deletedAt && isInLens(i, visibleIds));
     return deterministicPick(candidates, getISOWeek(new Date()));
-  }, [ideas]);
+  }, [ideas, visibleIds]);
 
   // ─── Pomodoro ───
   const pomodoroToday = useMemo(() => {

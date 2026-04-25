@@ -21,6 +21,7 @@ import { getTaskTitle } from '../types';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore } from '../store/ideas';
 import { useProposalsStore } from '../store/proposals';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { FiCheckSquare } from 'react-icons/fi';
 void FiCheckSquare;
 
@@ -337,7 +338,8 @@ export function EmpresasPage({ defaultSelectedId, onNavigate }: { defaultSelecte
   } = useTaskStore();
 
   // Active (non-trashed) lists
-  const activeCompanies = companies.filter(c => !c.deletedAt);
+  const visibleIds = useVisibleWorkspaceIds();
+  const activeCompanies = companies.filter(c => !c.deletedAt && isInLens(c, visibleIds));
 
   // Trash window: items deleted within last 30 days
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;

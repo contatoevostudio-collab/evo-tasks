@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore, STATUS_CONFIG as IDEA_STATUS_CONFIG, TAG_CONFIG as IDEA_TAG_CONFIG } from '../store/ideas';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { getTaskTitle } from '../types';
 import type { Task, TodoItem, Idea, PageType } from '../types';
 
@@ -163,19 +164,20 @@ export function InboxPage({ onTaskClick, onNavigate }: Props) {
 
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
 
+  const visibleIds = useVisibleWorkspaceIds();
   const inboxTasks = useMemo(
-    () => tasks.filter(t => t.inbox && !t.deletedAt && !t.archived).sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
-    [tasks],
+    () => tasks.filter(t => t.inbox && !t.deletedAt && !t.archived && isInLens(t, visibleIds)).sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
+    [tasks, visibleIds],
   );
 
   const standbyTodos = useMemo(
-    () => todoItems.filter(t => t.status === 'standby' && !t.archived),
-    [todoItems],
+    () => todoItems.filter(t => t.status === 'standby' && !t.archived && isInLens(t, visibleIds)),
+    [todoItems, visibleIds],
   );
 
   const draftIdeas = useMemo(
-    () => ideas.filter(i => i.status === 'rascunho' && !i.deletedAt),
-    [ideas],
+    () => ideas.filter(i => i.status === 'rascunho' && !i.deletedAt && isInLens(i, visibleIds)),
+    [ideas, visibleIds],
   );
 
   const totalCount = inboxTasks.length + standbyTodos.length + draftIdeas.length;

@@ -25,6 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Task, TaskStatus, Priority, TaskCategory } from '../../types';
 import { getTaskTitle } from '../../types';
 import { useTaskStore } from '../../store/tasks';
+import { useVisibleWorkspaceIds, isInLens } from '../../store/workspaces';
 import { playDrop } from '../../lib/sounds';
 
 interface Props {
@@ -304,8 +305,10 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  const visibleIds = useVisibleWorkspaceIds();
   const filteredTasks = tasks.filter(t =>
     !t.deletedAt &&
+    isInLens(t, visibleIds) &&
     selectedCompanies.includes(t.companyId) &&
     !t.archived &&
     !t.inbox &&
