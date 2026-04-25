@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { QrCodePix } from 'qrcode-pix';
 import {
   FiPlus, FiTrash2, FiEdit2, FiX, FiCheck, FiDollarSign,
@@ -86,8 +87,8 @@ function StatusDropdown({ invoiceId, currentStatus }: { invoiceId: string; curre
       >
         {cfg.label} <FiChevronDown size={9} />
       </button>
-      {open && (
-        <div style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 1000, background: 'var(--modal-bg)', border: '1px solid var(--b2)', borderRadius: 10, padding: 5, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 144 }}>
+      {open && createPortal(
+        <div style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999, background: 'var(--modal-bg)', border: '1px solid var(--b2)', borderRadius: 10, padding: 5, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 144 }}>
           {(['rascunho', 'enviada', 'paga', 'cancelada'] as InvoiceStatus[]).map(s => {
             const c = INVOICE_STATUS_CONFIG[s];
             const isActive = s === currentStatus;
@@ -103,7 +104,8 @@ function StatusDropdown({ invoiceId, currentStatus }: { invoiceId: string; curre
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
