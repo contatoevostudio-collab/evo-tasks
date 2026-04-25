@@ -64,6 +64,18 @@ const ICSImportModal  = lazy(() => import('./components/ICSImportModal').then(m 
 const AuthModal       = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
 const WorkspaceModal  = lazy(() => import('./components/WorkspaceModal').then(m => ({ default: m.WorkspaceModal })));
 
+const VALID_PAGES: PageType[] = [
+  'home', 'tarefas', 'empresas', 'arquivo', 'crm', 'todo', 'financas',
+  'ideias', 'propostas', 'inbox',
+  'aprovacoes', 'editorial', 'faturas', 'briefings', 'onboarding', 'snippets', 'kpis', 'habitos',
+  'timetracking',
+];
+
+function pathnameToPage(pathname: string): PageType {
+  const seg = pathname.replace(/^\//, '') || 'home';
+  return VALID_PAGES.includes(seg as PageType) ? (seg as PageType) : 'home';
+}
+
 const PageFallback = () => (
   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t4)', fontSize: 12 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -127,7 +139,19 @@ export default function App() {
     }
   }, [user]);
 
-  const [page, setPage] = useState<PageType>('home');
+  const [page, _setPage] = useState<PageType>(() => pathnameToPage(window.location.pathname));
+
+  // Sync page ↔ URL (Option A: History API)
+  const setPage = useCallback((p: PageType) => {
+    _setPage(p);
+    window.history.pushState(null, '', p === 'home' ? '/' : `/${p}`);
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => _setPage(pathnameToPage(window.location.pathname));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [modalTask,    setModalTask]    = useState<Task | null | undefined>(undefined);
   const [modalDate,    setModalDate]    = useState<string | undefined>(undefined);
   const [showSettings,   setShowSettings]   = useState(false);

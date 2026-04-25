@@ -94,6 +94,7 @@ export interface Invoice {
   createdAt: string;
   shareToken?: string;
   pixKey?: string;
+  pixName?: string;  // nome do recebedor (aparece no app do banco)
 }
 
 // ─── ONDA 5 — Briefing ──────────────────────────────────────────────────

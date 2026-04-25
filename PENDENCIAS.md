@@ -93,9 +93,12 @@
 1. ~~push + deploy Onda 4~~ ✅
 2. ~~Polish pós-MVP de Onda 4~~ ✅
 3. ~~Onda 5: features de agência~~ ✅
-4. **AGORA:** Onda 6 — Time Tracking dedicado (linka com Pomodoro+Tarefa)
-5. Onda 3D opcional (histórico de versões)
-6. (opcional, com aprovação) Onda 4-original: Google Calendar OAuth + webhooks + IA
+4. ~~URL routing (Option A — pushState)~~ ✅ 2026-04-25
+5. ~~PIX QR Code real (EMV QRCPS BR Code)~~ ✅ 2026-04-25
+6. **AGORA:** Onda 6 — Time Tracking dedicado (linka com Pomodoro+Tarefa)
+7. Onda 3D opcional (histórico de versões)
+8. URL routing Option B (React Router) — ver memory `project_routing_option_b.md`
+9. (opcional, com aprovação) Onda 4-original: Google Calendar OAuth + webhooks + IA
 
 ---
 

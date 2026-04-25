@@ -14,6 +14,46 @@ type EditState = Invoice | 'new' | null;
 const fmt = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const mkToken = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 
+// ── PIX BR Code (EMV QRCPS-MPM-001) ──────────────────────────────────────────
+function crc16ccitt(str: string): string {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+function tlv(id: string, value: string): string {
+  return `${id}${String(value.length).padStart(2, '0')}${value}`;
+}
+
+// Sanitize to ASCII, strip accents, max length
+function asciiTrunc(s: string, max: number): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '').trim().slice(0, max).toUpperCase();
+}
+
+function generatePixPayload(key: string, name: string, amount: number): string {
+  const mai = tlv('00', 'br.gov.bcb.pix') + tlv('01', key);
+  const parts = [
+    tlv('00', '01'),
+    tlv('01', '11'),                               // static QR (reusável)
+    tlv('26', mai),
+    tlv('52', '0000'),
+    tlv('53', '986'),                              // BRL
+    tlv('54', amount.toFixed(2)),
+    tlv('58', 'BR'),
+    tlv('59', asciiTrunc(name || 'Prestador', 25)),
+    tlv('60', 'SAO PAULO'),
+    tlv('62', tlv('05', '***')),
+  ];
+  const base = parts.join('') + '6304';
+  return base + crc16ccitt(base);
+}
+
 // ── StatusDropdown ────────────────────────────────────────────────────────────
 function StatusDropdown({ invoiceId, currentStatus }: { invoiceId: string; currentStatus: InvoiceStatus }) {
   const { setStatus } = useInvoicesStore();
@@ -298,6 +338,7 @@ function InvoiceModal({
   const [notes, setNotes] = useState(invoice?.notes ?? '');
   const [taxes, setTaxes] = useState(invoice?.taxes ?? 0);
   const [pixKey, setPixKey] = useState(invoice?.pixKey ?? '');
+  const [pixName, setPixName] = useState(invoice?.pixName ?? '');
   const [items, setItems] = useState<InvoiceItem[]>(invoice?.items ?? [{ id: uid(), description: '', qty: 1, unitPrice: 0 }]);
 
   const subtotal = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
@@ -314,6 +355,7 @@ function InvoiceModal({
       clientId, date, dueDate: dueDate || undefined, notes: notes.trim() || undefined,
       taxes: taxes || undefined, items, status: invoice?.status ?? 'rascunho' as const,
       pixKey: pixKey.trim() || undefined,
+      pixName: pixName.trim() || undefined,
     };
     if (invoice) updateInvoice(invoice.id, { ...payload, subtotal, total });
     else addInvoice(payload);
@@ -400,15 +442,27 @@ function InvoiceModal({
         </div>
 
         {/* PIX */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={label}>Chave PIX para pagamento (opcional)</label>
-          <input
-            value={pixKey} onChange={e => setPixKey(e.target.value)}
-            placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
-            style={field}
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={label}>Chave PIX (opcional)</label>
+              <input
+                value={pixKey} onChange={e => setPixKey(e.target.value)}
+                placeholder="CPF, CNPJ, e-mail, telefone…"
+                style={{ ...field, fontSize: 12 }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={label}>Nome do recebedor (app do banco)</label>
+              <input
+                value={pixName} onChange={e => setPixName(e.target.value)}
+                placeholder="Seu nome ou empresa"
+                style={{ ...field, fontSize: 12 }}
+              />
+            </div>
+          </div>
           <p style={{ fontSize: 11, color: 'var(--t4)', margin: 0 }}>
-            Aparece no invoice enviado ao cliente junto com QR code.
+            O QR Code gerado é lido por qualquer app bancário (Nubank, BB, Caixa…).
           </p>
         </div>
 
@@ -659,16 +713,16 @@ export function PublicInvoiceView({
                     Transfira exatamente <strong style={{ color: accent }}>{fmt(inv.total)}</strong> para esta chave PIX.
                   </p>
                 </div>
-                {/* QR Code */}
+                {/* QR Code PIX (EMV BR Code) */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(inv.pixKey)}&bgcolor=ffffff&color=000000&margin=8`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(generatePixPayload(inv.pixKey, inv.pixName ?? '', inv.total))}&bgcolor=ffffff&color=000000&margin=8`}
                     alt="QR Code PIX"
                     width={140}
                     height={140}
                     style={{ borderRadius: 10, background: '#fff', display: 'block' }}
                   />
-                  <span style={{ fontSize: 10, color: 'var(--t4)' }}>QR Code</span>
+                  <span style={{ fontSize: 10, color: 'var(--t4)' }}>Escaneie para pagar</span>
                 </div>
               </div>
             </>
