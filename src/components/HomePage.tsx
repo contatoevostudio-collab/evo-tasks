@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import {
   FiPlus, FiZap, FiAlertTriangle, FiArrowRight,
   FiCheckSquare, FiUsers, FiBriefcase, FiClock,
-  FiCheckCircle, FiTrendingUp,
+  FiCheckCircle, FiTrendingUp, FiSun, FiTarget, FiCalendar,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore, TAG_CONFIG as IDEA_TAG_CONFIG } from '../store/ideas';
@@ -100,11 +100,18 @@ function CardHeader({
 }
 
 // ─── Empty state with optional CTA ──────────────────────────────────────────
-function EmptyState({ emoji, text, cta, onCta }: { emoji: string; text: string; cta?: string; onCta?: () => void }) {
+function EmptyState({ icon, text, cta, onCta, iconColor = 'rgba(255,255,255,0.45)' }: { icon: React.ReactNode; text: string; cta?: string; onCta?: () => void; iconColor?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '28px 16px' }}>
-      <div style={{ fontSize: 36, opacity: 0.85 }}>{emoji}</div>
-      {/* #8 — Empty state em branco */}
+      <div style={{
+        width: 48, height: 48, borderRadius: 12,
+        background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: iconColor,
+      }}>
+        {icon}
+      </div>
       <div style={{ fontSize: 13, color: '#ffffff', fontWeight: 600, textAlign: 'center', letterSpacing: '-0.1px' }}>{text}</div>
       {cta && onCta && (
         <button
@@ -553,7 +560,15 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
               <div style={{ padding: '12px 12px 14px', position: 'relative' }}>
                 {todayTasks.length === 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '22px 16px' }}>
-                    <div style={{ fontSize: 38 }}>☀️</div>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 14,
+                      background: 'rgba(255,255,255,0.14)',
+                      border: '1px solid rgba(255,255,255,0.22)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#ffffff',
+                    }}>
+                      <FiSun size={24} />
+                    </div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.2px' }}>
                       Dia livre. Aproveite!
                     </div>
@@ -617,7 +632,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
               />
               <div style={{ padding: '10px 10px 12px' }}>
                 {sortedOpenLeads.length === 0 ? (
-                  <EmptyState emoji="🎯" text="Nenhum lead em aberto." cta="Criar lead" onCta={() => onNavigate('crm')} />
+                  <EmptyState icon={<FiTarget size={20} />} text="Nenhum lead em aberto." cta="Criar lead" onCta={() => onNavigate('crm')} iconColor="#bf5af2" />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {sortedOpenLeads.map((lead, i) => {
@@ -644,7 +659,14 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
                           <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: stageColor, flexShrink: 0 }}>
                             {LEAD_STAGE_LABEL[lead.stage]}
                           </span>
-                          {lead.temperature === 'quente' && <span style={{ fontSize: 11 }}>🔥</span>}
+                          {lead.temperature === 'quente' && (
+                            <span style={{
+                              fontSize: 8, fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase',
+                              color: '#ff453a', background: 'rgba(255,69,58,0.16)',
+                              border: '1px solid rgba(255,69,58,0.3)',
+                              borderRadius: 99, padding: '1px 6px', flexShrink: 0,
+                            }}>Quente</span>
+                          )}
                         </motion.button>
                       );
                     })}
@@ -662,7 +684,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
               />
               <div style={{ padding: '10px 10px 12px' }}>
                 {upcomingByDay.length === 0 ? (
-                  <EmptyState emoji="📅" text="Agenda livre nos próximos dias." cta="Adicionar tarefa" onCta={() => onNavigate('tarefas')} />
+                  <EmptyState icon={<FiCalendar size={20} />} text="Agenda livre nos próximos dias." cta="Adicionar tarefa" onCta={() => onNavigate('tarefas')} iconColor="#64d2ff" />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {upcomingByDay.map((group, gi) => (
@@ -739,7 +761,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
               />
               <div style={{ padding: '10px 10px 12px' }}>
                 {overdue.length === 0 ? (
-                  <EmptyState emoji="✅" text="Nada em atraso." />
+                  <EmptyState icon={<FiCheckCircle size={20} />} text="Nada em atraso." iconColor="#30d158" />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {overdue.map((task, i) => (
@@ -786,7 +808,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
               />
               <div style={{ padding: '14px 16px 16px' }}>
                 {!ideaOfWeek ? (
-                  <EmptyState emoji="💡" text="Nenhuma ideia ainda." cta="Criar primeira" onCta={() => onNavigate('ideias')} />
+                  <EmptyState icon={<FiZap size={20} />} text="Nenhuma ideia ainda." cta="Criar primeira" onCta={() => onNavigate('ideias')} iconColor="#ffd60a" />
                 ) : (() => {
                   const tagCfg = IDEA_TAG_CONFIG[ideaOfWeek.tag];
                   return (
