@@ -13,7 +13,7 @@ import { useAuthStore } from '../store/auth';
 import type { PageType, Theme, Company } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
+import { useVisibleWorkspaceIds, isInLens, useWorkspacesStore } from '../store/workspaces';
 
 interface Props {
   currentPage: PageType;
@@ -152,6 +152,12 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
     accentColor,
   } = useTaskStore();
   const accentRgb = navHexToRgb(accentColor);
+
+  const { workspaces, activeWorkspaceId } = useWorkspacesStore(
+    s => ({ workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId })
+  );
+  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
+  const enabledPages = activeWorkspace?.settings?.enabledPages ?? null;
 
   const { user } = useAuthStore();
 
@@ -365,7 +371,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
             <img src={EvoIcon} alt="Evo" style={{ width: 18, height: 18, objectFit: 'contain', filter: 'invert(1)' }} />
           </div>
 
-          {NAV_ITEMS.map(({ id, label, Icon, beta }) => {
+          {NAV_ITEMS.filter(({ id }) => !enabledPages || enabledPages.includes(id)).map(({ id, label, Icon, beta }) => {
             const active = currentPage === id;
             return (
               <div key={id} style={{ position: 'relative' }}>
@@ -426,13 +432,18 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
 
           {/* Navigation — grouped sections */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 0' }}>
-            {NAV_GROUPS.map((group, gi) => (
+            {NAV_GROUPS.map((group, gi) => {
+              const visibleItems = enabledPages
+                ? group.items.filter(id => enabledPages.includes(id))
+                : group.items;
+              if (visibleItems.length === 0) return null;
+              return (
               <div key={group.label} style={{ marginBottom: 4 }}>
                 {/* Section label */}
                 <div style={{ padding: '8px 12px 3px', fontSize: 8, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', opacity: 0.55 }}>
                   {group.label}
                 </div>
-                {group.items.map(pageId => {
+                {visibleItems.map(pageId => {
                   const item = NAV_ITEMS.find(n => n.id === pageId);
                   if (!item) return null;
                   return (
@@ -478,7 +489,8 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
                   <div style={{ height: 1, background: 'var(--b1)', margin: '6px 4px 2px' }} />
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Bottom bar */}

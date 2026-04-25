@@ -21,11 +21,21 @@ export function getPalette(id: string): WorkspacePalette {
 }
 
 // ─── Páginas habilitadas por tipo de workspace ──────────────────────────────
-const ALL_PAGES: PageType[] = ['home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas', 'todo', 'financas', 'ideias', 'arquivo'];
+const ALL_PAGES: PageType[] = [
+  'home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas',
+  'aprovacoes', 'editorial', 'briefings', 'onboarding',
+  'todo', 'ideias', 'snippets', 'habitos',
+  'financas', 'faturas', 'kpis', 'arquivo',
+];
 
 const PAGES_BY_TYPE: Record<WorkspaceType, PageType[]> = {
   freelance: ['home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas', 'todo', 'financas', 'ideias', 'arquivo'],
-  agencia:   ['home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas', 'financas', 'ideias', 'arquivo'],
+  agencia:   [
+    'home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas',
+    'aprovacoes', 'editorial', 'briefings', 'onboarding',
+    'snippets', 'habitos',
+    'financas', 'faturas', 'kpis', 'ideias', 'arquivo',
+  ],
   pessoal:   ['home', 'inbox', 'todo', 'ideias', 'financas', 'arquivo'],
   blank:     ALL_PAGES,
 };
