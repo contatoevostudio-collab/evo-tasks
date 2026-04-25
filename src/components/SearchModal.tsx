@@ -9,6 +9,7 @@ import { useTaskStore } from '../store/tasks';
 import { useIdeasStore, TAG_CONFIG, STATUS_CONFIG } from '../store/ideas';
 import { useProposalsStore } from '../store/proposals';
 import { useFinanceStore } from '../store/finance';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { getTaskTitle } from '../types';
 import type { Task, PageType, LeadStage, ProposalStatus } from '../types';
 import { fmtBRL, fmtDate } from '../lib/format';
@@ -116,6 +117,7 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
   const { ideas } = useIdeasStore();
   const { proposals } = useProposalsStore();
   const { transactions } = useFinanceStore();
+  const visibleIds = useVisibleWorkspaceIds();
 
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(0);
@@ -126,6 +128,12 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
   const groups: Group[] = useMemo(() => {
     const q = query.trim().toLowerCase();
     const out: Group[] = [];
+
+    // Lens filter — only show results from visible workspaces
+    const lTasks     = tasks.filter(t => isInLens(t, visibleIds));
+    const lCompanies = companies.filter(c => isInLens(c, visibleIds));
+    const lLeads     = leads.filter(l => isInLens(l, visibleIds));
+    const lIdeas     = ideas.filter(i => isInLens(i, visibleIds));
 
     // Commands group
     const isLight = theme.startsWith('light');
@@ -160,10 +168,10 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
     if (q.length === 0) return out;
 
     // Tasks
-    const taskRows: ResultRow[] = tasks
+    const taskRows: ResultRow[] = lTasks
       .filter(t => !t.archived && !t.deletedAt)
       .map(t => {
-        const title = getTaskTitle(t, companies, subClients);
+        const title = getTaskTitle(t, lCompanies, subClients);
         const haystack = (
           title + ' ' + (t.notes ?? '') + ' ' + (t.tags ?? []).join(' ')
         ).toLowerCase();
@@ -182,19 +190,19 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
           subtitle: subtitle || undefined,
           chipLabel: STATUS_LABEL[t.status] ?? t.status,
           chipColor: STATUS_COLOR[t.status] ?? '#636366',
-          iconColor: t.colorOverride ?? companies.find(c => c.id === t.companyId)?.color ?? '#356BFF',
+          iconColor: t.colorOverride ?? lCompanies.find(c => c.id === t.companyId)?.color ?? '#356BFF',
           data: t,
         };
       });
     if (taskRows.length > 0) out.push({ key: 'tasks', label: 'Tarefas', rows: taskRows });
 
     // Companies
-    const companyRows: ResultRow[] = companies
+    const companyRows: ResultRow[] = lCompanies
       .filter(c => !c.archived && !c.deletedAt && c.name.toLowerCase().includes(q))
       .slice(0, PER_CATEGORY_LIMIT)
       .map(c => {
         const subCount = subClients.filter(s => s.companyId === c.id).length;
-        const taskCount = tasks.filter(t => t.companyId === c.id && !t.archived).length;
+        const taskCount = lTasks.filter(t => t.companyId === c.id && !t.archived).length;
         const status = c.status ?? 'ativo';
         return {
           kind: 'company' as const,
@@ -224,10 +232,10 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
     if (subclientRows.length > 0) out.push({ key: 'subclients', label: 'Subclients', rows: subclientRows });
 
     // Leads
-    const leadRows: ResultRow[] = leads
+    const leadRows: ResultRow[] = lLeads
       .filter(l => {
         if (l.deletedAt) return false;
-        const linkedCompany = l.linkedCompanyId ? companies.find(c => c.id === l.linkedCompanyId) : undefined;
+        const linkedCompany = l.linkedCompanyId ? lCompanies.find(c => c.id === l.linkedCompanyId) : undefined;
         const haystack = (
           l.name + ' ' + (l.contact ?? '') + ' ' + (l.email ?? '') +
           ' ' + (l.phone ?? '') + ' ' + (linkedCompany?.name ?? '')
@@ -246,7 +254,7 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
     if (leadRows.length > 0) out.push({ key: 'leads', label: 'Leads', rows: leadRows });
 
     // Ideas
-    const ideaRows: ResultRow[] = ideas
+    const ideaRows: ResultRow[] = lIdeas
       .filter(i => !i.deletedAt)
       .filter(i => {
         const haystack = (i.title + ' ' + (i.description ?? '')).toLowerCase();
@@ -319,7 +327,7 @@ export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {
 
     return out;
   }, [
-    query, theme, tasks, companies, subClients, leads, ideas, proposals, transactions, todoItems,
+    query, theme, visibleIds, tasks, companies, subClients, leads, ideas, proposals, transactions, todoItems,
     onNavigate, onClose, setTheme,
   ]);
 

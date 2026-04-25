@@ -195,7 +195,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
     setExpanded(p => ({ ...p, [id]: !p[id] }));
 
   const countFor = (companyId: string) =>
-    tasks.filter(t => !t.deletedAt && t.companyId === companyId && t.status !== 'done' && !t.archived).length;
+    tasks.filter(t => !t.deletedAt && t.companyId === companyId && t.status !== 'done' && !t.archived && isInLens(t, visibleIds)).length;
 
   // Group companies by status (excluindo deletadas / na lixeira) + filtrando pela lente
   const visibleIds = useVisibleWorkspaceIds();

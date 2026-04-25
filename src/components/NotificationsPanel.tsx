@@ -5,6 +5,7 @@ import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore } from '../store/ideas';
 import { useFinanceStore } from '../store/finance';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import type { PageType } from '../types';
 
 export type NotificationSeverity = 'high' | 'medium' | 'low';
@@ -274,9 +275,10 @@ interface NotificationsPanelProps {
 }
 
 export function NotificationsPanel({ open, onClose, onNavigate, top = 60, right = 20 }: NotificationsPanelProps) {
-  const { tasks, todoItems, leads, companies } = useTaskStore();
-  const { ideas } = useIdeasStore();
+  const { tasks: allTasks, todoItems, leads: allLeads, companies: allCompanies } = useTaskStore();
+  const { ideas: allIdeas } = useIdeasStore();
   const { recurringBills } = useFinanceStore();
+  const visibleIds = useVisibleWorkspaceIds();
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -285,14 +287,14 @@ export function NotificationsPanel({ open, onClose, onNavigate, top = 60, right 
       computeNotifications({
         navigate: (p) => onNavigate?.(p),
         todayStr,
-        tasks,
+        tasks:     allTasks.filter(t => isInLens(t, visibleIds)),
         todoItems,
-        leads,
-        companies,
-        ideas,
+        leads:     allLeads.filter(l => isInLens(l, visibleIds)),
+        companies: allCompanies.filter(c => isInLens(c, visibleIds)),
+        ideas:     allIdeas.filter(i => isInLens(i, visibleIds)),
         bills: recurringBills,
       }),
-    [todayStr, tasks, todoItems, leads, companies, ideas, recurringBills, onNavigate],
+    [todayStr, visibleIds, allTasks, todoItems, allLeads, allCompanies, allIdeas, recurringBills, onNavigate],
   );
 
   const grouped = useMemo(() => {
@@ -559,24 +561,25 @@ export function NotificationsBell({ count, onClick }: NotificationsBellProps) {
 
 /** Convenience: read all stores + return current count, for badge usage outside the panel. */
 export function useNotificationsCount(): number {
-  const tasks = useTaskStore(s => s.tasks);
+  const allTasks = useTaskStore(s => s.tasks);
   const todoItems = useTaskStore(s => s.todoItems);
-  const leads = useTaskStore(s => s.leads);
-  const companies = useTaskStore(s => s.companies);
-  const ideas = useIdeasStore(s => s.ideas);
+  const allLeads = useTaskStore(s => s.leads);
+  const allCompanies = useTaskStore(s => s.companies);
+  const allIdeas = useIdeasStore(s => s.ideas);
   const recurringBills = useFinanceStore(s => s.recurringBills);
+  const visibleIds = useVisibleWorkspaceIds();
 
   return useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     return computeNotifications({
       navigate: () => {},
       todayStr,
-      tasks,
+      tasks:     allTasks.filter(t => isInLens(t, visibleIds)),
       todoItems,
-      leads,
-      companies,
-      ideas,
+      leads:     allLeads.filter(l => isInLens(l, visibleIds)),
+      companies: allCompanies.filter(c => isInLens(c, visibleIds)),
+      ideas:     allIdeas.filter(i => isInLens(i, visibleIds)),
       bills: recurringBills,
     }).length;
-  }, [tasks, todoItems, leads, companies, ideas, recurringBills]);
+  }, [visibleIds, allTasks, todoItems, allLeads, allCompanies, allIdeas, recurringBills]);
 }

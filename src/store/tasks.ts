@@ -4,6 +4,7 @@ import type { Task, TaskTemplate, Company, SubClient, Lead, LeadInteraction, Lea
 import { format } from 'date-fns';
 import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient, syncLead, removeLead, syncQuickNote, removeQuickNote, syncTodoItem, removeTodoItem, syncCalendarEvent, removeCalendarEvent } from '../lib/supabaseSync';
 import { useAuthStore } from './auth';
+import { useWorkspacesStore } from './workspaces';
 
 const DEFAULT_COMPANIES: Company[] = [
   { id: 'imperio',    name: 'IMPERIO',      color: '#30d158' },
@@ -260,7 +261,8 @@ export const useTaskStore = create<TaskStore>()(
 
       addTask: (task) => {
         const id = crypto.randomUUID();
-        const full = { ...task, id, createdAt: task.createdAt ?? new Date().toISOString() };
+        const wsId = useWorkspacesStore.getState().activeWorkspaceId;
+        const full = { ...task, id, workspaceId: task.workspaceId ?? (wsId ?? undefined), createdAt: task.createdAt ?? new Date().toISOString() };
         set((state) => ({ tasks: [...state.tasks, full] }));
         const userId = get().userId;
         if (userId) syncTask(full, userId).catch(console.error);
@@ -363,7 +365,8 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       addCompany: (company) => {
-        const full = { ...company, id: crypto.randomUUID() };
+        const wsId = useWorkspacesStore.getState().activeWorkspaceId;
+        const full = { ...company, id: crypto.randomUUID(), workspaceId: company.workspaceId ?? (wsId ?? undefined) };
         set((state) => ({ companies: [...state.companies, full], selectedCompanies: [...state.selectedCompanies, full.id] }));
         const userId = get().userId;
         if (userId) syncCompany(full, userId).catch(console.error);
@@ -535,7 +538,8 @@ export const useTaskStore = create<TaskStore>()(
 
       addLead: (lead) => {
         const id = crypto.randomUUID();
-        const full: Lead = { ...lead, id, createdAt: new Date().toISOString() };
+        const wsId = useWorkspacesStore.getState().activeWorkspaceId;
+        const full: Lead = { ...lead, id, workspaceId: lead.workspaceId ?? (wsId ?? undefined), createdAt: new Date().toISOString() };
         set((state) => ({ leads: [...state.leads, full] }));
         const userId = get().userId;
         if (userId) syncLead(full, userId).catch(console.error);
