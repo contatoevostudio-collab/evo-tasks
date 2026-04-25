@@ -520,6 +520,7 @@ export function PublicInvoiceView({
   const { invoices, updateInvoice } = useInvoicesStore();
   const { companies, accentColor: storeAccent } = useTaskStore();
   const [pixCopied, setPixCopied] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -556,6 +557,48 @@ export function PublicInvoiceView({
     navigator.clipboard.writeText(inv.pixKey);
     setPixCopied(true);
     setTimeout(() => setPixCopied(false), 1600);
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!inv) return;
+    setGeneratingPDF(true);
+    try {
+      let qrCodeSrc = '';
+      if (inv.pixKey) {
+        const key = sanitizePixKey(inv.pixKey);
+        const name = (inv.pixName || 'Prestador').normalize('NFD')
+          .replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '').trim().slice(0, 25) || 'Prestador';
+        const { QrCodePix } = await import('qrcode-pix');
+        const qr = QrCodePix({ version: '01', key, name, city: 'SAO PAULO', transactionId: '***', message: '', currency: 986, countryCode: 'BR', value: inv.total > 0 ? inv.total : undefined });
+        qrCodeSrc = await qr.base64();
+      }
+      const { useWorkspacesStore, getPalette } = await import('../store/workspaces');
+      const ws = useWorkspacesStore.getState();
+      const workspace = ws.workspaces.find(w => w.id === ws.activeWorkspaceId);
+      const wsAccent = workspace ? getPalette(workspace.paletteId).primary : accent;
+      const { pdf } = await import('@react-pdf/renderer');
+      const { InvoicePDF } = await import('./InvoicePDF');
+      const blob = await pdf(
+        <InvoicePDF
+          inv={inv}
+          clientName={clientName}
+          accent={wsAccent}
+          qrCodeSrc={qrCodeSrc}
+          workspaceName={workspace?.name ?? 'Studio'}
+          workspacePhotoUrl={workspace?.photoUrl}
+        />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fatura-${String(inv.number).padStart(4, '0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('PDF error:', e);
+    } finally {
+      setGeneratingPDF(false);
+    }
   };
 
   const handlePrint = () => window.print();
@@ -603,10 +646,15 @@ export function PublicInvoiceView({
             {copied ? <FiCheck size={12} /> : <FiLink size={12} />}
             {copied ? 'Copiado!' : 'Copiar link'}
           </button>
-          <button onClick={handlePrint}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, background: accent, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+          <button onClick={handlePrint} title="Imprimir"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, background: 'transparent', border: '1px solid var(--b2)', color: 'var(--t3)', fontSize: 12, cursor: 'pointer' }}
           >
-            <FiPrinter size={12} /> Imprimir / PDF
+            <FiPrinter size={12} /> Imprimir
+          </button>
+          <button onClick={handleDownloadPDF} disabled={generatingPDF}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, background: accent, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: generatingPDF ? 'wait' : 'pointer', opacity: generatingPDF ? 0.7 : 1, transition: 'opacity .15s' }}
+          >
+            <FiPrinter size={12} /> {generatingPDF ? 'Gerando...' : 'Baixar PDF'}
           </button>
         </div>
 
