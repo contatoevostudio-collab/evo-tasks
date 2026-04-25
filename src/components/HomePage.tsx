@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { format, parseISO, isBefore, startOfToday, addDays, getDay, startOfWeek, subWeeks, subMonths, startOfMonth, endOfMonth, differenceInCalendarDays, eachDayOfInterval, subDays } from 'date-fns';
+import { format, parseISO, isBefore, startOfToday, addDays, startOfWeek, endOfWeek, subWeeks, subMonths, startOfMonth, endOfMonth, differenceInCalendarDays, eachDayOfInterval, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import {
@@ -346,129 +346,142 @@ function ProductivityHeatmap({ counts }: { counts: Map<string, number> }) {
   };
   const get = (d: Date) => counts.get(format(d, 'yyyy-MM-dd')) ?? 0;
 
-  // ─── Anual: 52 semanas com separadores por mês ─────
+  // ─── Anual: Jan a Dez do ano corrente, agrupado por mês ─────
   const renderAnual = () => {
-    const start = subDays(startOfWeek(today, { weekStartsOn: 1 }), 51 * 7);
-    const days = eachDayOfInterval({ start, end: today });
-    const weeks: Date[][] = [];
-    let currentWeek: Date[] = [];
-    days.forEach(d => {
-      currentWeek.push(d);
-      if (getDay(d) === 0) { weeks.push(currentWeek); currentWeek = []; }
-    });
-    if (currentWeek.length > 0) weeks.push(currentWeek);
+    const year = today.getFullYear();
+    const CELL = 11, GAP = 2, MONTH_GAP = 10;
 
-    // Para cada semana, identifica o mês predominante (1ª segunda)
-    const weekMonth = (week: Date[]) => week[0]?.getMonth() ?? 0;
-    // Detecta mudanças de mês — adiciona separador antes
-    const monthLabels: { wi: number; label: string }[] = [];
-    let lastMonth = -1;
-    weeks.forEach((w, wi) => {
-      const m = weekMonth(w);
-      if (m !== lastMonth) {
-        monthLabels.push({ wi, label: format(w[0], 'MMM', { locale: ptBR }).toUpperCase() });
-        lastMonth = m;
+    // 12 meses, cada um como um bloco de semanas
+    const months = Array.from({ length: 12 }).map((_, mi) => {
+      const monthStart = new Date(year, mi, 1);
+      const monthEnd = endOfMonth(monthStart);
+      // Semanas que tocam o mês (segunda a domingo)
+      const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+      const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+      const allDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
+      // Agrupa em colunas de 7 dias (segunda → domingo)
+      const weeks: (Date | null)[][] = [];
+      for (let i = 0; i < allDays.length; i += 7) {
+        const week = allDays.slice(i, i + 7).map(d => {
+          // Só renderiza se o dia pertence ao mês atual
+          return d.getMonth() === mi ? d : null;
+        });
+        weeks.push(week);
       }
+      return {
+        label: format(monthStart, 'MMM', { locale: ptBR }).toUpperCase(),
+        weeks,
+      };
     });
-
-    const CELL = 11, GAP = 2, MONTH_GAP = 5;
 
     return (
       <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-        {/* Month labels row */}
-        <div style={{ position: 'relative', height: 14, marginBottom: 4 }}>
-          {monthLabels.map(({ wi, label }) => {
-            // Calcula offset acumulado considerando gaps extras nas mudanças
-            let offset = 0;
-            for (let i = 0; i < wi; i++) {
-              offset += CELL + GAP;
-              if (monthLabels.some(ml => ml.wi === i + 1)) offset += (MONTH_GAP - GAP);
-            }
-            return (
-              <span key={wi} style={{
-                position: 'absolute', left: offset,
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: MONTH_GAP }}>
+          {months.map((m, mi) => (
+            <div key={mi} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {/* Month label */}
+              <div style={{
                 fontSize: 9, fontWeight: 700, letterSpacing: '0.6px',
-                color: 'rgba(255,255,255,0.5)',
+                color: 'rgba(255,255,255,0.5)', textAlign: 'left',
               }}>
-                {label}
-              </span>
-            );
-          })}
-        </div>
-
-        {/* Weeks grid with month gaps */}
-        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-          {weeks.map((week, wi) => {
-            const isNewMonth = monthLabels.some(ml => ml.wi === wi);
-            return (
-              <div
-                key={wi}
-                style={{
-                  display: 'flex', flexDirection: 'column', gap: GAP,
-                  marginLeft: wi === 0 ? 0 : (isNewMonth ? MONTH_GAP : GAP),
-                }}
-              >
-                {Array.from({ length: 7 }).map((_, di) => {
-                  const d = week[di];
-                  if (!d) return <div key={di} style={{ width: CELL, height: CELL }} />;
-                  const c = get(d);
-                  return (
-                    <div key={di}
-                      title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
-                      style={{ width: CELL, height: CELL, borderRadius: 2, background: cellColor(c) }}
-                    />
-                  );
-                })}
+                {m.label}
               </div>
-            );
-          })}
+              {/* Month grid: weeks as columns */}
+              <div style={{ display: 'flex', gap: GAP }}>
+                {m.weeks.map((week, wi) => (
+                  <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
+                    {week.map((d, di) => {
+                      if (!d) return <div key={di} style={{ width: CELL, height: CELL }} />;
+                      const c = get(d);
+                      return (
+                        <div key={di}
+                          title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
+                          style={{ width: CELL, height: CELL, borderRadius: 2, background: cellColor(c) }}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
   };
 
-  // ─── Mensal: calendário discreto (visual check) ─────
+  // ─── Mensal: 4 últimos meses lado a lado (estilo anual mas mais legível) ─────
   const renderMensal = () => {
-    const monthStart = startOfMonth(today);
-    const monthEnd = endOfMonth(today);
-    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const gridDays = eachDayOfInterval({ start: gridStart, end: monthEnd });
-    while (gridDays.length % 7 !== 0) gridDays.push(addDays(gridDays[gridDays.length - 1], 1));
-
-    const CELL = 22, GAP = 3;
-    const totalCount = gridDays.filter(d => d >= monthStart && d <= monthEnd).reduce((s, d) => s + get(d), 0);
+    const CELL = 14, GAP = 3, MONTH_GAP = 18;
+    // Pega os últimos 4 meses (incluindo o atual)
+    const months = Array.from({ length: 4 }).map((_, i) => {
+      const ref = subMonths(today, 3 - i);
+      const monthStart = startOfMonth(ref);
+      const monthEnd = endOfMonth(ref);
+      const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+      const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+      const allDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
+      const weeks: (Date | null)[][] = [];
+      for (let j = 0; j < allDays.length; j += 7) {
+        const week = allDays.slice(j, j + 7).map(d => {
+          return (d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear()) ? d : null;
+        });
+        weeks.push(week);
+      }
+      const total = allDays.filter(d => d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear()).reduce((s, d) => s + get(d), 0);
+      return {
+        label: format(monthStart, 'MMM', { locale: ptBR }).toUpperCase(),
+        weeks,
+        total,
+        isCurrent: ref.getMonth() === today.getMonth() && ref.getFullYear() === today.getFullYear(),
+      };
+    });
 
     return (
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.1px' }}>
-            {format(today, 'MMMM yyyy', { locale: ptBR })}
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>
-            {totalCount} concluída{totalCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gap: GAP, marginBottom: 4 }}>
-          {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((l, i) => (
-            <div key={i} style={{ width: CELL, fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textAlign: 'center', letterSpacing: '0.5px' }}>{l}</div>
+      <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: MONTH_GAP }}>
+          {months.map((m, mi) => (
+            <div key={mi} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 800, letterSpacing: '0.8px',
+                  color: m.isCurrent ? '#30d158' : 'rgba(255,255,255,0.55)',
+                }}>
+                  {m.label}
+                </span>
+                <span style={{
+                  fontSize: 9, fontWeight: 700,
+                  color: m.total > 0 ? '#30d158' : 'rgba(255,255,255,0.35)',
+                  background: m.total > 0 ? 'rgba(48,209,88,0.12)' : 'rgba(255,255,255,0.04)',
+                  border: m.total > 0 ? '1px solid rgba(48,209,88,0.25)' : '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 99, padding: '1px 7px',
+                }}>
+                  {m.total}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: GAP }}>
+                {m.weeks.map((week, wi) => (
+                  <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
+                    {week.map((d, di) => {
+                      if (!d) return <div key={di} style={{ width: CELL, height: CELL }} />;
+                      const c = get(d);
+                      const isToday = format(d, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+                      return (
+                        <div key={di}
+                          title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
+                          style={{
+                            width: CELL, height: CELL, borderRadius: 3,
+                            background: cellColor(c),
+                            border: isToday ? '1.5px solid #ffffff' : 'none',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
-        </div>
-        <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gap: GAP }}>
-          {gridDays.map((d, i) => {
-            const inMonth = d >= monthStart && d <= monthEnd;
-            const c = inMonth ? get(d) : 0;
-            const isToday = format(d, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
-            return (
-              <div key={i}
-                title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
-                style={{
-                  width: CELL, height: CELL, borderRadius: 4,
-                  background: inMonth ? cellColor(c) : 'transparent',
-                  border: isToday ? '1.5px solid #ffffff' : 'none',
-                }}
-              />
-            );
-          })}
         </div>
       </div>
     );
