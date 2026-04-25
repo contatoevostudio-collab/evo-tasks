@@ -485,6 +485,7 @@ function NewFolderModal({ onClose, workspaceId, companies }: {
 function FolderManagerModal({ folderId, onClose }: { folderId: string; onClose: () => void }) {
   const { folders, approvals, addApprovalToFolder, removeApprovalFromFolder, updateFolder } = useContentApprovalsStore();
   const { companies } = useTaskStore();
+  const visibleIds = useVisibleWorkspaceIds();
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(folder?.name ?? '');
@@ -493,8 +494,8 @@ function FolderManagerModal({ folderId, onClose }: { folderId: string; onClose: 
 
   const company = companies.find(c => c.id === folder.clientId);
   const clientColor = company?.color ?? '#636366';
-  const inFolder = approvals.filter(a => folder.approvalIds.includes(a.id) && !a.deletedAt);
-  const available = approvals.filter(a => !folder.approvalIds.includes(a.id) && !a.deletedAt && a.clientId === folder.clientId);
+  const inFolder = approvals.filter(a => folder.approvalIds.includes(a.id) && !a.deletedAt && isInLens(a, visibleIds));
+  const available = approvals.filter(a => !folder.approvalIds.includes(a.id) && !a.deletedAt && a.clientId === folder.clientId && isInLens(a, visibleIds));
 
   const saveName = () => {
     if (nameVal.trim() && nameVal.trim() !== folder.name) updateFolder(folder.id, { name: nameVal.trim() });
@@ -737,6 +738,8 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
   const [activeAssetIdx, setActiveAssetIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
 
   const cfg = APPROVAL_STATUS_CONFIG[approval.status];
   const shareUrl = `${window.location.origin}${window.location.pathname}#aprovar=${approval.shareToken}`;
@@ -763,10 +766,6 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        if (file.size > 5 * 1024 * 1024) {
-          alert(`${file.name}: muito grande (max 5MB)`);
-          continue;
-        }
         const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
         const path = `${user.id}/${approval.id}/${Math.random().toString(36).slice(2, 10)}.${ext}`;
         const { error } = await supabase.storage.from('content-assets').upload(path, file, { cacheControl: '3600' });
@@ -882,6 +881,37 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
                   : <FiUpload size={16} />}
                 <input type="file" accept="image/*,video/*" multiple onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
               </label>
+              {showLinkInput ? (
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                  <input
+                    autoFocus
+                    placeholder="Cole a URL..."
+                    value={linkUrl}
+                    onChange={e => setLinkUrl(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && linkUrl.trim()) {
+                        addAsset(approval.id, { url: linkUrl.trim() });
+                        setLinkUrl(''); setShowLinkInput(false);
+                      }
+                      if (e.key === 'Escape') { setLinkUrl(''); setShowLinkInput(false); }
+                    }}
+                    style={{ width: 180, padding: '5px 9px', borderRadius: 7, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 12, outline: 'none' }}
+                  />
+                  <button onClick={() => { if (linkUrl.trim()) { addAsset(approval.id, { url: linkUrl.trim() }); setLinkUrl(''); setShowLinkInput(false); } }}
+                    style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(53,107,255,0.15)', border: '1px solid rgba(53,107,255,0.35)', cursor: 'pointer', color: '#356BFF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <FiCheck size={12} />
+                  </button>
+                  <button onClick={() => { setLinkUrl(''); setShowLinkInput(false); }}
+                    style={{ width: 28, height: 28, borderRadius: 7, background: 'transparent', border: '1px solid var(--b2)', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <FiX size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowLinkInput(true)} title="Colar link de vídeo ou arquivo"
+                  style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 8, border: '2px dashed var(--b2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--t3)', background: 'transparent' }}>
+                  <FiLink size={14} />
+                </button>
+              )}
               {approval.assets[activeAssetIdx] && (
                 <button onClick={() => { if (confirm('Remover asset?')) { removeAsset(approval.id, approval.assets[activeAssetIdx].id); setActiveAssetIdx(0); } }}
                   style={{ marginLeft: 'auto', flexShrink: 0, padding: 8, borderRadius: 7, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)' }}>
@@ -990,33 +1020,51 @@ function AssetView({ asset, onAddComment, onResolve }: {
   };
 
   const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(asset.url);
+  const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(asset.url);
+  const isSupabase = asset.url.includes('supabase');
+  const isExternalLink = asset.url.startsWith('http') && !isVideo && !isImage && !isSupabase;
+
+  const isYouTube = /youtu(be\.com|\.be)/i.test(asset.url);
+  const isVimeo = /vimeo\.com/i.test(asset.url);
+  const isDrive = /drive\.google\.com/i.test(asset.url);
+  const linkLabel = isYouTube ? 'YouTube' : isVimeo ? 'Vimeo' : isDrive ? 'Google Drive' : 'Abrir link';
+  const linkIcon = isYouTube ? '▶' : isVimeo ? '▶' : isDrive ? '📁' : '🔗';
 
   return (
     <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
-      {isVideo
-        ? <video src={asset.url} controls style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />
-        : (
-          <div onClick={handleClick} style={{ cursor: 'crosshair', position: 'relative' }}>
-            <img src={asset.url} alt="" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8, display: 'block' }} />
-            {asset.comments?.filter(c => c.area).map((c, i) => (
-              <button key={c.id}
-                onClick={(e) => { e.stopPropagation(); onResolve(c.id); }}
-                title={c.text}
-                style={{
-                  position: 'absolute', left: `${c.area!.x}%`, top: `${c.area!.y}%`,
-                  transform: 'translate(-50%, -50%)',
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: c.resolved ? '#30d158' : c.fromClient ? '#ff9f0a' : '#356BFF',
-                  color: '#fff', fontSize: 10, fontWeight: 700,
-                  border: '2px solid #fff', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                }}
-              >{i + 1}</button>
-            ))}
-          </div>
-        )
-      }
+      {isExternalLink ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 20px', background: 'var(--s1)', borderRadius: 12, border: '1px solid var(--b2)' }}>
+          <div style={{ fontSize: 40 }}>{linkIcon}</div>
+          <div style={{ fontSize: 13, color: 'var(--t2)', fontWeight: 600 }}>{linkLabel}</div>
+          <div style={{ fontSize: 11, color: 'var(--t4)', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.url}</div>
+          <a href={asset.url} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 9, background: '#356BFF', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+            <FiExternalLink size={13} /> Abrir link
+          </a>
+        </div>
+      ) : isVideo ? (
+        <video src={asset.url} controls style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />
+      ) : (
+        <div onClick={handleClick} style={{ cursor: 'crosshair', position: 'relative' }}>
+          <img src={asset.url} alt="" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8, display: 'block' }} />
+          {asset.comments?.filter(c => c.area).map((c, i) => (
+            <button key={c.id}
+              onClick={(e) => { e.stopPropagation(); onResolve(c.id); }}
+              title={c.text}
+              style={{
+                position: 'absolute', left: `${c.area!.x}%`, top: `${c.area!.y}%`,
+                transform: 'translate(-50%, -50%)',
+                width: 22, height: 22, borderRadius: '50%',
+                background: c.resolved ? '#30d158' : c.fromClient ? '#ff9f0a' : '#356BFF',
+                color: '#fff', fontSize: 10, fontWeight: 700,
+                border: '2px solid #fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              }}
+            >{i + 1}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1088,52 +1136,70 @@ export function PublicApprovalView({ token, onBack }: { token: string; onBack: (
         </div>
       </div>
 
-      {/* Body */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px 60px', gap: 20, overflowY: 'auto' }}>
-        {approval.assets.length > 0 ? (
-          <>
-            <div style={{ width: '100%', maxWidth: 700 }}>
-              <AssetView asset={approval.assets[activeIdx]} onAddComment={handleAddComment} onResolve={() => {}} />
-            </div>
-            {approval.assets.length > 1 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                {approval.assets.map((a, i) => (
-                  <button key={a.id} onClick={() => setActiveIdx(i)}
-                    style={{ width: 52, height: 52, borderRadius: 8, background: `url(${a.url}) center/cover`, border: i === activeIdx ? '2px solid #356BFF' : '2px solid #2a2a3e', cursor: 'pointer', flexShrink: 0 }}
-                  />
-                ))}
+      {/* Body — 2-column layout */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Left: asset viewer */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 24px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+          {approval.assets.length > 0 ? (
+            <>
+              <div style={{ width: '100%', maxWidth: 680 }}>
+                <AssetView asset={approval.assets[activeIdx]} onAddComment={handleAddComment} onResolve={() => {}} />
               </div>
-            )}
-            <div style={{ fontSize: 11, color: '#555', textAlign: 'center' }}>Clique na imagem para adicionar um comentário ancorado naquele ponto</div>
-          </>
-        ) : (
-          <div style={{ padding: 40, color: '#555', fontSize: 14 }}>Nenhum asset disponível ainda.</div>
-        )}
-
-        {/* Feedback */}
-        <div style={{ width: '100%', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ fontSize: 11, color: '#666' }}>Feedback geral (opcional)</label>
-          <textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Escreva seu feedback..." rows={3}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, background: '#111', border: '1px solid #2a2a3e', color: '#fff', fontSize: 13, resize: 'vertical', outline: 'none' }}
-          />
+              {approval.assets.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {approval.assets.map((a, i) => (
+                    <button key={a.id} onClick={() => setActiveIdx(i)}
+                      style={{ width: 52, height: 52, borderRadius: 8, background: `url(${a.url}) center/cover`, border: i === activeIdx ? '2px solid #356BFF' : '2px solid #2a2a3e', cursor: 'pointer', flexShrink: 0 }}
+                    />
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: '#444', textAlign: 'center' }}>Clique na imagem para adicionar um comentário ancorado naquele ponto</div>
+            </>
+          ) : (
+            <div style={{ padding: 40, color: '#555', fontSize: 14 }}>Nenhum asset disponível ainda.</div>
+          )}
         </div>
 
-        {!altRequested && (
-          <div style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 700 }}>
-            <button onClick={handleRequestChanges}
-              style={{ flex: 1, padding: '13px', borderRadius: 12, background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.4)', color: '#ff9f0a', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-            >Pedir alteração</button>
-            <button onClick={handleApprove}
-              style={{ flex: 1, padding: '13px', borderRadius: 12, background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(48,209,88,0.4)', color: '#30d158', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-            >✓ Aprovar</button>
+        {/* Right: feedback + actions panel */}
+        <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid #1a1a2e', display: 'flex', flexDirection: 'column', background: '#0d0d1a' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: '#555', marginBottom: 8 }}>Sua decisão</div>
+              {altRequested ? (
+                <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.25)', fontSize: 13, color: '#ff9f0a', textAlign: 'center' }}>
+                  Alterações já solicitadas.
+                  {approval.feedback && <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>"{approval.feedback}"</div>}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button onClick={handleApprove}
+                    style={{ padding: '14px', borderRadius: 12, background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(48,209,88,0.45)', color: '#30d158', fontSize: 15, fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.2px' }}
+                  >✓ Aprovar conteúdo</button>
+                  <button onClick={handleRequestChanges}
+                    style={{ padding: '13px', borderRadius: 12, background: 'rgba(255,159,10,0.10)', border: '1px solid rgba(255,159,10,0.35)', color: '#ff9f0a', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                  >Pedir alteração</button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: '#555', marginBottom: 8 }}>Feedback geral <span style={{ color: '#444', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></div>
+              <textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Descreva o que precisar alterar ou deixe um comentário..." rows={5}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10, background: '#111', border: '1px solid #2a2a3e', color: '#fff', fontSize: 13, resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
+              />
+            </div>
+
+            {approval.assets.length > 0 && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: '#555', marginBottom: 8 }}>Comentários por ponto</div>
+                <div style={{ fontSize: 11, color: '#444', lineHeight: 1.5 }}>
+                  Clique em qualquer ponto da imagem à esquerda para ancorar um comentário específico.
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        {altRequested && (
-          <div style={{ width: '100%', maxWidth: 700, padding: 16, borderRadius: 12, background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.25)', fontSize: 13, color: '#ff9f0a', textAlign: 'center' }}>
-            Alterações já solicitadas. Aguardando revisão.
-            {approval.feedback && <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>"{approval.feedback}"</div>}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

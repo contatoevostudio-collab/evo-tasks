@@ -1,14 +1,15 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays, parseISO } from 'date-fns';
 import {
-  FiCalendar, FiArrowRight, FiTrash2, FiCheckSquare, FiZap, FiList, FiX,
+  FiCalendar, FiArrowRight, FiTrash2, FiCheckSquare, FiZap, FiList, FiX, FiCheckCircle,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore, STATUS_CONFIG as IDEA_STATUS_CONFIG, TAG_CONFIG as IDEA_TAG_CONFIG } from '../store/ideas';
+import { useContentApprovalsStore, APPROVAL_STATUS_CONFIG } from '../store/contentApprovals';
 import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { getTaskTitle } from '../types';
-import type { Task, TodoItem, Idea, PageType } from '../types';
+import type { Task, TodoItem, Idea, PageType, ContentApproval } from '../types';
 
 interface Props {
   onTaskClick: (task: Task) => void;
@@ -161,6 +162,7 @@ export function InboxPage({ onTaskClick, onNavigate }: Props) {
     showToast, hideToast,
   } = useTaskStore();
   const { ideas, setStatus: setIdeaStatus, deleteIdea } = useIdeasStore();
+  const { approvals: allApprovals } = useContentApprovalsStore();
 
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
 
@@ -180,7 +182,16 @@ export function InboxPage({ onTaskClick, onNavigate }: Props) {
     [ideas, visibleIds],
   );
 
-  const totalCount = inboxTasks.length + standbyTodos.length + draftIdeas.length;
+  const approvalActions = useMemo(() => {
+    const today = new Date();
+    return allApprovals
+      .filter(a => !a.deletedAt && a.decidedAt && isInLens(a, visibleIds) &&
+        (a.status === 'aprovado' || a.status === 'alteracao') &&
+        differenceInCalendarDays(today, parseISO(a.decidedAt)) <= 7)
+      .sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? ''));
+  }, [allApprovals, visibleIds]);
+
+  const totalCount = inboxTasks.length + standbyTodos.length + draftIdeas.length + approvalActions.length;
 
   // ── Task actions ──
   const scheduleTask = (id: string, date: string) => {
@@ -320,6 +331,46 @@ export function InboxPage({ onTaskClick, onNavigate }: Props) {
     );
   };
 
+  const renderApprovalRow = (a: ContentApproval) => {
+    const cfg = APPROVAL_STATUS_CONFIG[a.status];
+    const isApproved = a.status === 'aprovado';
+    return (
+      <ItemRow
+        key={a.id}
+        primary={a.title}
+        secondary={
+          <>
+            <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>
+              {isApproved ? '✓' : '!'} {cfg.label}
+            </span>
+            {a.feedback && (
+              <span style={{ fontSize: 10, color: 'var(--t4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
+                "{a.feedback}"
+              </span>
+            )}
+            {a.decidedAt && (
+              <span style={{ fontSize: 10, color: 'var(--t4)' }}>
+                {format(parseISO(a.decidedAt), 'dd/MM')}
+              </span>
+            )}
+          </>
+        }
+        accentColor={cfg.color}
+        onClick={() => onNavigate('aprovacoes')}
+        actions={
+          <ActionBtn
+            title="Ver em Aprovações"
+            color={cfg.color}
+            bg={`rgba(${cfg.rgb},0.12)`}
+            onClick={() => onNavigate('aprovacoes')}
+          >
+            <FiArrowRight size={11} /> Ver
+          </ActionBtn>
+        }
+      />
+    );
+  };
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Sticky header */}
@@ -330,10 +381,11 @@ export function InboxPage({ onTaskClick, onNavigate }: Props) {
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {[
-            { label: 'Tarefas',  value: inboxTasks.length, color: '#356BFF', rgb: '53,107,255' },
-            { label: 'Todos',    value: standbyTodos.length, color: '#ff9f0a', rgb: '255,159,10' },
-            { label: 'Ideias',   value: draftIdeas.length, color: '#bf5af2', rgb: '191,90,242' },
-          ].map(k => (
+            { label: 'Tarefas',    value: inboxTasks.length, color: '#356BFF', rgb: '53,107,255' },
+            { label: 'Todos',      value: standbyTodos.length, color: '#ff9f0a', rgb: '255,159,10' },
+            { label: 'Ideias',     value: draftIdeas.length, color: '#bf5af2', rgb: '191,90,242' },
+            { label: 'Aprovações', value: approvalActions.length, color: '#30d158', rgb: '48,209,88' },
+          ].filter(k => k.value > 0 || k.label !== 'Aprovações').map(k => (
             <div key={k.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: `rgba(${k.rgb},0.08)`, border: `1px solid rgba(${k.rgb},0.2)` }}>
               <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: `rgba(${k.rgb},0.7)` }}>{k.label}</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: k.color }}>{k.value}</span>
@@ -372,6 +424,15 @@ export function InboxPage({ onTaskClick, onNavigate }: Props) {
               <div style={{ background: 'var(--s1)', borderRadius: 14, border: '1px solid var(--b2)', overflow: 'hidden' }}>
                 <SectionHeader icon={<FiZap size={14} />} title="Ideias em rascunho" count={draftIdeas.length} color="#bf5af2" />
                 <AnimatePresence>{draftIdeas.map(renderIdeaRow)}</AnimatePresence>
+              </div>
+            )}
+
+            {approvalActions.length > 0 && (
+              <div style={{ background: 'var(--s1)', borderRadius: 14, border: '1px solid var(--b2)', overflow: 'hidden' }}>
+                <SectionHeader icon={<FiCheckCircle size={14} />} title="Respostas de aprovação" count={approvalActions.length} color="#30d158" />
+                <AnimatePresence>
+                  {approvalActions.map(a => renderApprovalRow(a))}
+                </AnimatePresence>
               </div>
             )}
           </>

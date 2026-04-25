@@ -5,6 +5,7 @@ import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore } from '../store/ideas';
 import { useFinanceStore } from '../store/finance';
+import { useContentApprovalsStore } from '../store/contentApprovals';
 import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import type { PageType } from '../types';
 
@@ -23,7 +24,9 @@ export interface AppNotification {
     | 'bill-overdue'
     | 'bill-due-soon'
     | 'idea-review'
-    | 'todo-overdue';
+    | 'todo-overdue'
+    | 'aprovacao-aprovada'
+    | 'aprovacao-alteracao';
   title: string;
   subtitle?: string;
   date?: string;
@@ -53,8 +56,9 @@ function computeNotifications(opts: {
   companies: ReturnType<typeof useTaskStore.getState>['companies'];
   ideas: ReturnType<typeof useIdeasStore.getState>['ideas'];
   bills: ReturnType<typeof useFinanceStore.getState>['recurringBills'];
+  approvals: ReturnType<typeof useContentApprovalsStore.getState>['approvals'];
 }): AppNotification[] {
-  const { navigate, todayStr, tasks, todoItems, leads, companies, ideas, bills } = opts;
+  const { navigate, todayStr, tasks, todoItems, leads, companies, ideas, bills, approvals } = opts;
   const today = parseISO(todayStr);
   const out: AppNotification[] = [];
 
@@ -251,6 +255,33 @@ function computeNotifications(opts: {
       });
     });
 
+  // 10. Aprovações recentes (aprovado / alteracao nos últimos 7 dias)
+  approvals
+    .filter(a => !a.deletedAt && a.decidedAt && differenceInCalendarDays(today, parseISO(a.decidedAt)) <= 7)
+    .forEach(a => {
+      if (a.status === 'aprovado') {
+        out.push({
+          id: `aprovacao-aprovada-${a.id}`,
+          type: 'aprovacao-aprovada',
+          title: `Aprovado pelo cliente · ${a.title}`,
+          subtitle: a.feedback ? `"${a.feedback}"` : 'Conteúdo aprovado',
+          date: format(parseISO(a.decidedAt!), 'dd/MM'),
+          severity: 'medium',
+          onClick: () => navigate('aprovacoes'),
+        });
+      } else if (a.status === 'alteracao') {
+        out.push({
+          id: `aprovacao-alteracao-${a.id}`,
+          type: 'aprovacao-alteracao',
+          title: `Alteração solicitada · ${a.title}`,
+          subtitle: a.feedback ? `"${a.feedback}"` : 'Cliente pediu alterações',
+          date: format(parseISO(a.decidedAt!), 'dd/MM'),
+          severity: 'high',
+          onClick: () => navigate('aprovacoes'),
+        });
+      }
+    });
+
   // Sort: severity first, then date
   out.sort((a, b) => {
     const s = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
@@ -278,6 +309,7 @@ export function NotificationsPanel({ open, onClose, onNavigate, top = 60, right 
   const { tasks: allTasks, todoItems, leads: allLeads, companies: allCompanies } = useTaskStore();
   const { ideas: allIdeas } = useIdeasStore();
   const { recurringBills } = useFinanceStore();
+  const { approvals: allApprovals } = useContentApprovalsStore();
   const visibleIds = useVisibleWorkspaceIds();
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -292,9 +324,10 @@ export function NotificationsPanel({ open, onClose, onNavigate, top = 60, right 
         leads:     allLeads.filter(l => isInLens(l, visibleIds)),
         companies: allCompanies.filter(c => isInLens(c, visibleIds)),
         ideas:     allIdeas.filter(i => isInLens(i, visibleIds)),
-        bills: recurringBills,
+        bills:     recurringBills,
+        approvals: allApprovals.filter(a => isInLens(a, visibleIds)),
       }),
-    [todayStr, visibleIds, allTasks, todoItems, allLeads, allCompanies, allIdeas, recurringBills, onNavigate],
+    [todayStr, visibleIds, allTasks, todoItems, allLeads, allCompanies, allIdeas, recurringBills, allApprovals, onNavigate],
   );
 
   const grouped = useMemo(() => {
@@ -567,6 +600,7 @@ export function useNotificationsCount(): number {
   const allCompanies = useTaskStore(s => s.companies);
   const allIdeas = useIdeasStore(s => s.ideas);
   const recurringBills = useFinanceStore(s => s.recurringBills);
+  const allApprovals = useContentApprovalsStore(s => s.approvals);
   const visibleIds = useVisibleWorkspaceIds();
 
   return useMemo(() => {
@@ -579,7 +613,8 @@ export function useNotificationsCount(): number {
       leads:     allLeads.filter(l => isInLens(l, visibleIds)),
       companies: allCompanies.filter(c => isInLens(c, visibleIds)),
       ideas:     allIdeas.filter(i => isInLens(i, visibleIds)),
-      bills: recurringBills,
+      bills:     recurringBills,
+      approvals: allApprovals.filter(a => isInLens(a, visibleIds)),
     }).length;
-  }, [visibleIds, allTasks, todoItems, allLeads, allCompanies, allIdeas, recurringBills]);
+  }, [visibleIds, allTasks, todoItems, allLeads, allCompanies, allIdeas, recurringBills, allApprovals]);
 }
