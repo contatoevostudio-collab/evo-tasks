@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiPlus, FiSearch, FiX, FiLink, FiTrash2, FiGrid, FiList, FiColumns,
   FiMic, FiCheck, FiCalendar, FiArrowRight, FiRotateCcw, FiMenu,
+  FiZap, FiTrendingUp, FiBookmark, FiActivity,
 } from 'react-icons/fi';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval, subWeeks, getISOWeek, differenceInDays } from 'date-fns';
@@ -20,6 +21,7 @@ import { useTaskStore } from '../store/tasks';
 import { useProposalsStore } from '../store/proposals';
 import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import type { Idea, IdeaTag, IdeaStatus } from '../types';
+import { KpiTile, EmptyState, hexToRgb } from './dashboard';
 
 const TAGS = Object.entries(TAG_CONFIG) as [IdeaTag, { label: string; color: string }][];
 const STATUSES: IdeaStatus[] = ['rascunho', 'desenvolvendo', 'executada', 'arquivada'];
@@ -1069,6 +1071,18 @@ export function IdeiasPage() {
     [activeIdeas, lastWeekStart, lastWeekEnd]
   );
   const weekDelta = thisWeekCount - lastWeekCount;
+  const weekDeltaPct = lastWeekCount > 0 ? ((thisWeekCount - lastWeekCount) / lastWeekCount) * 100 : (thisWeekCount > 0 ? 100 : 0);
+
+  // Sparkline: ideias criadas por dia nos últimos 7 dias
+  const weeklySpark = useMemo(() => {
+    const days: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = format(new Date(now.getTime() - i * 86400000), 'yyyy-MM-dd');
+      days.push(activeIdeas.filter(idea => idea.createdAt.startsWith(day)).length);
+    }
+    return days;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIdeas]);
 
   const streak = useMemo(() => calcStreak(ideas), [ideas]);
 
@@ -1157,18 +1171,15 @@ export function IdeiasPage() {
 
   // ─── UI ─────────────────────────────────────────────────────────────────
 
-  const statChips: { label: string; value: string | number; rgb: string; color: string }[] = [
-    { label: 'Total',        value: activeIdeas.length, rgb: '53,107,255',  color: '#356BFF' },
-    { label: 'Pinadas',      value: pinnedIdeas.length, rgb: '255,159,10',  color: '#ff9f0a' },
-    { label: 'Esta semana',  value: thisWeekCount,      rgb: '48,209,88',   color: '#30d158' },
-    { label: 'Em dev',       value: countByStatus.desenvolvendo, rgb: '53,107,255',  color: '#356BFF' },
-  ];
-
   const renderEmptyState = (msg: string, hint?: string) => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 240, gap: 10, color: 'var(--t4)' }}>
-      <span style={{ fontSize: 38, opacity: 0.3 }}>💡</span>
-      <span style={{ fontSize: 13, fontWeight: 500 }}>{msg}</span>
-      {hint && <span style={{ fontSize: 11, opacity: 0.5 }}>{hint}</span>}
+    <div style={{ minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <EmptyState
+        icon={<FiZap size={22} />}
+        text={msg}
+        iconColor="#ffd60a"
+        cta={hint ? undefined : 'Criar primeira ideia'}
+        onCta={hint ? undefined : () => { setEditIdea(undefined); setShowModal(true); }}
+      />
     </div>
   );
 
@@ -1189,108 +1200,167 @@ export function IdeiasPage() {
     };
   };
 
+  const accentRgb = hexToRgb(accentColor);
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* ═══ Compact sticky header ═══════════════════════════════════════════ */}
-      <div style={{ padding: '14px 20px', flexShrink: 0, borderBottom: '1px solid var(--b2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {/* ═══ Hero + KPIs ═══════════════════════════════════════════════════ */}
+      <div style={{ padding: '20px 20px 14px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Hero card */}
+        <div style={{
+          background: `linear-gradient(135deg, ${accentColor} 0%, #1d4ed8 60%, #1e3a8a 100%)`,
+          borderRadius: 18, padding: '20px 24px',
+          position: 'relative', overflow: 'hidden',
+          minHeight: 110,
+          boxShadow: `0 12px 40px rgba(${accentRgb},0.28), 0 0 0 1px rgba(255,255,255,0.06) inset`,
+          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        }}>
+          <div aria-hidden style={{ position: 'absolute', top: -60, right: -40, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <div aria-hidden style={{ position: 'absolute', bottom: -90, left: -60, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,214,10,0.16) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
           {isMobile && (
             <button
               onClick={() => setSidebarOpen(o => !o)}
               aria-label="Abrir menu lateral"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', cursor: 'pointer', flexShrink: 0 }}
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 9, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)', color: '#ffffff', cursor: 'pointer', flexShrink: 0 }}
             >
-              <FiMenu size={14} />
+              <FiMenu size={16} />
             </button>
           )}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', marginBottom: 2 }}>Criativo</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px' }}>Ideias</div>
+
+          <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', marginBottom: 6 }}>
+              Criativo
+            </div>
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.7px', lineHeight: 1.1 }}>
+              Ideias<span style={{ color: 'rgba(255,255,255,0.78)' }}>.</span>
+            </h1>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', marginTop: 5, fontWeight: 500 }}>
+              {activeIdeas.length === 0
+                ? 'Nenhuma ideia ainda. Capture sua primeira!'
+                : `${activeIdeas.length} ${activeIdeas.length === 1 ? 'ideia' : 'ideias'} no banco · ${pinnedIdeas.length} pinada${pinnedIdeas.length !== 1 ? 's' : ''} · streak de ${streak} dia${streak !== 1 ? 's' : ''}`}
+            </div>
           </div>
+
+          <button
+            onClick={() => { setEditIdea(undefined); setShowModal(true); }}
+            style={{
+              position: 'relative', flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '11px 20px', borderRadius: 11,
+              background: '#ffffff', border: 'none',
+              color: accentColor, fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              boxShadow: '0 8px 22px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.4) inset',
+              letterSpacing: '-0.1px', transition: 'transform .12s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+          >
+            <FiPlus size={14} /> Nova ideia
+          </button>
         </div>
 
-        {/* Stat chips */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {statChips.map((k) => (
-            <div key={k.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: `rgba(${k.rgb},0.08)`, border: `1px solid rgba(${k.rgb},0.2)` }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: `rgba(${k.rgb},0.6)` }}>{k.label}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: k.color }}>{k.value}</span>
-            </div>
+        {/* KPI tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+          <KpiTile
+            label="Total"
+            value={activeIdeas.length}
+            icon={<FiZap size={13} />}
+            color={accentColor}
+          />
+          <KpiTile
+            label="Esta semana"
+            value={thisWeekCount}
+            delta={weekDeltaPct}
+            icon={<FiTrendingUp size={13} />}
+            color="#30d158"
+            sparkline={weeklySpark}
+          />
+          <KpiTile
+            label="Pinadas"
+            value={pinnedIdeas.length}
+            icon={<FiBookmark size={13} />}
+            color="#ff9f0a"
+          />
+          <KpiTile
+            label="Em desenvolvimento"
+            value={countByStatus.desenvolvendo}
+            suffix={countByStatus.executada > 0 ? `· ${countByStatus.executada} feita${countByStatus.executada !== 1 ? 's' : ''}` : undefined}
+            icon={<FiActivity size={13} />}
+            color="#bf5af2"
+          />
+        </div>
+      </div>
+
+      {/* ═══ Controls bar ═══════════════════════════════════════════════════ */}
+      <div style={{ padding: '0 20px 12px', flexShrink: 0, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 9, padding: '6px 10px', flex: '1 1 200px', minWidth: 180 }}>
+          <FiSearch size={12} style={{ color: 'rgba(255,255,255,0.55)' }} />
+          <input
+            placeholder="Buscar ideias..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ background: 'none', border: 'none', outline: 'none', color: '#ffffff', fontSize: 12, flex: 1 }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.55)', display: 'flex', padding: 0 }}>
+              <FiX size={11} />
+            </button>
+          )}
+        </div>
+
+        {/* Sort */}
+        <select
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as SortMode)}
+          style={{ padding: '7px 10px', borderRadius: 9, border: '1px solid var(--b2)', background: 'var(--s1)', color: '#ffffff', fontSize: 11, fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+        >
+          <option value="date-desc">Recentes</option>
+          <option value="date-asc">Antigas</option>
+          <option value="alpha">A–Z</option>
+          <option value="updated">Atualizadas</option>
+        </select>
+
+        {/* View mode segmented */}
+        <div style={{ display: 'flex', background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 9, padding: 2, gap: 2 }}>
+          {([
+            { id: 'grid' as const,    icon: <FiGrid size={12} />,    label: 'Grade' },
+            { id: 'list' as const,    icon: <FiList size={12} />,    label: 'Lista' },
+            { id: 'kanban' as const,  icon: <FiColumns size={12} />, label: 'Kanban' },
+          ]).map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setViewMode(m.id)}
+              aria-label={m.label}
+              title={m.label}
+              style={{
+                padding: '5px 10px', borderRadius: 7, border: 'none',
+                background: viewMode === m.id ? accentColor : 'transparent',
+                color: viewMode === m.id ? '#fff' : 'rgba(255,255,255,0.55)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                transition: 'all .15s', fontSize: 11, fontWeight: 700,
+              }}
+            >
+              {m.icon}
+            </button>
           ))}
         </div>
 
-        {/* Controls */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {/* Search */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 9, padding: '6px 10px' }}>
-            <FiSearch size={12} style={{ color: 'var(--t4)' }} />
-            <input
-              placeholder="Buscar..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--t1)', fontSize: 12, width: 110 }}
-            />
-          </div>
-
-          {/* Sort */}
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as SortMode)}
-            style={{ padding: '6px 9px', borderRadius: 8, border: '1px solid var(--b2)', background: 'var(--s1)', color: 'var(--t2)', fontSize: 11, cursor: 'pointer', outline: 'none' }}
-          >
-            <option value="date-desc">Recentes</option>
-            <option value="date-asc">Antigas</option>
-            <option value="alpha">A–Z</option>
-            <option value="updated">Atualizadas</option>
-          </select>
-
-          {/* View mode segmented */}
-          <div style={{ display: 'flex', background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 8, padding: 2, gap: 1 }}>
-            {([
-              { id: 'grid' as const,    icon: <FiGrid size={11} />,    label: 'Grade' },
-              { id: 'list' as const,    icon: <FiList size={11} />,    label: 'Lista' },
-              { id: 'kanban' as const,  icon: <FiColumns size={11} />, label: 'Kanban' },
-            ]).map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setViewMode(m.id)}
-                aria-label={m.label}
-                title={m.label}
-                style={{
-                  padding: '5px 9px', borderRadius: 6, border: 'none',
-                  background: viewMode === m.id ? accentColor : 'transparent',
-                  color: viewMode === m.id ? '#fff' : 'var(--t3)',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  transition: 'all .15s',
-                }}
-              >
-                {m.icon}
-              </button>
-            ))}
-          </div>
-
-          {/* Density */}
-          <button
-            onClick={() => setDensity((d) => d === 'compact' ? 'normal' : 'compact')}
-            title={density === 'compact' ? 'Modo normal' : 'Modo compacto'}
-            style={{
-              padding: '6px 9px', borderRadius: 8, border: `1px solid ${density === 'compact' ? accentColor : 'var(--b2)'}`,
-              background: density === 'compact' ? `${accentColor}15` : 'var(--s1)',
-              color: density === 'compact' ? accentColor : 'var(--t3)',
-              cursor: 'pointer', fontSize: 10, fontWeight: 700,
-            }}
-          >
-            {density === 'compact' ? 'COMPACTO' : 'NORMAL'}
-          </button>
-
-          {/* + Nova */}
-          <button
-            onClick={() => { setEditIdea(undefined); setShowModal(true); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, background: accentColor, border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-          >
-            <FiPlus size={12} /> Nova
-          </button>
-        </div>
+        {/* Density */}
+        <button
+          onClick={() => setDensity((d) => d === 'compact' ? 'normal' : 'compact')}
+          title={density === 'compact' ? 'Modo normal' : 'Modo compacto'}
+          style={{
+            padding: '6px 11px', borderRadius: 9,
+            border: `1px solid ${density === 'compact' ? accentColor : 'var(--b2)'}`,
+            background: density === 'compact' ? `rgba(${accentRgb},0.18)` : 'var(--s1)',
+            color: density === 'compact' ? '#ffffff' : 'rgba(255,255,255,0.6)',
+            cursor: 'pointer', fontSize: 10, fontWeight: 800, letterSpacing: '0.4px',
+          }}
+        >
+          {density === 'compact' ? 'COMPACTO' : 'NORMAL'}
+        </button>
       </div>
 
       {/* ═══ Body: sidebar + main ═══════════════════════════════════════════ */}
