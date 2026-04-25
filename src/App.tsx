@@ -30,7 +30,6 @@ const CRMPage       = lazy(() => import('./components/CRMPage').then(m => ({ def
 const TodoPage      = lazy(() => import('./components/TodoPage').then(m => ({ default: m.TodoPage })));
 const FinancePage   = lazy(() => import('./components/FinancePage').then(m => ({ default: m.FinancePage })));
 const IdeiasPage    = lazy(() => import('./components/IdeiasPage').then(m => ({ default: m.IdeiasPage })));
-const GamesPage     = lazy(() => import('./components/GamesPage').then(m => ({ default: m.GamesPage })));
 const PropostasPage = lazy(() => import('./components/PropostasPage').then(m => ({ default: m.PropostasPage })));
 const InboxPage     = lazy(() => import('./components/InboxPage').then(m => ({ default: m.InboxPage })));
 
@@ -585,8 +584,6 @@ export default function App() {
               {page === 'financas' && <ErrorBoundary><FinancePage /></ErrorBoundary>}
 
               {page === 'ideias' && <ErrorBoundary><IdeiasPage /></ErrorBoundary>}
-
-              {page === 'jogos' && <ErrorBoundary><GamesPage /></ErrorBoundary>}
 
               {page === 'propostas' && <ErrorBoundary><PropostasPage /></ErrorBoundary>}
 

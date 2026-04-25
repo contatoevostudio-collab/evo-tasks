@@ -2,10 +2,8 @@ import { supabase } from './supabase';
 import { useTaskStore } from '../store/tasks';
 import { useFinanceStore } from '../store/finance';
 import { useIdeasStore } from '../store/ideas';
-import { usePetsStore } from '../store/pets';
 import { useSyncStore } from '../store/sync';
 import type { Task, Company, SubClient, Lead, QuickNote, TodoItem, CalendarEvent, Transaction, FinancialGoal, RecurringBill, Idea } from '../types';
-import type { ActivePet } from '../store/pets';
 
 // ─── Sync state helpers (visual indicator) ──────────────────────────────────
 // These wrap the new useSyncStore so all calls funnel through one place.
@@ -296,21 +294,6 @@ function recurringBillFromDb(r: Record<string, unknown>): RecurringBill {
   };
 }
 
-function petToDb(pet: ActivePet, userId: string, tasksXpClaimed: number, ideasXpClaimed: number) {
-  return {
-    user_id: userId,
-    class: pet.class,
-    name: pet.name,
-    level: pet.level,
-    exp: pet.exp,
-    battles_won: pet.battlesWon,
-    battles_lost: pet.battlesLost,
-    tasks_xp_claimed: tasksXpClaimed,
-    ideas_xp_claimed: ideasXpClaimed,
-  };
-}
-
-
 // ─── Load all data from Supabase ─────────────────────────────────────────────
 
 export async function loadFromSupabase(userId: string): Promise<void> {
@@ -328,7 +311,6 @@ export async function loadFromSupabase(userId: string): Promise<void> {
     { data: transactions, error: e9 },
     { data: financialGoals, error: e10 },
     { data: recurringBills, error: e11 },
-    { data: petRows, error: e12 },
   ] = await Promise.all([
     supabase.from('companies').select('*').eq('user_id', userId),
     supabase.from('sub_clients').select('*').eq('user_id', userId),
@@ -341,11 +323,10 @@ export async function loadFromSupabase(userId: string): Promise<void> {
     supabase.from('transactions').select('*').eq('user_id', userId),
     supabase.from('financial_goals').select('*').eq('user_id', userId),
     supabase.from('recurring_bills').select('*').eq('user_id', userId),
-    supabase.from('user_pet').select('*').eq('user_id', userId).maybeSingle(),
   ]);
 
-  if (e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12) {
-    const firstErr = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10 ?? e11 ?? e12;
+  if (e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11) {
+    const firstErr = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10 ?? e11;
     console.error('Supabase load error:', firstErr);
     useTaskStore.getState().setSyncStatus('error');
     endSyncErr(firstErr);
@@ -406,10 +387,6 @@ export async function loadFromSupabase(userId: string): Promise<void> {
       } as Idea;
     })
   );
-
-  if (petRows) {
-    usePetsStore.getState().loadFromDb(petRows as Record<string, unknown>);
-  }
 
   useTaskStore.getState().setSyncStatus('idle');
   useTaskStore.getState().setLastSyncAt(new Date().toISOString());
@@ -581,16 +558,3 @@ export async function removeIdea(id: string, userId: string) {
   else endSyncOk();
 }
 
-export async function syncPet(pet: ActivePet, userId: string, tasksXpClaimed: number, ideasXpClaimed: number) {
-  beginSync();
-  const { error } = await supabase.from('user_pet').upsert(petToDb(pet, userId, tasksXpClaimed, ideasXpClaimed));
-  if (error) { console.error('syncPet error:', error); endSyncErr(error); }
-  else endSyncOk();
-}
-
-export async function deletePet(userId: string) {
-  beginSync();
-  const { error } = await supabase.from('user_pet').delete().eq('user_id', userId);
-  if (error) { console.error('deletePet error:', error); endSyncErr(error); }
-  else endSyncOk();
-}

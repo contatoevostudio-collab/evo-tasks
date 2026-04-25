@@ -24,7 +24,7 @@ export type TaskType =
   // eventos
   | 'lancamento' | 'workshop' | 'feira' | 'aniversario' | 'evento_outro';
 export type ViewMode = 'kanban' | 'month' | 'week' | 'day';
-export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas' | 'ideias' | 'jogos' | 'propostas' | 'inbox';
+export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas' | 'ideias' | 'propostas' | 'inbox';
 
 export type ProposalService = 'social-media' | 'estrategia' | 'site' | 'identidade-visual' | 'logo';
 export type ProposalStatus = 'rascunho' | 'enviada' | 'aceita' | 'recusada';
@@ -74,17 +74,6 @@ export interface Proposal {
   linkedLeadId?: string;     // proposta originada de qual lead
   linkedCompanyId?: string;  // se aceita, qual empresa
 }
-export type PetClass = 'mago' | 'arqueiro' | 'barbaro' | 'guerreiro' | 'shaman';
-
-export interface ActivePet {
-  class: PetClass;
-  name: string;
-  level: number;
-  exp: number;
-  battlesWon: number;
-  battlesLost: number;
-}
-
 export type IdeaTag = 'negocio' | 'pessoal' | 'design' | 'marketing' | 'dev' | 'outro';
 export type IdeaStatus = 'rascunho' | 'desenvolvendo' | 'executada' | 'arquivada';
 

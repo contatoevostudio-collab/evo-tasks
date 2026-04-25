@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   FiSearch, FiX, FiCheckSquare, FiBriefcase, FiUser, FiTrendingUp,
   FiZap, FiFileText, FiDollarSign, FiList, FiArrowRight, FiHome,
-  FiCalendar, FiArchive, FiInbox, FiPieChart, FiAward, FiBookOpen,
+  FiCalendar, FiArchive, FiInbox, FiPieChart, FiBookOpen,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useIdeasStore, TAG_CONFIG, STATUS_CONFIG } from '../store/ideas';
@@ -109,7 +109,6 @@ const PAGE_COMMANDS: { id: string; title: string; page: PageType; keywords: stri
   { id: 'cmd-financas',  title: 'Ir para Finanças',  page: 'financas',  keywords: 'financas finanças finance dinheiro', icon: <FiPieChart size={14} />, color: '#30d158' },
   { id: 'cmd-propostas', title: 'Ir para Propostas', page: 'propostas', keywords: 'propostas proposals orcamento', icon: <FiFileText size={14} />,     color: '#356BFF' },
   { id: 'cmd-arquivo',   title: 'Ir para Arquivo',   page: 'arquivo',   keywords: 'arquivo arquivado archive',     icon: <FiArchive size={14} />,      color: '#636366' },
-  { id: 'cmd-jogos',     title: 'Ir para Jogos',     page: 'jogos',     keywords: 'jogos games pets',              icon: <FiAward size={14} />,        color: '#bf5af2' },
 ];
 
 export function SearchModal({ onClose, onTaskClick, onNavigate }: Props) {

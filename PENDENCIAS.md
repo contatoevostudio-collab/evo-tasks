@@ -135,11 +135,11 @@ Lente ATIVA aparece visualmente clara (badge colorido no header) pra usuário nu
 - `WorkspaceSettings.enabledPages: PageType[]` controla nav
 - Migração: dados atuais → workspace `Freelance Design` (tipo: freelance). User cria `Minha Agência` zerada.
 
-### Perguntas pendentes pro user antes de Onda 4
-1. **Tema/cor por workspace?** Provavelmente sim — cor é o badge visual do workspace.
-2. **Logo/avatar do workspace no switcher?** Sim, recomendado.
-3. **Stats do dashboard (HomePage)** sempre seguem a lente? Ou tem stats fixas globais?
-4. **Pomodoro** sempre global (confirmado pela decisão da lente). Notificações também.
+### Decisões finais (respondidas em 2026-04-25)
+1. **Tema/cor:** paletas padrão pré-definidas, user escolhe entre elas (sem color picker custom)
+2. **Logo/avatar do switcher:** foto opcional via upload; sem foto, mostra só o nome (ex: "Pessoal" = nome da pessoa, "Agência" = nome da agência da pessoa)
+3. **Stats da HomePage:** TUDO segue a lente sem exceção (lente "Todos" entrega cross-workspace quando user quiser)
+4. **Pomodoro:** sempre global, ignora workspace e lente. **Notificações:** global por default + filtro opcional dentro do painel (chip "Todos | Freelance | Agência | Pessoal")
 
 ## 🚀 Onda 5 — Features de agência
 
