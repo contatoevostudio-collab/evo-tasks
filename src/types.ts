@@ -25,7 +25,131 @@ export type TaskType =
   // eventos
   | 'lancamento' | 'workshop' | 'feira' | 'aniversario' | 'evento_outro';
 export type ViewMode = 'kanban' | 'month' | 'week' | 'day';
-export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas' | 'ideias' | 'propostas' | 'inbox';
+export type PageType =
+  | 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas'
+  | 'ideias' | 'propostas' | 'inbox'
+  // Onda 5 (agência)
+  | 'aprovacoes' | 'editorial' | 'faturas' | 'briefings' | 'onboarding' | 'snippets' | 'kpis' | 'habitos';
+
+// ─── ONDA 5 — Aprovações ────────────────────────────────────────────────
+export type ContentType = 'card' | 'carrossel' | 'reels' | 'story' | 'video' | 'apresentacao' | 'moodboard' | 'site' | 'identidade' | 'outro';
+export type ApprovalStatus = 'rascunho' | 'enviado' | 'visualizado' | 'alteracao' | 'aprovado' | 'postado';
+
+export interface ContentComment {
+  id: string;
+  area?: { x: number; y: number };  // 0-100 % do asset
+  text: string;
+  fromClient: boolean;
+  resolved?: boolean;
+  createdAt: string;
+}
+
+export interface ContentAsset {
+  id: string;
+  url: string;
+  type?: ContentType;
+  position: number;
+  comments?: ContentComment[];
+}
+
+export interface ContentApproval {
+  id: string;
+  workspaceId?: string;
+  taskId?: string;
+  clientId: string;
+  title: string;
+  type: ContentType;
+  assets: ContentAsset[];
+  status: ApprovalStatus;
+  shareToken: string;
+  feedback?: string;
+  sentAt?: string;
+  viewedAt?: string;
+  decidedAt?: string;
+  deletedAt?: string;
+  createdAt: string;
+}
+
+// ─── ONDA 5 — Faturas ───────────────────────────────────────────────────
+export type InvoiceStatus = 'rascunho' | 'enviada' | 'paga' | 'cancelada';
+export interface InvoiceItem { id: string; description: string; qty: number; unitPrice: number; }
+export interface Invoice {
+  id: string;
+  workspaceId?: string;
+  clientId: string;
+  number: number;
+  date: string;
+  dueDate?: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  taxes?: number;
+  total: number;
+  notes?: string;
+  status: InvoiceStatus;
+  paidAt?: string;
+  deletedAt?: string;
+  createdAt: string;
+}
+
+// ─── ONDA 5 — Briefing ──────────────────────────────────────────────────
+export type BriefingStatus = 'rascunho' | 'enviado' | 'respondido';
+export type BriefingFieldType = 'text' | 'long' | 'select' | 'multi' | 'number';
+export interface BriefingQuestion {
+  id: string;
+  label: string;
+  type: BriefingFieldType;
+  required?: boolean;
+  options?: string[];
+  answer?: string | string[] | number;
+}
+export interface Briefing {
+  id: string;
+  workspaceId?: string;
+  clientId: string;
+  title: string;
+  shareToken: string;
+  status: BriefingStatus;
+  questions: BriefingQuestion[];
+  respondedAt?: string;
+  deletedAt?: string;
+  createdAt: string;
+}
+
+// ─── ONDA 5 — Onboarding playbook ───────────────────────────────────────
+export interface OnboardingStep { id: string; label: string; description?: string; }
+export interface OnboardingTemplate {
+  id: string;
+  workspaceId?: string;
+  name: string;
+  steps: OnboardingStep[];
+  createdAt: string;
+}
+
+// ─── ONDA 5 — Snippets ──────────────────────────────────────────────────
+export interface Snippet {
+  id: string;
+  workspaceId?: string;
+  title: string;
+  text: string;
+  category?: string;
+  useCount?: number;
+  createdAt: string;
+}
+
+// ─── ONDA 5 — Hábitos operacionais ──────────────────────────────────────
+export type HabitFrequency = 'daily' | 'weekly' | 'monthly';
+export interface HabitCompletion { date: string; completed: boolean; }
+export interface Habit {
+  id: string;
+  workspaceId?: string;
+  title: string;
+  frequency: HabitFrequency;
+  weekdays?: number[];        // pra weekly: [1,3,5]
+  monthlyDay?: number;        // pra monthly: dia do mês
+  completions: HabitCompletion[];
+  archived?: boolean;
+  createdAt: string;
+}
 
 // ─── Workspaces (Onda 4) ─────────────────────────────────────────────────────
 export type WorkspaceType = 'freelance' | 'agencia' | 'pessoal' | 'blank';

@@ -3,7 +3,7 @@ import { useTaskStore } from '../store/tasks';
 import { useFinanceStore } from '../store/finance';
 import { useIdeasStore } from '../store/ideas';
 import { useSyncStore } from '../store/sync';
-import type { Task, Company, SubClient, Lead, QuickNote, TodoItem, CalendarEvent, Transaction, FinancialGoal, RecurringBill, Idea } from '../types';
+import type { Task, Company, SubClient, Lead, QuickNote, TodoItem, CalendarEvent, Transaction, FinancialGoal, RecurringBill, Idea, ContentApproval, Invoice, Briefing, OnboardingTemplate, Snippet, Habit } from '../types';
 
 // ─── Sync state helpers (visual indicator) ──────────────────────────────────
 // These wrap the new useSyncStore so all calls funnel through one place.
@@ -577,6 +577,153 @@ export async function removeIdea(id: string, userId: string) {
   beginSync();
   const { error } = await supabase.from('ideas').delete().eq('id', id).eq('user_id', userId);
   if (error) { console.error('removeIdea error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+
+// ─── ONDA 5 — sync helpers ─────────────────────────────────────────────────
+
+export async function syncContentApproval(a: ContentApproval, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('content_approvals').upsert({
+    id: a.id, user_id: userId,
+    workspace_id: a.workspaceId ?? null,
+    task_id: a.taskId ?? null,
+    client_id: a.clientId,
+    title: a.title,
+    type: a.type,
+    assets: a.assets,
+    status: a.status,
+    share_token: a.shareToken,
+    feedback: a.feedback ?? null,
+    sent_at: a.sentAt ?? null,
+    viewed_at: a.viewedAt ?? null,
+    decided_at: a.decidedAt ?? null,
+    deleted_at: a.deletedAt ?? null,
+    created_at: a.createdAt,
+  });
+  if (error) { console.error('syncContentApproval error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+export async function removeContentApproval(id: string, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('content_approvals').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeContentApproval error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+
+export async function syncInvoice(inv: Invoice, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('invoices').upsert({
+    id: inv.id, user_id: userId,
+    workspace_id: inv.workspaceId ?? null,
+    client_id: inv.clientId,
+    number: inv.number,
+    date: inv.date,
+    due_date: inv.dueDate ?? null,
+    items: inv.items,
+    subtotal: inv.subtotal,
+    taxes: inv.taxes ?? 0,
+    total: inv.total,
+    notes: inv.notes ?? null,
+    status: inv.status,
+    paid_at: inv.paidAt ?? null,
+    deleted_at: inv.deletedAt ?? null,
+    created_at: inv.createdAt,
+  });
+  if (error) { console.error('syncInvoice error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+export async function removeInvoice(id: string, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('invoices').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeInvoice error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+
+export async function syncBriefing(b: Briefing, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('briefings').upsert({
+    id: b.id, user_id: userId,
+    workspace_id: b.workspaceId ?? null,
+    client_id: b.clientId,
+    title: b.title,
+    share_token: b.shareToken,
+    status: b.status,
+    questions: b.questions,
+    responded_at: b.respondedAt ?? null,
+    deleted_at: b.deletedAt ?? null,
+    created_at: b.createdAt,
+  });
+  if (error) { console.error('syncBriefing error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+export async function removeBriefing(id: string, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('briefings').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeBriefing error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+
+export async function syncOnboardingTemplate(t: OnboardingTemplate, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('onboarding_templates').upsert({
+    id: t.id, user_id: userId,
+    workspace_id: t.workspaceId ?? null,
+    name: t.name,
+    steps: t.steps,
+    created_at: t.createdAt,
+  });
+  if (error) { console.error('syncOnboardingTemplate error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+export async function removeOnboardingTemplate(id: string, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('onboarding_templates').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeOnboardingTemplate error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+
+export async function syncSnippet(sn: Snippet, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('snippets').upsert({
+    id: sn.id, user_id: userId,
+    workspace_id: sn.workspaceId ?? null,
+    title: sn.title,
+    text: sn.text,
+    category: sn.category ?? null,
+    use_count: sn.useCount ?? 0,
+    created_at: sn.createdAt,
+  });
+  if (error) { console.error('syncSnippet error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+export async function removeSnippet(id: string, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('snippets').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeSnippet error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+
+export async function syncHabit(h: Habit, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('habits').upsert({
+    id: h.id, user_id: userId,
+    workspace_id: h.workspaceId ?? null,
+    title: h.title,
+    frequency: h.frequency,
+    weekdays: h.weekdays ?? null,
+    monthly_day: h.monthlyDay ?? null,
+    completions: h.completions,
+    archived: h.archived ?? false,
+    created_at: h.createdAt,
+  });
+  if (error) { console.error('syncHabit error:', error); endSyncErr(error); }
+  else endSyncOk();
+}
+export async function removeHabit(id: string, userId: string) {
+  beginSync();
+  const { error } = await supabase.from('habits').delete().eq('id', id).eq('user_id', userId);
+  if (error) { console.error('removeHabit error:', error); endSyncErr(error); }
   else endSyncOk();
 }
 

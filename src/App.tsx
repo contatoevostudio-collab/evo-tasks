@@ -25,14 +25,23 @@ import { ToastContainer, ErrorBoundary } from './components/ui';
 import './index.css';
 
 // Heavy pages — loaded on demand
-const EmpresasPage  = lazy(() => import('./components/EmpresasPage').then(m => ({ default: m.EmpresasPage })));
-const ArchivePage   = lazy(() => import('./components/ArchivePage').then(m => ({ default: m.ArchivePage })));
-const CRMPage       = lazy(() => import('./components/CRMPage').then(m => ({ default: m.CRMPage })));
-const TodoPage      = lazy(() => import('./components/TodoPage').then(m => ({ default: m.TodoPage })));
-const FinancePage   = lazy(() => import('./components/FinancePage').then(m => ({ default: m.FinancePage })));
-const IdeiasPage    = lazy(() => import('./components/IdeiasPage').then(m => ({ default: m.IdeiasPage })));
-const PropostasPage = lazy(() => import('./components/PropostasPage').then(m => ({ default: m.PropostasPage })));
-const InboxPage     = lazy(() => import('./components/InboxPage').then(m => ({ default: m.InboxPage })));
+const EmpresasPage    = lazy(() => import('./components/EmpresasPage').then(m => ({ default: m.EmpresasPage })));
+const ArchivePage     = lazy(() => import('./components/ArchivePage').then(m => ({ default: m.ArchivePage })));
+const CRMPage         = lazy(() => import('./components/CRMPage').then(m => ({ default: m.CRMPage })));
+const TodoPage        = lazy(() => import('./components/TodoPage').then(m => ({ default: m.TodoPage })));
+const FinancePage     = lazy(() => import('./components/FinancePage').then(m => ({ default: m.FinancePage })));
+const IdeiasPage      = lazy(() => import('./components/IdeiasPage').then(m => ({ default: m.IdeiasPage })));
+const PropostasPage   = lazy(() => import('./components/PropostasPage').then(m => ({ default: m.PropostasPage })));
+const InboxPage       = lazy(() => import('./components/InboxPage').then(m => ({ default: m.InboxPage })));
+// Onda 5 — Agência
+const AprovacoesPage  = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.AprovacoesPage })));
+const EditorialPage   = lazy(() => import('./components/EditorialPage').then(m => ({ default: m.EditorialPage })));
+const FaturasPage     = lazy(() => import('./components/FaturasPage').then(m => ({ default: m.FaturasPage })));
+const BriefingsPage   = lazy(() => import('./components/BriefingsPage').then(m => ({ default: m.BriefingsPage })));
+const OnboardingPage  = lazy(() => import('./components/OnboardingPage').then(m => ({ default: m.OnboardingPage })));
+const SnippetsPage    = lazy(() => import('./components/SnippetsPage').then(m => ({ default: m.SnippetsPage })));
+const KPIsPage        = lazy(() => import('./components/KPIsPage').then(m => ({ default: m.KPIsPage })));
+const HabitosPage     = lazy(() => import('./components/HabitosPage').then(m => ({ default: m.HabitosPage })));
 
 // Heavy view components (used inside the "tarefas" page)
 const MonthView  = lazy(() => import('./components/views/MonthView').then(m => ({ default: m.MonthView })));
@@ -600,7 +609,17 @@ export default function App() {
 
               {page === 'propostas' && <ErrorBoundary><PropostasPage /></ErrorBoundary>}
 
-              {page === 'inbox' && <ErrorBoundary><InboxPage onTaskClick={openTask} onNavigate={(p) => setPage(p)} /></ErrorBoundary>}
+              {page === 'inbox'      && <ErrorBoundary><InboxPage onTaskClick={openTask} onNavigate={(p) => setPage(p)} /></ErrorBoundary>}
+
+              {/* Onda 5 — Agência */}
+              {page === 'aprovacoes' && <ErrorBoundary><AprovacoesPage /></ErrorBoundary>}
+              {page === 'editorial'  && <ErrorBoundary><EditorialPage /></ErrorBoundary>}
+              {page === 'faturas'    && <ErrorBoundary><FaturasPage /></ErrorBoundary>}
+              {page === 'briefings'  && <ErrorBoundary><BriefingsPage /></ErrorBoundary>}
+              {page === 'onboarding' && <ErrorBoundary><OnboardingPage /></ErrorBoundary>}
+              {page === 'snippets'   && <ErrorBoundary><SnippetsPage /></ErrorBoundary>}
+              {page === 'kpis'       && <ErrorBoundary><KPIsPage /></ErrorBoundary>}
+              {page === 'habitos'    && <ErrorBoundary><HabitosPage /></ErrorBoundary>}
 
               {page === 'tarefas' && (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px 20px 0', overflow: 'hidden', minHeight: 0 }}>

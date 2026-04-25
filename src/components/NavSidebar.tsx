@@ -6,6 +6,7 @@ import {
   FiChevronDown, FiChevronRight, FiChevronLeft,
   FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
   FiUser, FiTrendingUp, FiList, FiLock, FiDollarSign, FiZap, FiFileText, FiInbox,
+  FiCheckCircle, FiGrid, FiClipboard, FiMessageSquare, FiLayers, FiCopy, FiBarChart2, FiRepeat,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useAuthStore } from '../store/auth';
@@ -27,22 +28,31 @@ interface Props {
 }
 
 const NAV_ITEMS: { id: PageType; label: string; Icon: React.ElementType; beta?: boolean }[] = [
-  { id: 'home',       label: 'Home',       Icon: FiHome },
-  { id: 'inbox',      label: 'Inbox',      Icon: FiInbox },
-  { id: 'tarefas',    label: 'Calendário', Icon: FiCalendar },
-  { id: 'empresas',   label: 'Empresas',   Icon: FiBriefcase },
-  { id: 'crm',        label: 'CRM',        Icon: FiTrendingUp, beta: true },
-  { id: 'propostas',  label: 'Propostas',  Icon: FiFileText },
-  { id: 'todo',       label: 'To Do',      Icon: FiList },
-  { id: 'financas',   label: 'Finanças',   Icon: FiDollarSign },
-  { id: 'ideias',     label: 'Ideias',     Icon: FiZap },
+  { id: 'home',       label: 'Home',          Icon: FiHome },
+  { id: 'inbox',      label: 'Inbox',         Icon: FiInbox },
+  { id: 'tarefas',    label: 'Calendário',    Icon: FiCalendar },
+  { id: 'empresas',   label: 'Empresas',      Icon: FiBriefcase },
+  { id: 'crm',        label: 'CRM',           Icon: FiTrendingUp, beta: true },
+  { id: 'propostas',  label: 'Propostas',     Icon: FiFileText },
+  { id: 'aprovacoes', label: 'Aprovações',    Icon: FiCheckCircle },
+  { id: 'editorial',  label: 'Editorial',     Icon: FiGrid },
+  { id: 'briefings',  label: 'Briefings',     Icon: FiMessageSquare },
+  { id: 'onboarding', label: 'Onboarding',    Icon: FiLayers },
+  { id: 'todo',       label: 'To Do',         Icon: FiList },
+  { id: 'ideias',     label: 'Ideias',        Icon: FiZap },
+  { id: 'snippets',   label: 'Snippets',      Icon: FiCopy },
+  { id: 'habitos',    label: 'Hábitos',       Icon: FiRepeat },
+  { id: 'financas',   label: 'Finanças',      Icon: FiDollarSign },
+  { id: 'faturas',    label: 'Faturas',       Icon: FiClipboard },
+  { id: 'kpis',       label: 'KPIs',          Icon: FiBarChart2 },
 ];
 
 const NAV_GROUPS: { label: string; items: PageType[] }[] = [
   { label: 'Principais', items: ['home', 'inbox', 'tarefas'] },
   { label: 'Negócio',    items: ['empresas', 'crm', 'propostas'] },
-  { label: 'Rápido',     items: ['todo', 'ideias'] },
-  { label: 'Gestão',     items: ['financas'] },
+  { label: 'Agência',    items: ['aprovacoes', 'editorial', 'briefings', 'onboarding'] },
+  { label: 'Ferramentas',items: ['todo', 'ideias', 'snippets', 'habitos'] },
+  { label: 'Gestão',     items: ['financas', 'faturas', 'kpis'] },
 ];
 
 const THEMES: Theme[] = ['dark-blue', 'light-soft'];
