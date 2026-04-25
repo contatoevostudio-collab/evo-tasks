@@ -1055,7 +1055,7 @@ export function PublicApprovalView({ token, onBack }: { token: string; onBack: (
 }
 
 // ─── Vista pública da PASTA de aprovação ────────────────────────────────────
-export function PublicApprovalFolderView({ token, onBack }: { token: string; onBack: () => void }) {
+export function PublicApprovalFolderView({ token, onBack: _onBack }: { token: string; onBack: () => void }) {
   const { approvals, folders, markViewed } = useContentApprovalsStore();
   const { companies } = useTaskStore();
   const folder = folders.find(f => f.shareToken === token && !f.deletedAt);
