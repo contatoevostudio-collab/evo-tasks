@@ -5,7 +5,7 @@ import {
   FiHome, FiCalendar, FiBriefcase, FiSettings,
   FiChevronDown, FiChevronRight, FiChevronLeft,
   FiEye, FiEyeOff, FiArchive, FiDownload, FiSun, FiMoon,
-  FiUser, FiTrendingUp, FiList, FiLock, FiDollarSign, FiZap, FiFileText,
+  FiUser, FiTrendingUp, FiList, FiLock, FiDollarSign, FiZap, FiFileText, FiInbox,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useAuthStore } from '../store/auth';
@@ -25,6 +25,7 @@ interface Props {
 
 const NAV_ITEMS: { id: PageType; label: string; Icon: React.ElementType; beta?: boolean }[] = [
   { id: 'home',       label: 'Home',       Icon: FiHome },
+  { id: 'inbox',      label: 'Inbox',      Icon: FiInbox },
   { id: 'tarefas',    label: 'Calendário', Icon: FiCalendar },
   { id: 'empresas',   label: 'Empresas',   Icon: FiBriefcase },
   { id: 'crm',        label: 'CRM',        Icon: FiTrendingUp, beta: true },
@@ -35,7 +36,7 @@ const NAV_ITEMS: { id: PageType; label: string; Icon: React.ElementType; beta?: 
 ];
 
 const NAV_GROUPS: { label: string; items: PageType[] }[] = [
-  { label: 'Principais', items: ['home', 'tarefas'] },
+  { label: 'Principais', items: ['home', 'inbox', 'tarefas'] },
   { label: 'Negócio',    items: ['empresas', 'crm', 'propostas'] },
   { label: 'Rápido',     items: ['todo', 'ideias'] },
   { label: 'Gestão',     items: ['financas'] },

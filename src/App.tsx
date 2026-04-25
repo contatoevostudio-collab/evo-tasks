@@ -32,6 +32,7 @@ const FinancePage   = lazy(() => import('./components/FinancePage').then(m => ({
 const IdeiasPage    = lazy(() => import('./components/IdeiasPage').then(m => ({ default: m.IdeiasPage })));
 const GamesPage     = lazy(() => import('./components/GamesPage').then(m => ({ default: m.GamesPage })));
 const PropostasPage = lazy(() => import('./components/PropostasPage').then(m => ({ default: m.PropostasPage })));
+const InboxPage     = lazy(() => import('./components/InboxPage').then(m => ({ default: m.InboxPage })));
 
 // Heavy view components (used inside the "tarefas" page)
 const MonthView  = lazy(() => import('./components/views/MonthView').then(m => ({ default: m.MonthView })));
@@ -588,6 +589,8 @@ export default function App() {
               {page === 'jogos' && <ErrorBoundary><GamesPage /></ErrorBoundary>}
 
               {page === 'propostas' && <ErrorBoundary><PropostasPage /></ErrorBoundary>}
+
+              {page === 'inbox' && <ErrorBoundary><InboxPage onTaskClick={openTask} onNavigate={(p) => setPage(p)} /></ErrorBoundary>}
 
               {page === 'tarefas' && (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px 20px 0', overflow: 'hidden', minHeight: 0 }}>

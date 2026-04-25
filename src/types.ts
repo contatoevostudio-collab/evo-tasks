@@ -24,7 +24,7 @@ export type TaskType =
   // eventos
   | 'lancamento' | 'workshop' | 'feira' | 'aniversario' | 'evento_outro';
 export type ViewMode = 'kanban' | 'month' | 'week' | 'day';
-export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas' | 'ideias' | 'jogos' | 'propostas';
+export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas' | 'ideias' | 'jogos' | 'propostas' | 'inbox';
 
 export type ProposalService = 'social-media' | 'estrategia' | 'site' | 'identidade-visual' | 'logo';
 export type ProposalStatus = 'rascunho' | 'enviada' | 'aceita' | 'recusada';
