@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Company, SubClient, Lead, LeadStage, TaskStatus, TaskType, ViewMode, Priority, Theme, QuickNote } from '../types';
+import type { Task, Company, SubClient, Lead, LeadInteraction, LeadStage, TaskStatus, TaskType, TaskCategory, ViewMode, Priority, Theme, QuickNote, TodoItem, TodoItemStatus, TodoContext, CalendarEvent, CalendarEventCategory, PomodoroSession, PaymentRecord, CompanyInteraction } from '../types';
 import { format } from 'date-fns';
-import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient, syncLead, removeLead, syncQuickNote, removeQuickNote } from '../lib/supabaseSync';
+import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient, syncLead, removeLead, syncQuickNote, removeQuickNote, syncTodoItem, removeTodoItem, syncCalendarEvent, removeCalendarEvent } from '../lib/supabaseSync';
+import { useAuthStore } from './auth';
 
 const DEFAULT_COMPANIES: Company[] = [
   { id: 'imperio',    name: 'IMPERIO',      color: '#30d158' },
@@ -41,6 +42,8 @@ interface TaskStore {
   filterPriority: Priority | null;
   filterSubClient: string | null;   // #3 / #53
   filterTaskType: TaskType | null;  // #50
+  filterTaskCategory: TaskCategory | null;
+  filterTags: string[];             // #5 — tag filter
   sidebarCollapsed: boolean;        // #5
   theme: Theme;                     // #60
   kanbanOrder: Record<TaskStatus, string[]>;
@@ -52,6 +55,7 @@ interface TaskStore {
   deleteTask(id: string): void;                     // soft-delete → lixeira
   permanentlyDeleteTask(id: string): void;          // remove de vez (lixeira)
   restoreTask(id: string): void;                    // restaurar da lixeira
+  duplicateTask(id: string): string;       // #2
   updateTaskStatus(id: string, status: TaskStatus): void;
   cycleTaskStatus(id: string): void;       // #34/#37 todo→doing→done→todo
   toggleArchive(id: string): void;         // #13
@@ -78,6 +82,13 @@ interface TaskStore {
   restoreSubClient(id: string): void;               // restaurar da lixeira
   updateSubClientNotes(id: string, notes: string): void;
   updateSubClientTips(id: string, tips: string[]): void;
+  reorderSubClients(companyId: string, orderedIds: string[]): void;
+  archiveCompany(id: string): void;
+  unarchiveCompany(id: string): void;
+  addPaymentRecord(companyId: string, record: Omit<PaymentRecord, 'id'>): void;
+  deletePaymentRecord(companyId: string, recordId: string): void;
+  addInteraction(companyId: string, interaction: Omit<CompanyInteraction, 'id'>): void;
+  deleteInteraction(companyId: string, interactionId: string): void;
 
   // Lead CRM CRUD
   addLead(l: Omit<Lead, 'id' | 'createdAt'>): string;
@@ -87,6 +98,8 @@ interface TaskStore {
   restoreLead(id: string): void;                    // restaurar da lixeira
   moveLead(id: string, stage: LeadStage): void;
   convertLead(id: string, companyName: string, color: string): void;
+  addLeadInteraction(leadId: string, i: Omit<LeadInteraction, 'id'>): void; // #37
+  deleteLeadInteraction(leadId: string, interactionId: string): void;
 
   // Lixeira (30 dias)
   purgeOldTrash(): void;
@@ -97,16 +110,55 @@ interface TaskStore {
   // Auth / sync
   userId: string | null;
   setUserId(id: string | null): void;
-  replaceAll(data: { companies: Company[]; subClients: SubClient[]; tasks: Task[]; leads: Lead[]; quickNotes?: QuickNote[] }): void;
+  replaceAll(data: { companies: Company[]; subClients: SubClient[]; tasks: Task[]; leads: Lead[]; quickNotes?: QuickNote[]; todoItems?: TodoItem[]; calendarEvents?: CalendarEvent[] }): void;
 
   // Toast / undo
   toast: { text: string; undoFn?: () => void } | null;
   showToast(text: string, undoFn?: () => void): void;
   hideToast(): void;
 
+  // User display name + profile
+  userName: string;
+  userPhoto: string;
+  accentColor: string;
+  setUserName(name: string): void;
+  setUserPhoto(photo: string): void;
+  setAccentColor(color: string): void;
+  clearAllData(): void;
+
   // Animations toggle (#43)
   animationsEnabled: boolean;
   setAnimationsEnabled(v: boolean): void;
+
+  // Compact mode (#45)
+  compactMode: boolean;
+  toggleCompactMode(): void;
+
+  // Sidebar width (#51)
+  sidebarWidth: number;
+  setSidebarWidth(w: number): void;
+
+  // Home section layout (#50)
+  homeLayout: string[];
+  setHomeLayout(layout: string[]): void;
+
+  // Home bento grid layout (react-grid-layout per breakpoint)
+  homeGridLayouts: Record<string, Array<{ i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number }>>;
+  setHomeGridLayouts(layouts: Record<string, Array<{ i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number }>>): void;
+  resetHomeGridLayouts(): void;
+
+  // Last sync timestamp (#55)
+  lastSyncAt: string | null;
+  setLastSyncAt(t: string): void;
+
+  // Pomodoro sessions (#30)
+  pomodoroSessions: PomodoroSession[];
+  addPomodoroSession(s: Omit<PomodoroSession, 'id'>): void;
+  clearPomodoroSessions(): void;
+
+  // Pomodoro daily goal (#34)
+  pomodoroGoal: number;
+  setPomodoroGoal(n: number): void;
 
   // Sync indicator (#50)
   syncStatus: 'idle' | 'syncing' | 'error';
@@ -122,6 +174,8 @@ interface TaskStore {
   setFilterPriority(p: Priority | null): void;
   setFilterSubClient(id: string | null): void;  // #3
   setFilterTaskType(t: TaskType | null): void;  // #50
+  setFilterTaskCategory(c: TaskCategory | null): void;
+  toggleFilterTag(tag: string): void; // #5 — toggle tag filter
   clearAllFilters(): void;       // #51
   toggleSidebar(): void;         // #5
   setTheme(t: Theme): void;      // #60
@@ -132,6 +186,27 @@ interface TaskStore {
   toggleQuickNote(id: string): void;
   deleteQuickNote(id: string): void;
   reorderQuickNotes(activeId: string, overId: string): void;
+
+  // Todo items (weekly calendar)
+  todoItems: TodoItem[];
+  addTodoItem(text: string, date: string, status?: TodoItemStatus, context?: TodoContext, priority?: Priority): void;
+  toggleTodoItem(id: string): void;
+  moveTodoItem(id: string, status: TodoItemStatus): void;
+  deleteTodoItem(id: string): void;
+  archiveTodoItem(id: string): void;
+  updateTodoItem(id: string, updates: Partial<Pick<TodoItem, 'text' | 'context' | 'priority'>>): void;
+  addTodoSubTask(todoId: string, label: string): void;  // #41
+  toggleTodoSubTask(todoId: string, subId: string): void;
+  deleteTodoSubTask(todoId: string, subId: string): void;
+  convertTodoToTask(todoId: string): string;  // #44 — returns new task id
+
+  // Calendar events
+  calendarEvents: CalendarEvent[];
+  calendarCategoryFilter: CalendarEventCategory | 'todos';
+  addCalendarEvent(e: Omit<CalendarEvent, 'id' | 'createdAt'>): void;
+  updateCalendarEvent(id: string, updates: Partial<CalendarEvent>): void;
+  deleteCalendarEvent(id: string): void;
+  setCalendarCategoryFilter(f: CalendarEventCategory | 'todos'): void;
 
   // Helper
   nextSequence(companyId: string, subClientId: string, taskType: TaskType): number;
@@ -151,15 +226,30 @@ export const useTaskStore = create<TaskStore>()(
       filterPriority: null,
       filterSubClient: null,
       filterTaskType: null,
+      filterTaskCategory: null,
+      filterTags: [],
       sidebarCollapsed: false,
       theme: 'dark-blue',
       kanbanOrder: { todo: [], doing: [], done: [] },
       pin: null,
       toast: null,
       userId: null,
+      userName: '',
+      userPhoto: '',
+      accentColor: '#356BFF',
       animationsEnabled: true,
+      compactMode: false,
+      sidebarWidth: 220,
+      homeLayout: ['stats', 'quota', 'categories', 'next3', 'streak', 'chart', 'heatmap'],
+      homeGridLayouts: {},
+      lastSyncAt: null,
+      pomodoroSessions: [],
+      pomodoroGoal: 4,
       syncStatus: 'idle' as const,
       quickNotes: [],
+      todoItems: [],
+      calendarEvents: [],
+      calendarCategoryFilter: 'todos' as const,
 
       addTask: (task) => {
         const id = crypto.randomUUID();
@@ -194,6 +284,17 @@ export const useTaskStore = create<TaskStore>()(
         set((state) => ({ tasks: state.tasks.map((t) => (t.id === id ? { ...t, deletedAt: undefined } : t)) }));
         const { userId, tasks } = get();
         if (userId) { const t = tasks.find(x => x.id === id); if (t) syncTask(t, userId).catch(console.error); }
+      },
+
+      duplicateTask: (id) => {
+        const src = get().tasks.find(t => t.id === id);
+        if (!src) return '';
+        const newId = crypto.randomUUID();
+        const dup = { ...src, id: newId, status: 'todo' as TaskStatus, createdAt: new Date().toISOString(), versions: undefined, subtasks: undefined };
+        set(state => ({ tasks: [...state.tasks, dup] }));
+        const userId = get().userId;
+        if (userId) syncTask(dup, userId).catch(console.error);
+        return newId;
       },
 
       updateTaskStatus: (id, status) => {
@@ -256,7 +357,7 @@ export const useTaskStore = create<TaskStore>()(
 
       addCompany: (company) => {
         const full = { ...company, id: crypto.randomUUID() };
-        set((state) => ({ companies: [...state.companies, full] }));
+        set((state) => ({ companies: [...state.companies, full], selectedCompanies: [...state.selectedCompanies, full.id] }));
         const userId = get().userId;
         if (userId) syncCompany(full, userId).catch(console.error);
       },
@@ -379,6 +480,52 @@ export const useTaskStore = create<TaskStore>()(
         if (userId) { const s = subClients.find(x => x.id === id); if (s) syncSubClient(s, userId).catch(console.error); }
       },
 
+      reorderSubClients: (companyId, orderedIds) => {
+        set(state => {
+          const sorted = orderedIds.map(id => state.subClients.find(s => s.id === id)).filter(Boolean) as typeof state.subClients;
+          const others = state.subClients.filter(s => s.companyId !== companyId);
+          return { subClients: [...others, ...sorted] };
+        });
+      },
+
+      archiveCompany: (id) => {
+        set(state => ({ companies: state.companies.map(c => c.id === id ? { ...c, archived: true } : c) }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === id); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
+      unarchiveCompany: (id) => {
+        set(state => ({ companies: state.companies.map(c => c.id === id ? { ...c, archived: false } : c) }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === id); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
+      addPaymentRecord: (companyId, record) => {
+        const full: PaymentRecord = { ...record, id: crypto.randomUUID() };
+        set(state => ({ companies: state.companies.map(c => c.id === companyId ? { ...c, paymentHistory: [...(c.paymentHistory ?? []), full] } : c) }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === companyId); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
+      deletePaymentRecord: (companyId, recordId) => {
+        set(state => ({ companies: state.companies.map(c => c.id === companyId ? { ...c, paymentHistory: (c.paymentHistory ?? []).filter(r => r.id !== recordId) } : c) }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === companyId); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
+      addInteraction: (companyId, interaction) => {
+        const full: CompanyInteraction = { ...interaction, id: crypto.randomUUID() };
+        set(state => ({ companies: state.companies.map(c => c.id === companyId ? { ...c, interactions: [...(c.interactions ?? []), full] } : c) }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === companyId); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
+      deleteInteraction: (companyId, interactionId) => {
+        set(state => ({ companies: state.companies.map(c => c.id === companyId ? { ...c, interactions: (c.interactions ?? []).filter(i => i.id !== interactionId) } : c) }));
+        const { userId, companies } = get();
+        if (userId) { const c = companies.find(x => x.id === companyId); if (c) syncCompany(c, userId).catch(console.error); }
+      },
+
       addLead: (lead) => {
         const id = crypto.randomUUID();
         const full: Lead = { ...lead, id, createdAt: new Date().toISOString() };
@@ -438,6 +585,19 @@ export const useTaskStore = create<TaskStore>()(
         }
       },
 
+      addLeadInteraction: (leadId, interaction) => {
+        const full: LeadInteraction = { ...interaction, id: crypto.randomUUID() };
+        set(state => ({ leads: state.leads.map(l => l.id === leadId ? { ...l, interactions: [...(l.interactions ?? []), full] } : l) }));
+        const { userId, leads } = get();
+        if (userId) { const l = leads.find(x => x.id === leadId); if (l) syncLead(l, userId).catch(console.error); }
+      },
+
+      deleteLeadInteraction: (leadId, interactionId) => {
+        set(state => ({ leads: state.leads.map(l => l.id === leadId ? { ...l, interactions: (l.interactions ?? []).filter(i => i.id !== interactionId) } : l) }));
+        const { userId, leads } = get();
+        if (userId) { const l = leads.find(x => x.id === leadId); if (l) syncLead(l, userId).catch(console.error); }
+      },
+
       setKanbanOrder: (status, ids) =>
         set(s => ({ kanbanOrder: { ...s.kanbanOrder, [status]: ids } })),
 
@@ -482,7 +642,7 @@ export const useTaskStore = create<TaskStore>()(
         }
       },
 
-      replaceAll: ({ companies, subClients, tasks, leads, quickNotes }) =>
+      replaceAll: ({ companies, subClients, tasks, leads, quickNotes, todoItems, calendarEvents }) =>
         set((state) => {
           // Preserve existing selection; auto-select any brand-new companies
           const prev = new Set(state.selectedCompanies);
@@ -495,6 +655,8 @@ export const useTaskStore = create<TaskStore>()(
             tasks,
             leads,
             quickNotes: quickNotes ?? state.quickNotes,
+            todoItems: todoItems ?? state.todoItems,
+            calendarEvents: calendarEvents ?? state.calendarEvents,
             selectedCompanies,
             kanbanOrder: state.kanbanOrder,
             // preserve UI state
@@ -507,7 +669,35 @@ export const useTaskStore = create<TaskStore>()(
       showToast: (text, undoFn) => set({ toast: { text, undoFn } }),
       hideToast: () => set({ toast: null }),
 
+      setUserName: (name) => set({ userName: name }),
+      setUserPhoto: (photo) => set({ userPhoto: photo }),
+      setAccentColor: (color) => set({ accentColor: color }),
+      clearAllData: () => set({
+        tasks: [],
+        companies: DEFAULT_COMPANIES,
+        subClients: DEFAULT_SUB_CLIENTS,
+        leads: [],
+        quickNotes: [],
+        todoItems: [],
+        kanbanOrder: { todo: [], doing: [], done: [] },
+        selectedCompanies: DEFAULT_COMPANIES.map(c => c.id),
+        hideDone: false,
+        filterPriority: null,
+        filterSubClient: null,
+        filterTaskType: null,
+        filterTaskCategory: null,
+      }),
       setAnimationsEnabled: (v) => set({ animationsEnabled: v }),
+      toggleCompactMode: () => set(s => ({ compactMode: !s.compactMode })),
+      setSidebarWidth: (w) => set({ sidebarWidth: Math.max(180, Math.min(320, w)) }),
+      setHomeLayout: (layout) => set({ homeLayout: layout }),
+
+      setHomeGridLayouts: (layouts) => set({ homeGridLayouts: layouts }),
+      resetHomeGridLayouts: () => set({ homeGridLayouts: {} }),
+      setLastSyncAt: (t) => set({ lastSyncAt: t }),
+      addPomodoroSession: (s) => set(state => ({ pomodoroSessions: [...state.pomodoroSessions, { ...s, id: crypto.randomUUID() }] })),
+      clearPomodoroSessions: () => set({ pomodoroSessions: [] }),
+      setPomodoroGoal: (n) => set({ pomodoroGoal: n }),
       setSyncStatus: (s) => set({ syncStatus: s }),
 
       setViewMode: (viewMode) => set({ viewMode }),
@@ -536,9 +726,18 @@ export const useTaskStore = create<TaskStore>()(
 
       setFilterTaskType: (t) =>
         set((s) => ({ filterTaskType: s.filterTaskType === t ? null : t })),
+      setFilterTaskCategory: (c) =>
+        set((s) => ({ filterTaskCategory: s.filterTaskCategory === c ? null : c })),
+
+      toggleFilterTag: (tag) =>
+        set((s) => ({
+          filterTags: s.filterTags.includes(tag)
+            ? s.filterTags.filter(t => t !== tag)
+            : [...s.filterTags, tag],
+        })),
 
       clearAllFilters: () =>
-        set({ filterPriority: null, filterSubClient: null, filterTaskType: null, hideDone: false }),
+        set({ filterPriority: null, filterSubClient: null, filterTaskType: null, filterTaskCategory: null, filterTags: [], hideDone: false }),
 
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
@@ -572,6 +771,95 @@ export const useTaskStore = create<TaskStore>()(
         });
       },
 
+      addTodoItem: (text, date, status = 'todo', context, priority) => {
+        const item: TodoItem = { id: crypto.randomUUID(), text, checked: status === 'done', status, date, createdAt: new Date().toISOString(), context, priority };
+        set(state => ({ todoItems: [...state.todoItems, item] }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) syncTodoItem(item, userId).catch(console.error);
+      },
+      toggleTodoItem: (id) => {
+        set(state => ({ todoItems: state.todoItems.map(t => {
+          if (t.id !== id) return t;
+          const newChecked = !t.checked;
+          return { ...t, checked: newChecked, status: newChecked ? 'done' as TodoItemStatus : 'todo' as TodoItemStatus };
+        }) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === id); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+      moveTodoItem: (id, status) => {
+        set(state => ({ todoItems: state.todoItems.map(t => t.id === id ? { ...t, status, checked: status === 'done' } : t) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === id); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+      deleteTodoItem: (id) => {
+        const userId = useAuthStore.getState().user?.id;
+        set(state => ({ todoItems: state.todoItems.filter(t => t.id !== id) }));
+        if (userId) removeTodoItem(id, userId).catch(console.error);
+      },
+      archiveTodoItem: (id) => {
+        set(state => ({ todoItems: state.todoItems.map(t => t.id === id ? { ...t, archived: true } : t) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === id); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+      updateTodoItem: (id, updates) => {
+        set(state => ({ todoItems: state.todoItems.map(t => t.id === id ? { ...t, ...updates } : t) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === id); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+
+      addTodoSubTask: (todoId, label) => {
+        set(state => ({ todoItems: state.todoItems.map(t => t.id === todoId ? { ...t, subtasks: [...(t.subtasks ?? []), { id: crypto.randomUUID(), label, done: false }] } : t) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === todoId); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+      toggleTodoSubTask: (todoId, subId) => {
+        set(state => ({ todoItems: state.todoItems.map(t => t.id !== todoId ? t : { ...t, subtasks: (t.subtasks ?? []).map(s => s.id === subId ? { ...s, done: !s.done } : s) }) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === todoId); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+      deleteTodoSubTask: (todoId, subId) => {
+        set(state => ({ todoItems: state.todoItems.map(t => t.id !== todoId ? t : { ...t, subtasks: (t.subtasks ?? []).filter(s => s.id !== subId) }) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const t = get().todoItems.find(x => x.id === todoId); if (t) syncTodoItem(t, userId).catch(console.error); }
+      },
+      convertTodoToTask: (todoId) => {
+        const todo = get().todoItems.find(t => t.id === todoId);
+        if (!todo) return '';
+        const { companies } = get();
+        const newId = get().addTask({
+          companyId: companies[0]?.id ?? '',
+          subClientId: '',
+          taskType: 'outro',
+          customType: todo.text,
+          sequence: 0,
+          date: todo.date,
+          status: todo.status === 'done' ? 'done' : todo.status === 'doing' ? 'doing' : 'todo',
+          priority: todo.priority,
+          allDay: true,
+          createdAt: new Date().toISOString(),
+        });
+        get().archiveTodoItem(todoId);
+        return newId;
+      },
+
+      addCalendarEvent: (e) => {
+        const full: CalendarEvent = { ...e, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+        set(state => ({ calendarEvents: [...state.calendarEvents, full] }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) syncCalendarEvent(full, userId).catch(console.error);
+      },
+      updateCalendarEvent: (id, updates) => {
+        set(state => ({ calendarEvents: state.calendarEvents.map(e => e.id === id ? { ...e, ...updates } : e) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) { const ev = get().calendarEvents.find(x => x.id === id); if (ev) syncCalendarEvent(ev, userId).catch(console.error); }
+      },
+      deleteCalendarEvent: (id) => {
+        const userId = useAuthStore.getState().user?.id;
+        set(state => ({ calendarEvents: state.calendarEvents.filter(e => e.id !== id) }));
+        if (userId) removeCalendarEvent(id, userId).catch(console.error);
+      },
+      setCalendarCategoryFilter: (f) => set({ calendarCategoryFilter: f }),
+
       nextSequence: (companyId, subClientId, taskType) => {
         const { tasks } = get();
         const count = tasks.filter(
@@ -594,6 +882,20 @@ export const useTaskStore = create<TaskStore>()(
         kanbanOrder: state.kanbanOrder,
         pin: state.pin,
         quickNotes: state.quickNotes,
+        todoItems: state.todoItems,
+        calendarEvents: state.calendarEvents,
+        calendarCategoryFilter: state.calendarCategoryFilter,
+        compactMode: state.compactMode,
+        sidebarWidth: state.sidebarWidth,
+        homeLayout: state.homeLayout,
+        homeGridLayouts: state.homeGridLayouts,
+        pomodoroSessions: state.pomodoroSessions,
+        pomodoroGoal: state.pomodoroGoal,
+        lastSyncAt: state.lastSyncAt,
+        animationsEnabled: state.animationsEnabled,
+        userName: state.userName,
+        userPhoto: state.userPhoto,
+        accentColor: state.accentColor,
       }),
     }
   )

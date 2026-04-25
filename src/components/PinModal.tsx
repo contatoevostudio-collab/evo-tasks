@@ -58,7 +58,7 @@ export function PinModal({ onUnlock }: Props) {
         animate={{ scale: 1, y: 0 }}
         transition={{ type: 'spring', damping: 26, stiffness: 320 }}
         style={{
-          background: 'var(--modal-bg)', border: '1px solid var(--b3)',
+          background: 'var(--modal-bg)',
           borderRadius: 24, padding: '40px 48px',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
           boxShadow: '0 40px 80px rgba(0,0,0,0.5)',
@@ -85,9 +85,8 @@ export function PinModal({ onUnlock }: Props) {
                 width: 48, height: 56, textAlign: 'center',
                 fontSize: 20, fontWeight: 700,
                 background: error ? 'rgba(255,69,58,0.1)' : 'var(--ib)',
-                border: `2px solid ${error ? 'rgba(255,69,58,0.5)' : d ? '#356BFF' : 'var(--b2)'}`,
                 borderRadius: 12, color: 'var(--t1)',
-                outline: 'none', transition: 'border-color .15s',
+                outline: 'none',
               }}
             />
           ))}

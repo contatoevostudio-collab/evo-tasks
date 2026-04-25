@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addDays, isSameMonth, isToday, getISOWeek, getDay,
+  addDays, isSameMonth, isToday, getDay,
 } from 'date-fns';
 import { playDrop } from '../../lib/sounds';
 import { ptBR } from 'date-fns/locale';
@@ -9,7 +9,14 @@ import { motion } from 'framer-motion';
 import { FiPlus } from 'react-icons/fi';
 import { useTaskStore } from '../../store/tasks';
 import { TaskChip } from '../TaskChip';
-import type { Task, Priority } from '../../types';
+import type { Task, Priority, TaskCategory } from '../../types';
+
+// Module-level default; component shadows accentColor with store value
+const accentColor = '#356BFF';
+
+const CAT_COLOR: Record<string, string> = {
+  agencia: accentColor, trabalho: '#ff9f0a', evento: '#bf5af2', pessoal: '#30d158', feriado: '#ff453a',
+};
 
 interface Props {
   onTaskClick: (task: Task) => void;
@@ -55,7 +62,10 @@ function sortByPriority(tasks: Task[]): Task[] {
 }
 
 export function MonthView({ onTaskClick, onDayClick }: Props) {
-  const { currentDate, tasks, selectedCompanies, hideDone, filterPriority, filterSubClient, filterTaskType, updateTask } = useTaskStore();
+  const store = useTaskStore();
+  const { currentDate, tasks, selectedCompanies, hideDone, filterPriority, filterSubClient, filterTaskType, filterTaskCategory, setFilterTaskCategory, updateTask, calendarEvents, calendarCategoryFilter } = store;
+  const accentColor = store.accentColor;
+  const accentRgb = (() => { const v = accentColor.replace('#', ''); const c = v.length === 3 ? v.split('').map(x => x+x).join('') : v; return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`; })();
   const [overflow, setOverflow] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const dragTaskId = useRef<string | null>(null);
@@ -80,10 +90,12 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
   const weeks: Date[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
-  const currentWeek = getISOWeek(currentDate);
 
-  const getTasksForDay = (day: Date) =>
-    sortByPriority(
+  const showTasks = calendarCategoryFilter === 'todos' || calendarCategoryFilter === 'agencia';
+
+  const getTasksForDay = (day: Date) => {
+    if (!showTasks) return [];
+    return sortByPriority(
       tasks.filter(t =>
         !t.deletedAt &&
         t.date === format(day, 'yyyy-MM-dd') &&
@@ -93,9 +105,20 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
         (!hideDone || t.status !== 'done') &&
         (!filterPriority || t.priority === filterPriority) &&
         (!filterSubClient || t.subClientId === filterSubClient) &&
-        (!filterTaskType || t.taskType === filterTaskType)
+        (!filterTaskType || t.taskType === filterTaskType) &&
+        (!filterTaskCategory || (t.taskCategory ?? 'criacao') === filterTaskCategory)
       )
     );
+  };
+
+  const getCalendarEventsForDay = (day: Date) => {
+    if (calendarCategoryFilter === 'agencia') return [];
+    const dateStr = format(day, 'yyyy-MM-dd');
+    return calendarEvents.filter(e =>
+      e.date === dateStr &&
+      (calendarCategoryFilter === 'todos' || e.category === calendarCategoryFilter)
+    );
+  };
 
   const maxDayCount = Math.max(1, ...days.map(d => getTasksForDay(d).length));
 
@@ -108,18 +131,55 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', paddingBottom: 8 }}>
+      {/* Category filter */}
+      {(() => {
+        const TASK_CATEGORIES: { id: TaskCategory; label: string; color: string }[] = [
+          { id: 'criacao', label: 'Criação', color: accentColor },
+          { id: 'reuniao', label: 'Reunião', color: '#ff9f0a' },
+          { id: 'pessoal', label: 'Pessoal', color: '#30d158' },
+          { id: 'eventos', label: 'Eventos', color: '#bf5af2' },
+        ];
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px 4px', flexShrink: 0 }}>
+            {/* Todos */}
+            {(() => {
+              const active = filterTaskCategory === null;
+              return (
+                <button onClick={() => setFilterTaskCategory(null)}
+                  style={{ padding: '3px 12px', borderRadius: 99, fontSize: 11, fontWeight: active ? 700 : 400, border: 'none', cursor: 'pointer', transition: 'all .15s', background: active ? 'rgba(100,196,255,0.15)' : 'transparent', color: active ? '#64C4FF' : 'var(--t4)' }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = '#64C4FF'; }}
+                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                >
+                  Todos
+                </button>
+              );
+            })()}
+            {TASK_CATEGORIES.map(cat => {
+              const active = filterTaskCategory === cat.id;
+              return (
+                <button key={cat.id} onClick={() => setFilterTaskCategory(cat.id)}
+                  style={{ padding: '3px 12px', borderRadius: 99, fontSize: 11, fontWeight: active ? 700 : 400, border: 'none', cursor: 'pointer', transition: 'all .15s', background: active ? `${cat.color}22` : 'transparent', color: active ? cat.color : 'var(--t4)' }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = cat.color; }}
+                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
       {/* Day headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--b1)', flexShrink: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flexShrink: 0, borderBottom: '1px solid var(--b1)' }}>
         {DAY_HEADERS.map((h, i) => {
           const isWeekend = WEEKEND_IDX.includes(i);
           return (
             <div key={h} style={{
-              padding: '10px 0', textAlign: 'center',
+              padding: '12px 12px 10px', textAlign: 'left',
               fontSize: 10, fontWeight: 700, letterSpacing: '1.5px',
               color: isWeekend ? 'rgba(100,196,255,0.5)' : 'var(--t4)',
-              borderRight: '1px solid var(--b1)',
-              background: isWeekend ? 'rgba(100,196,255,0.03)' : 'transparent',
+              borderRight: i < 6 ? '1px solid var(--b1)' : 'none',
             }}>
               {h}
             </div>
@@ -130,24 +190,22 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
       {/* Grid */}
       <div style={{ flex: 1, display: 'grid', overflow: 'hidden', gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}>
         {weeks.map((week, wi) => {
-          const weekNum = getISOWeek(week[0]);
-          const isCurrentWeek = weekNum === currentWeek;
 
           return (
             <div key={wi} style={{
               display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-              borderBottom: '1px solid var(--b1)',
-              borderLeft: isCurrentWeek ? '2px solid rgba(53,107,255,0.25)' : '2px solid transparent',
             }}>
               {week.map((day, di) => {
                 const inMonth  = isSameMonth(day, currentDate);
                 const todayDay = isToday(day);
                 const dateStr  = format(day, 'yyyy-MM-dd');
                 const dayTasks = getTasksForDay(day);
+                const dayCalEvts = getCalendarEventsForDay(day);
+                const showHoliday = calendarCategoryFilter === 'todos' || calendarCategoryFilter === 'feriado';
                 const visible  = dayTasks.slice(0, MAX_VISIBLE);
                 const hidden   = dayTasks.length - MAX_VISIBLE;
                 const doneCnt  = dayTasks.filter(t => t.status === 'done').length;
-                const holiday  = HOLIDAYS[dateStr];
+                const holiday  = showHoliday ? HOLIDAYS[dateStr] : undefined;
                 const isWeekend = getDay(day) === 0 || getDay(day) === 6;
                 const isDragOver = dragOver === dateStr;
 
@@ -159,19 +217,20 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
                     style={{
                       position: 'relative', display: 'flex', flexDirection: 'column',
                       padding: '8px 6px 6px',
-                      borderRight: '1px solid var(--b1)',
                       background: isDragOver
-                        ? 'rgba(53,107,255,0.12)'
+                        ? `rgba(${accentRgb}, 0.1)`
                         : todayDay
-                        ? 'rgba(53,107,255,0.05)'
+                        ? `rgba(${accentRgb}, 0.04)`
                         : isWeekend
-                        ? 'rgba(100,196,255,0.025)'
+                        ? 'rgba(100,196,255,0.018)'
                         : heatIntensity > 0
-                        ? `rgba(53,107,255,${heatIntensity})`
+                        ? `rgba(${accentRgb}, ${heatIntensity})`
                         : 'transparent',
+                      borderRight: di < 6 ? '1px solid var(--b1)' : 'none',
+                      borderBottom: '1px solid var(--b1)',
                       cursor: 'pointer', minHeight: 0, overflow: 'hidden',
                       transition: 'background .15s',
-                      outline: isDragOver ? '1.5px solid rgba(53,107,255,0.4)' : 'none',
+                      outline: isDragOver ? '1.5px solid rgba(${accentRgb}, 0.3)' : 'none',
                     }}
                     onClick={() => onDayClick(dateStr)}
                     onMouseEnter={e => { if (!todayDay && !isDragOver) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
@@ -179,7 +238,7 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
                       if (!todayDay && !isDragOver) {
                         (e.currentTarget as HTMLElement).style.background = isWeekend
                           ? 'rgba(100,196,255,0.025)'
-                          : heatIntensity > 0 ? `rgba(53,107,255,${heatIntensity})` : 'transparent';
+                          : heatIntensity > 0 ? `rgba(${accentRgb}, ${heatIntensity})` : 'transparent';
                       }
                     }}
                     onDragOver={e => { e.preventDefault(); setDragOver(dateStr); }}
@@ -195,15 +254,15 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
                             fontSize: 12, fontWeight: todayDay ? 700 : 400,
                             width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             borderRadius: '50%',
-                            background: todayDay ? '#356BFF' : 'transparent',
-                            color: todayDay ? '#fff' : inMonth ? (isWeekend ? 'rgba(100,196,255,0.6)' : 'var(--t1)') : 'var(--t4)',
-                            boxShadow: todayDay ? '0 2px 8px rgba(53,107,255,0.5)' : 'none',
+                            background: todayDay ? accentColor : 'transparent',
+                            color: todayDay ? '#fff' : inMonth ? (isWeekend ? 'rgba(100,196,255,0.5)' : 'var(--t1)') : 'var(--t4)',
+                            boxShadow: todayDay ? '0 2px 8px rgba(${accentRgb}, 0.4)' : 'none',
                           }}
                         >
                           {format(day, 'd')}
                         </span>
                         {dayTasks.length > 0 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: todayDay ? '#356BFF' : 'var(--t4)' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: todayDay ? accentColor : 'var(--t4)' }}>
                             {dayTasks.length}
                           </span>
                         )}
@@ -227,6 +286,26 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
                         🎉 {holiday}
                       </div>
                     )}
+
+                    {/* Calendar events */}
+                    {dayCalEvts.map(ev => (
+                      <div
+                        key={ev.id}
+                        style={{
+                          fontSize: 9, fontWeight: 600,
+                          color: CAT_COLOR[ev.category] ?? accentColor,
+                          background: `${CAT_COLOR[ev.category] ?? accentColor}18`,
+                          borderLeft: `2px solid ${CAT_COLOR[ev.category] ?? accentColor}`,
+                          borderRadius: '0 4px 4px 0',
+                          padding: '2px 6px', marginBottom: 2,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}
+                        title={ev.title}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {ev.title}
+                      </div>
+                    ))}
 
                     {/* Tasks */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'hidden' }}>
@@ -265,7 +344,7 @@ export function MonthView({ onTaskClick, onDayClick }: Props) {
                         style={{
                           position: 'absolute', top: 36, left: 0, zIndex: 30,
                           minWidth: 220, maxWidth: 280, padding: 12, borderRadius: 14,
-                          background: 'var(--modal-bg)', border: '1px solid var(--b3)',
+                          background: 'var(--modal-bg)',
                           boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
                         }}
                         onClick={e => e.stopPropagation()}

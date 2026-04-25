@@ -46,7 +46,6 @@ export function Header() {
       style={{
         height: '54px',
         background: 'rgba(8,12,24,0.95)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
         backdropFilter: 'blur(12px)',
         position: 'sticky',
         top: 0,
@@ -76,7 +75,6 @@ export function Header() {
             className="text-xs font-medium px-3 py-1.5 rounded-lg transition-all"
             style={{
               background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.1)',
               color: 'rgba(255,255,255,0.7)',
             }}
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
@@ -114,7 +112,6 @@ export function Header() {
         className="flex items-center rounded-xl p-1"
         style={{
           background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
         }}
       >
         {VIEWS.map(({ id, label, Icon }) => {

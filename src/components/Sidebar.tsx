@@ -35,7 +35,6 @@ export function Sidebar({ onAddTask, onOpenSettings }: Props) {
         width: 220,
         height: '100%',
         background: 'rgba(255,255,255,0.015)',
-        borderRight: '1px solid rgba(255,255,255,0.07)',
         position: 'sticky',
         top: 0,
         overflow: 'hidden',
@@ -136,7 +135,6 @@ export function Sidebar({ onAddTask, onOpenSettings }: Props) {
                   className="w-3 h-3 rounded-sm flex-shrink-0 transition-all"
                   style={{
                     background: active ? company.color : 'transparent',
-                    border: `2px solid ${active ? company.color : 'rgba(255,255,255,0.2)'}`,
                   }}
                 />
                 <span className="text-xs truncate" style={{ color: active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)' }}>

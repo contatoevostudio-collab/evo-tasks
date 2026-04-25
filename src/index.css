@@ -1,9 +1,141 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'AktivGrotesk';
+  src: url('/src/assets/images/Fontes/Aktiv.Grotesk/Aktiv Grotesk/TTF/AktivGrotesk-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'AktivGrotesk';
+  src: url('/src/assets/images/Fontes/Aktiv.Grotesk/Aktiv Grotesk/TTF/AktivGrotesk-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN TOKENS — foundational
+   (semantic tokens --s1/--t1/--b2/--accent injected per-theme in App.tsx)
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  /* 1. Z-INDEX SCALE */
+  --z-base:      0;
+  --z-dropdown:  10;
+  --z-sticky:    20;
+  --z-overlay:   40;
+  --z-modal:     50;
+  --z-toast:    100;
+  --z-tooltip:  200;
+  --z-confetti: 9999;
+
+  /* 2. ELEVATION LADDER — neutral depth (no glow) */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.10);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.14);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.30);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.38);
+  --shadow-2xl: 0 32px 80px rgba(0, 0, 0, 0.45);
+
+  /* 3. OPACITY SCALE — semantic */
+  --op-disabled:     0.40;
+  --op-muted:        0.55;
+  --op-secondary:    0.70;
+  --op-hover:        0.85;
+  --op-overlay-bg:   0.50;  /* modal backdrop */
+  --op-card-overlay: 0.92;  /* white-over-saturated buttons */
+
+  /* 4. EASING CURVES */
+  --ease-out:    cubic-bezier(.4, 0, .2, 1);
+  --ease-snap:   cubic-bezier(.2, 0, .2, 1);
+  --ease-pop:    cubic-bezier(.15, .9, .3, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .6, 1);
+
+  /* 5. SPACING SCALE (px) */
+  --sp-1:  2px;
+  --sp-2:  4px;
+  --sp-3:  6px;
+  --sp-4:  8px;
+  --sp-5: 10px;
+  --sp-6: 12px;
+  --sp-7: 14px;
+  --sp-8: 16px;
+  --sp-9: 20px;
+  --sp-10: 24px;
+  --sp-11: 28px;
+  --sp-12: 32px;
+  --sp-14: 40px;
+  --sp-16: 48px;
+
+  /* 6. BORDER WIDTHS */
+  --bw-thin:  1px;
+  --bw-med:   1.5px;
+  --bw-thick: 2px;
+
+  /* 7. BREAKPOINTS — in CSS @media (reference only; custom props can't be used inside media queries in standard CSS) */
+  /* mobile:  up to 640px
+     tablet:  up to 900px
+     desktop: 900px+ */
+
+  /* 8. TOUCH TARGETS */
+  --tt-desktop: 32px;
+  --tt-mobile:  44px;
+
+  /* 10. FONT WEIGHTS */
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  /* Typography line-heights */
+  --lh-tight:   1.1;   /* valor em destaque */
+  --lh-snug:    1.2;   /* títulos */
+  --lh-normal:  1.3;   /* body padrão */
+  --lh-relaxed: 1.5;   /* parágrafo longo / help text */
+
+  /* 13. GRADIENT LIBRARY — named gradients.
+     Use `background: var(--grad-balance)` em vez de repetir o degradê. */
+  --grad-balance:      linear-gradient(135deg, #356BFF 0%, rgba(53,107,255,0.67) 50%, #1a8ad4 100%);
+  --grad-income:       linear-gradient(135deg, rgba(48,209,88,0.22), transparent 60%);
+  --grad-expense:      linear-gradient(135deg, rgba(255,69,58,0.22), transparent 60%);
+  --grad-success-pill: linear-gradient(180deg, #30d158 0%, #22b348 100%);
+  --grad-danger-pill:  linear-gradient(180deg, #ff453a 0%, #d93526 100%);
+  --grad-card-sheen:   linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.07) 50%, transparent 60%);
+  --grad-subscription: linear-gradient(135deg, #bf5af2, #9b4cd6);
+}
+
+/* 16. TABULAR NUMERALS — forces numbers to share equal width.
+   Use em tabelas, colunas de valor, timers — qualquer lugar onde números alinham verticalmente. */
+.nums-tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* 18. TRUNCATION — single-line ellipsis */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0; /* necessário para flexbox respeitar overflow */
+}
+/* 18. TRUNCATION — multi-line clamp (use data-lines=2|3|4) */
+.clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: var(--clamp-lines, 2);
+  line-clamp: var(--clamp-lines, 2);
+}
+.clamp-2 { --clamp-lines: 2; }
+.clamp-3 { --clamp-lines: 3; }
+.clamp-4 { --clamp-lines: 4; }
+
 body {
-  background: #080C18;
+  background: #000;
   color: #ffffff;
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -27,6 +159,28 @@ body {
 /* Date & time inputs dark mode */
 input[type="date"], input[type="time"] { color-scheme: dark; }
 
+/* Focus ring visível — mostra só com navegação por teclado (não em clique de mouse).
+   Usa --accent como cor + offset 2px; componentes customizados podem sobrescrever. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent, #356BFF);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+/* Botões e elementos com borda arredondada herdam o radius do próprio elemento */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="option"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="radio"]:focus-visible {
+  outline: 2px solid var(--accent, #356BFF);
+  outline-offset: 2px;
+}
+
 /* Animations */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
@@ -34,10 +188,20 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 }
 .fade-up { animation: fadeUp .3s cubic-bezier(.4,0,.2,1) both; }
 
-/* No-animations mode (#43) */
+/* 9. REDUCED MOTION
+   .no-animations is toggled by the user setting. The @media block respects
+   OS-level "prefer reduced motion" even when the user hasn't disabled it manually. */
 .no-animations * {
   animation-duration: 0ms !important;
   transition-duration: 0ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Sync indicator pulse (#50) */
@@ -46,6 +210,328 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   50%       { opacity: 0.5; transform: scale(0.75); }
 }
 .sync-pulse { animation: syncPulse 1.2s ease-in-out infinite; }
+
+/* Skeleton shimmer — usado pelo Skeleton component */
+@keyframes skeletonShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Spin — usado pelo Spinner component */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.9s linear infinite; }
+
+/* RowActions — ações que só aparecem ao passar o mouse na linha.
+   Aplique .row-actions-host no container da linha; o <RowActions> interno faz fade-in. */
+.row-actions-host:hover .row-actions,
+.row-actions-host:focus-within .row-actions {
+  opacity: 1 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BENTO GRIDS — responsivos
+   Breakpoints:
+     desktop:  > 1100px
+     tablet:   701-1100px
+     mobile:   <= 700px
+   ═══════════════════════════════════════════════════════════════ */
+.bento-grid {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+/* Layouts principais */
+.bento-hero   { grid-template-columns: 1.8fr 1fr; }   /* big card + satellites */
+.bento-2col   { grid-template-columns: 1fr 1fr; }
+.bento-3col   { grid-template-columns: 1fr 1fr 1fr; }
+.bento-chart  { grid-template-columns: 1.6fr 1fr; }   /* chart + side */
+.bento-sidebar { grid-template-columns: 1fr 320px; }  /* main + sidebar 320 */
+.bento-split  { grid-template-columns: 1.5fr 1fr; }
+
+/* Tablet: colapsa sidebar e 3col vira 2col */
+@media (max-width: 1100px) {
+  .bento-sidebar { grid-template-columns: 1fr; }
+  .bento-3col    { grid-template-columns: 1fr 1fr; }
+  .bento-hero    { grid-template-columns: 1fr; }
+  .bento-chart   { grid-template-columns: 1fr; }
+  .bento-split   { grid-template-columns: 1fr; }
+}
+
+/* Mobile: tudo em coluna única */
+@media (max-width: 700px) {
+  .bento-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE NAV — esconde sidebar desktop e mostra bottom nav
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Bottom nav só aparece em tablet/mobile.
+   Sidebar esquerda só aparece no desktop. Mutuamente exclusivos — nunca os dois juntos.
+   Breakpoint: 1024px (tablet começa aqui) — desktop > 1024px, tablet/mobile <= 1024px */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  /* Sidebar de navegação esconde completamente */
+  .nav-sidebar-desktop {
+    display: none !important;
+  }
+  /* Mostra a bottom nav mobile (tablets + phones) */
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+  /* Padding inferior no container de conteúdo pra não ficar atrás do nav */
+  .app-main-column {
+    padding-bottom: 68px !important;
+  }
+  /* Top bar mais compacto */
+  .app-top-bar {
+    height: 48px !important;
+    padding: 0 10px !important;
+    gap: 6px !important;
+  }
+  .app-top-bar .top-bar-hide-mobile {
+    display: none !important;
+  }
+  .app-top-bar .top-bar-cta-hide-mobile {
+    display: none !important;
+  }
+  /* Reduz padding externo do app */
+  .app-root {
+    padding: 6px 6px 0 !important;
+    gap: 6px !important;
+  }
+}
+
+/* Mobile puro (phones) — ajuste adicional de overflow */
+@media (max-width: 700px) {
+  body { overflow: auto; }
+  #root {
+    height: auto;
+    min-height: 100vh;
+  }
+  .app-root {
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+}
+
+/* Garantia anti-overflow em filhos de grid (por causa do min-content do grid) */
+.bento-grid > * {
+  min-width: 0;
+}
+
+/* Orphan fill — quando o último item fica sozinho numa linha (número ímpar em 2 cols),
+   ele expande pra cobrir o espaço vazio. Evita "buraco" à direita. */
+.bento-2col > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* Task row — esconde nome da empresa quando a coluna fica muito estreita */
+@media (max-width: 1200px) {
+  .taskrow-company {
+    display: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME BENTO STATIC — fallback sem react-grid-layout
+   ═══════════════════════════════════════════════════════════════ */
+.home-bento-static {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+.home-bento-static-item {
+  min-width: 0;
+}
+/* ─── Bento orphan-fill & responsive ─────────────────────────────────────
+   REGRA: se um card tem espaço vazio à direita, ele cresce pra preencher.
+   Implementação: promovemos cards médios a full-width em breakpoints onde
+   não fazem sentido como "meia largura"; e aplicamos orphan-fill no último
+   item quando fica sozinho na linha. */
+
+/* Tablet — 8 colunas base (701-1100px — mobile range excluído pra não sobrepor).
+   Cards com span ≥ 5 viram full-width (ocupariam > 62% num grid de 8).
+   Cards com span 3 ficam 4 (pareiam melhor com vizinhos). */
+@media (min-width: 701px) and (max-width: 1100px) {
+  .home-bento-static {
+    grid-template-columns: repeat(8, 1fr);
+  }
+  .home-bento-static-item[style*="span 12"],
+  .home-bento-static-item[style*="span 8"],
+  .home-bento-static-item[style*="span 7"],
+  .home-bento-static-item[style*="span 6"],
+  .home-bento-static-item[style*="span 5"] {
+    grid-column: 1 / -1 !important;
+  }
+  .home-bento-static-item[style*="span 3"] {
+    grid-column: span 4 !important;
+  }
+  /* Orphan fill: último item em posição ímpar na grade de pares vai full width.
+     Pega casos tipo "3 cards span 4" onde o 3º ficaria sozinho. */
+  .home-bento-static-item[style*="span 4"]:last-child:nth-child(2n+1) {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* Desktop grande — orphan-fill também no 12-col grid.
+   Ex: se tiver 2 cards span 4 no final e sobrar 4 cols vazias. */
+@media (min-width: 1101px) {
+  /* Se o último item tem span 4 e a soma dos anteriores deixa 4-8 cols vazios
+     à direita, não dá pra detectar via CSS puro. Mas podemos lidar com casos
+     comuns: último item span 4 em posição onde sobra espaço, expande. */
+  .home-bento-static-item[style*="span 4"]:last-child:nth-child(3n+1) {
+    /* 1º, 4º, 7º... items de span 4 — sozinhos em suas rows */
+    grid-column: span 12 !important;
+  }
+  .home-bento-static-item[style*="span 4"]:last-child:nth-child(3n+2) {
+    /* 2º, 5º, 8º... items de span 4 — com 1 vizinho, sobra 4 cols */
+    grid-column: span 8 !important;
+  }
+}
+
+/* Mobile — tudo em 1 coluna alinhada, mesma largura/gutter.
+   Seletor composto pra bater specificity dos attribute selectors do tablet. */
+@media (max-width: 700px) {
+  .home-bento-static {
+    grid-template-columns: 1fr !important;
+  }
+  .home-bento-static > .home-bento-static-item,
+  .home-bento-static > .home-bento-static-item[style*="span 3"],
+  .home-bento-static > .home-bento-static-item[style*="span 4"],
+  .home-bento-static > .home-bento-static-item[style*="span 5"],
+  .home-bento-static > .home-bento-static-item[style*="span 6"],
+  .home-bento-static > .home-bento-static-item[style*="span 7"],
+  .home-bento-static > .home-bento-static-item[style*="span 8"],
+  .home-bento-static > .home-bento-static-item[style*="span 12"] {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME BENTO — react-grid-layout customization
+   ═══════════════════════════════════════════════════════════════ */
+.home-bento {
+  position: relative;
+}
+.home-bento-item {
+  position: relative;
+}
+.home-bento-content {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+/* Drag handle — barra fina clicável acima do card */
+.bento-drag-handle {
+  position: absolute;
+  top: 0; left: 14px; right: 14px;
+  height: 14px;
+  cursor: grab;
+  z-index: 2;
+  border-radius: 0 0 8px 8px;
+  opacity: 0;
+  transition: opacity .15s, background .15s;
+}
+.home-bento-item:hover .bento-drag-handle {
+  opacity: 1;
+  background: linear-gradient(180deg, rgba(var(--glow, 53,107,255), 0.5), transparent);
+}
+.bento-drag-handle:active {
+  cursor: grabbing;
+}
+/* Quando arrastando, desabilita transições caras */
+.react-grid-item.react-draggable-dragging {
+  transition: none !important;
+  z-index: 10 !important;
+  cursor: grabbing !important;
+}
+.react-grid-item.react-draggable-dragging .home-bento-content {
+  opacity: 0.95;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45) !important;
+}
+/* Placeholder enquanto arrasta (posição fantasma) */
+.react-grid-placeholder {
+  background: rgba(var(--accent-rgb, 53,107,255), 0.15) !important;
+  border: 2px dashed var(--accent, #356BFF) !important;
+  border-radius: 16px !important;
+  opacity: 1 !important;
+  transition-duration: 150ms !important;
+}
+/* Resize handle — só no canto inferior direito, discreto */
+.react-resizable-handle {
+  position: absolute;
+  width: 18px; height: 18px;
+  bottom: 4px; right: 4px;
+  cursor: se-resize;
+  background-image: none !important;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 3;
+}
+.home-bento-item:hover .react-resizable-handle {
+  opacity: 0.5;
+}
+.react-resizable-handle:hover {
+  opacity: 1 !important;
+}
+/* Dois tracinhos diagonais no canto */
+.react-resizable-handle::before,
+.react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  background: var(--t3);
+  border-radius: 1px;
+}
+.react-resizable-handle::before {
+  right: 3px;
+  width: 10px; height: 2px;
+  transform: rotate(-45deg);
+  transform-origin: right bottom;
+}
+.react-resizable-handle::after {
+  right: 3px;
+  width: 5px; height: 2px;
+  transform: rotate(-45deg);
+  transform-origin: right bottom;
+  bottom: 8px;
+}
+/* Quando redimensionando */
+.react-grid-item.resizing {
+  z-index: 10;
+  opacity: 0.95;
+}
+
+/* Em tablet, bento-3col vira 2-col; aplica orphan fill também */
+@media (max-width: 1100px) and (min-width: 701px) {
+  .bento-3col > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Em tablet, bento-hero vira 1 col — já preenche.
+   Se bento-3col tiver 4 items desktop (3-col), item 4 fica orphan à esquerda;
+   esta regra também cobre esse caso. */
+@media (min-width: 1101px) {
+  .bento-3col > :last-child:nth-child(3n+1) {
+    grid-column: 1 / -1;
+  }
+  .bento-3col > :last-child:nth-child(3n+2) {
+    grid-column: span 2;
+  }
+}
 
 /* Deadline pulse — urgent tasks */
 @keyframes deadlinePulse {
@@ -86,10 +572,67 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   transition: background-color 0.3s ease, color 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
 }
 
+/* Aurora glow — ambient neon bloom around accent chips.
+   Set --glow on the element to any rgb triplet (e.g. 48,209,88). */
+.glow {
+  box-shadow:
+    0 0 12px 0 rgba(var(--glow), 0.45),
+    0 0 28px 0 rgba(var(--glow), 0.25),
+    0 0 52px 0 rgba(var(--glow), 0.14);
+}
+.glow-soft {
+  box-shadow:
+    0 0 10px 0 rgba(var(--glow), 0.30),
+    0 0 22px 0 rgba(var(--glow), 0.14);
+}
+
+/* Ambient glow for big cards — a blurred radial halo bleeding outward. */
+.ambient-glow {
+  position: relative;
+  isolation: isolate;
+}
+.ambient-glow::after {
+  content: '';
+  position: absolute;
+  inset: -22% -18%;
+  background: radial-gradient(closest-side, rgba(var(--glow), 0.55), transparent 70%);
+  filter: blur(40px);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 /* Glassmorphism modal backdrop */
 .glass-backdrop {
   backdrop-filter: blur(16px) saturate(1.6);
   -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  will-change: transform;
+  isolation: isolate;
+}
+
+/* Glass panel — apply to sidebar, main content, cards */
+/* will-change:transform keeps the GPU compositing layer alive in Electron,
+   preventing the black-screen flash when any ancestor re-renders */
+.glass-panel {
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  will-change: transform;
+  isolation: isolate;
+}
+
+.glass-panel-sm {
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  will-change: transform;
+  isolation: isolate;
+}
+
+/* Glass border utility */
+.glass-border-dark {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), 0 8px 32px rgba(0,0,0,0.28);
+}
+.glass-border-light {
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.12);
 }
 
 /* Tooltip (hover card) */
@@ -100,4 +643,16 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .hover-tooltip {
   animation: tooltipIn 0.15s ease-out both;
   pointer-events: none;
+}
+
+
+/* Task completion pop animation (#49) */
+@keyframes pop-done {
+  0%   { box-shadow: 0 0 0 0 rgba(48,209,88,0.7); transform: scale(1); }
+  40%  { box-shadow: 0 0 0 8px rgba(48,209,88,0.0); transform: scale(1.03); }
+  70%  { transform: scale(0.98); }
+  100% { box-shadow: 0 0 0 0 rgba(48,209,88,0); transform: scale(1); }
+}
+.pop-done {
+  animation: pop-done 0.45s cubic-bezier(.36,.07,.19,.97) both;
 }

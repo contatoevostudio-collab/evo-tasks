@@ -1,611 +1,646 @@
-import { useState, useEffect, useRef } from 'react';
-import { format, parseISO, isAfter, isBefore, startOfToday, addDays, getDay } from 'date-fns';
+import { useState, useMemo } from 'react';
+import { format, parseISO, isAfter, isBefore, startOfToday, addDays, getDay, getISOWeek, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
-import { FiCheckCircle, FiCircle, FiClock, FiTrendingUp, FiAlertTriangle, FiPlus, FiZap, FiInbox, FiEdit3, FiX } from 'react-icons/fi';
-import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
-import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { playCheck, playAdd, playDelete, playChime } from '../lib/sounds';
+import {
+  FiPlus, FiZap, FiAlertTriangle, FiArrowRight,
+  FiCheckSquare, FiUsers, FiBriefcase, FiClock,
+  FiCheckCircle, FiTrendingUp,
+} from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
+import { useIdeasStore } from '../store/ideas';
+import { useAuthStore } from '../store/auth';
 import { getTaskTitle } from '../types';
-import type { Task, TaskStatus, PageType, TaskType } from '../types';
+import type { Task, TaskStatus, PageType, LeadStage } from '../types';
+
+const homeHexToRgb = (hex: string): string => {
+  const clean = hex.replace('#', '');
+  const v = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
+  const r = parseInt(v.slice(0, 2), 16) || 0;
+  const g = parseInt(v.slice(2, 4), 16) || 0;
+  const b = parseInt(v.slice(4, 6), 16) || 0;
+  return `${r},${g},${b}`;
+};
 
 interface Props {
   onTaskClick: (task: Task) => void;
   onNavigate: (page: PageType) => void;
 }
 
-function StatCard({
-  label, value, color, Icon, onClick,
-}: {
-  label: string; value: number; color: string; Icon: React.ElementType; onClick?: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      onClick={onClick}
-      style={{
-        background: 'var(--s1)',
-        border: '1px solid var(--b2)',
-        borderRadius: 16, padding: '20px 22px',
-        display: 'flex', flexDirection: 'column', gap: 10,
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'all .15s',
-      }}
-      onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-      onMouseLeave={e => { if (onClick) (e.currentTarget as HTMLElement).style.background = 'var(--s1)'; }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={16} style={{ color }} />
-        </div>
-        <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--t1)' }}>{value}</span>
-      </div>
-      <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 500 }}>{label}</span>
-    </motion.div>
-  );
-}
-
 const STATUS_COLOR: Record<TaskStatus, string> = { todo: '#ff9f0a', doing: '#64C4FF', done: '#30d158' };
 const STATUS_LABEL: Record<TaskStatus, string> = { todo: 'A Fazer', doing: 'Fazendo', done: 'Feito' };
 
-const TASK_TYPES: { id: TaskType; label: string }[] = [
-  { id: 'feed',      label: 'Feed' },
-  { id: 'story',     label: 'Story' },
-  { id: 'carrossel', label: 'Carrossel' },
-  { id: 'reels',     label: 'Reels' },
-  { id: 'thumb',     label: 'Thumb' },
-  { id: 'outro',     label: 'Outro' },
-];
+const LEAD_STAGE_LABEL: Record<LeadStage, string> = {
+  prospeccao: 'Prospecção', contato: 'Contato', proposta: 'Proposta',
+  negociacao: 'Negociação', fechado: 'Fechado',
+};
+const LEAD_STAGE_COLOR: Record<LeadStage, string> = {
+  prospeccao: '#64d2ff', contato: '#ff9f0a', proposta: '#bf5af2',
+  negociacao: '#ff375f', fechado: '#30d158',
+};
 
-function HomeNoteRow({ id, text, checked, onToggle, onDelete }: {
-  id: string; text: string; checked: boolean; onToggle: () => void; onDelete: () => void;
+// ─── Card primitive ─────────────────────────────────────────────────────────
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ background: 'var(--s1)', borderRadius: 14, border: '1px solid var(--b2)', overflow: 'hidden', ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({
+  icon, title, accent, right,
+}: { icon: React.ReactNode; title: string; accent: string; right?: React.ReactNode }) {
+  return (
+    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ color: accent, display: 'flex', alignItems: 'center' }}>{icon}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', flex: 1 }}>{title}</span>
+      {right}
+    </div>
+  );
+}
+
+// ─── Task row used inside cards ─────────────────────────────────────────────
+function TaskRow({
+  task, color, title, companyName, showDate, onClick,
+}: {
+  task: Task; color: string; title: string; companyName: string; showDate?: boolean; onClick?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+    <button
+      onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      style={{
+        width: '100%', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px',
+        background: hovered ? 'var(--s2)' : 'transparent',
+        border: '1px solid transparent',
+        borderRadius: 8,
+        cursor: 'pointer',
+        transition: 'background .12s',
+        minWidth: 0,
+      }}
     >
-      <div
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 7,
-          padding: '6px 10px 6px 8px',
-          borderRadius: 99,
-          border: `1px solid ${checked ? 'var(--b1)' : 'var(--b2)'}`,
-          background: checked ? 'var(--s1)' : hovered ? 'var(--s2)' : 'var(--s1)',
-          transition: isDragging ? 'none' : 'all .15s',
-          cursor: isDragging ? 'grabbing' : 'grab',
-          maxWidth: 280,
-          userSelect: 'none',
-        }}
-        {...attributes}
-        {...listeners}
-      >
-        {/* Checkbox */}
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          style={{
-            width: 15, height: 15, borderRadius: 4, flexShrink: 0,
-            border: `1.5px solid ${checked ? '#356BFF' : 'var(--b3)'}`,
-            background: checked ? '#356BFF' : 'transparent',
-            cursor: 'pointer', padding: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'all .15s',
-          }}
-        >
-          {checked && (
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-              <polyline points="1,4 3,6.5 7,1.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-
-        {/* Text */}
-        <span style={{
-          fontSize: 12, color: checked ? 'var(--t4)' : 'var(--t1)',
-          textDecoration: checked ? 'line-through' : 'none',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          transition: 'all .15s',
-        }}>
-          {text}
+      <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <span style={{
+        flex: '1 1 0', minWidth: 0,
+        fontSize: 12, fontWeight: 500,
+        color: task.status === 'done' ? 'var(--t4)' : 'var(--t1)',
+        textDecoration: task.status === 'done' ? 'line-through' : 'none',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {title}
+      </span>
+      {companyName && (
+        <span style={{ fontSize: 10, color: 'var(--t3)', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>
+          {companyName}
         </span>
+      )}
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        fontSize: 10, fontWeight: 600,
+        color: STATUS_COLOR[task.status],
+        flexShrink: 0, whiteSpace: 'nowrap',
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_COLOR[task.status] }} />
+        {STATUS_LABEL[task.status]}
+      </span>
+      {showDate && (
+        <span style={{ fontSize: 10, color: 'var(--t3)', flexShrink: 0, minWidth: 36, textAlign: 'right' }}>
+          {format(parseISO(task.date), "d MMM", { locale: ptBR })}
+        </span>
+      )}
+    </button>
+  );
+}
 
-        {/* Delete */}
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--t4)', padding: 0, display: 'flex', flexShrink: 0,
-            opacity: hovered ? 1 : 0,
-            transition: 'opacity .15s',
-            pointerEvents: hovered ? 'auto' : 'none',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
-        >
-          <FiX size={11} />
-        </button>
+// ─── Weekly bar chart (this ISO week) ───────────────────────────────────────
+function WeeklyBars({ tasks, accentColor, accentRgb }: { tasks: Task[]; accentColor: string; accentRgb: string }) {
+  const today = new Date();
+  const todayStr = format(today, 'yyyy-MM-dd');
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const counts = days.map(d => {
+    const dateStr = format(d, 'yyyy-MM-dd');
+    return tasks.filter(t => t.status === 'done' && !t.deletedAt && !t.inbox && t.date === dateStr).length;
+  });
+  const maxCount = Math.max(1, ...counts);
+  const total = counts.reduce((s, n) => s + n, 0);
+  const CHART_H = 80;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 11, color: 'var(--t3)' }}>{total} concluída{total !== 1 ? 's' : ''} esta semana</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: CHART_H, padding: '14px 0 0' }}>
+        {days.map((day, i) => {
+          const count = counts[i];
+          const pct = count / maxCount;
+          const dateStr = format(day, 'yyyy-MM-dd');
+          const isToday = dateStr === todayStr;
+          const hasData = count > 0;
+
+          let barBg: string;
+          let barShadow: string = 'none';
+          if (isToday) {
+            barBg = `linear-gradient(180deg, ${accentColor} 0%, ${accentColor}66 100%)`;
+            barShadow = `0 0 14px -2px rgba(${accentRgb}, 0.6)`;
+          } else if (hasData) {
+            barBg = 'linear-gradient(180deg, #30d158 0%, rgba(48,209,88,0.55) 100%)';
+            barShadow = '0 0 10px -4px rgba(48,209,88,0.4)';
+          } else {
+            barBg = 'var(--b2)';
+          }
+          const barHeight = hasData ? Math.max(8, pct * (CHART_H - 22)) : 4;
+
+          return (
+            <div key={dateStr} style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'flex-end', gap: 4, height: '100%', position: 'relative',
+            }}>
+              {hasData && (
+                <span style={{
+                  position: 'absolute',
+                  bottom: barHeight + 22,
+                  fontSize: 9, fontWeight: 700,
+                  color: isToday ? accentColor : '#30d158',
+                  lineHeight: 1,
+                }}>{count}</span>
+              )}
+              <motion.div
+                initial={{ height: 4 }}
+                animate={{ height: barHeight }}
+                transition={{ duration: 0.4, ease: 'easeOut', delay: i * 0.04 }}
+                style={{
+                  width: '70%', maxWidth: 22,
+                  borderTopLeftRadius: 6, borderTopRightRadius: 6,
+                  borderBottomLeftRadius: 2, borderBottomRightRadius: 2,
+                  background: barBg, boxShadow: barShadow,
+                }}
+              />
+              <span style={{
+                fontSize: 9,
+                fontWeight: isToday ? 700 : 500,
+                color: isToday ? accentColor : 'var(--t4)',
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+              }}>
+                {format(day, 'EEE', { locale: ptBR }).slice(0, 3)}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
+// ─── Deterministic pick by week-of-year ─────────────────────────────────────
+function deterministicPick<T>(items: T[], seed: number): T | null {
+  if (items.length === 0) return null;
+  const x = Math.sin(seed) * 10000;
+  const idx = Math.floor((x - Math.floor(x)) * items.length);
+  return items[Math.abs(idx) % items.length];
+}
+
+// ─── HomePage ───────────────────────────────────────────────────────────────
 export function HomePage({ onTaskClick, onNavigate }: Props) {
-  const { tasks, companies, subClients, selectedCompanies, setFilterPriority, setViewMode, addTask, nextSequence, showToast, hideToast, quickNotes, addQuickNote, toggleQuickNote, deleteQuickNote, reorderQuickNotes } = useTaskStore();
+  const {
+    tasks, companies, subClients, leads, accentColor, pomodoroSessions, userName,
+  } = useTaskStore();
+  const { ideas } = useIdeasStore();
+  const { user } = useAuthStore();
 
-  const filtered = tasks.filter(t => !t.deletedAt && selectedCompanies.includes(t.companyId) && !t.archived && !t.inbox);
-  const inboxTasks = tasks.filter(t => !t.deletedAt && selectedCompanies.includes(t.companyId) && !t.archived && t.inbox);
+  const accentRgb = homeHexToRgb(accentColor);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const todayTasks = filtered.filter(t => t.date === todayStr);
-  const doneTodayCnt = todayTasks.filter(t => t.status === 'done').length;
-  const todayPct = todayTasks.length > 0 ? (doneTodayCnt / todayTasks.length) * 100 : 0;
+  const todayDate = startOfToday();
 
-  const overdue = filtered.filter(t => {
-    try { const d = parseISO(t.date); return isBefore(d, startOfToday()) && t.status !== 'done'; } catch { return false; }
-  }).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
+  // ─── Greeting ───
+  const firstName = useMemo(() => {
+    if (userName && userName.trim()) return userName.trim().split(' ')[0];
+    if (user?.user_metadata?.name) return String(user.user_metadata.name).split(' ')[0];
+    if (user?.email) return user.email.split('@')[0];
+    return 'visitante';
+  }, [user, userName]);
 
-  const upcoming = filtered
+  // ─── Tasks ───
+  const activeTasks = tasks.filter(t => !t.archived && !t.inbox);
+  const todayTasks = activeTasks.filter(t => t.date === todayStr);
+  const todayCount = todayTasks.length;
+  const openTasks = activeTasks.filter(t => t.status !== 'done');
+  const overdue = activeTasks
     .filter(t => {
-      try { const d = parseISO(t.date); return isAfter(d, startOfToday()) && d <= addDays(startOfToday(), 7) && t.status !== 'done'; } catch { return false; }
+      try { return isBefore(parseISO(t.date), todayDate) && t.status !== 'done'; } catch { return false; }
     })
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 8);
+    .slice(0, 5);
 
-  const todo  = filtered.filter(t => t.status === 'todo').length;
-  const doing = filtered.filter(t => t.status === 'doing').length;
-  const done  = filtered.filter(t => t.status === 'done').length;
-  const total = filtered.length;
+  // Upcoming next 7 days, grouped by date
+  const upcomingByDay = useMemo(() => {
+    const upcoming = activeTasks
+      .filter(t => {
+        try {
+          const d = parseISO(t.date);
+          return isAfter(d, todayDate) && d <= addDays(todayDate, 7) && t.status !== 'done';
+        } catch { return false; }
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const groups: { date: string; tasks: Task[] }[] = [];
+    upcoming.forEach(t => {
+      const last = groups[groups.length - 1];
+      if (last && last.date === t.date) last.tasks.push(t);
+      else groups.push({ date: t.date, tasks: [t] });
+    });
+    return groups;
+  }, [activeTasks, todayDate]);
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  // ─── Leads ───
+  const openLeads = leads.filter(l => l.stage !== 'fechado');
+  const sortedOpenLeads = useMemo(() => {
+    const stageOrder: Record<LeadStage, number> = { negociacao: 0, proposta: 1, contato: 2, prospeccao: 3, fechado: 4 };
+    return [...openLeads].sort((a, b) => stageOrder[a.stage] - stageOrder[b.stage]).slice(0, 5);
+  }, [openLeads]);
 
-  const companyColor = (companyId: string) => companies.find(c => c.id === companyId)?.color ?? '#356BFF';
+  // ─── Ideas ───
+  const ideasThisWeek = useMemo(() => {
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    return ideas.filter(i => {
+      try { return !i.deletedAt && parseISO(i.createdAt) >= start; } catch { return false; }
+    });
+  }, [ideas]);
 
-  // Confetti celebration
-  const [showConfetti, setShowConfetti] = useState(false);
-  const prevAllDoneRef = useRef(false);
-  useEffect(() => {
-    const allDone = todayTasks.length > 0 && todayTasks.every(t => t.status === 'done');
-    if (allDone && !prevAllDoneRef.current) {
-      playChime();
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 2500);
-    }
-    prevAllDoneRef.current = allDone;
-  }, [todayTasks]);
+  // Idea of the week — deterministic by week-of-year
+  const ideaOfWeek = useMemo(() => {
+    const candidates = ideas.filter(i => !i.deletedAt);
+    return deterministicPick(candidates, getISOWeek(new Date()));
+  }, [ideas]);
 
-  // Quick notes
-  const [noteInput, setNoteInput] = useState('');
-  const handleAddNote = () => {
-    const text = noteInput.trim();
-    if (!text) return;
-    addQuickNote(text);
-    playAdd();
-    setNoteInput('');
+  // ─── Pomodoro ───
+  const pomodoroToday = useMemo(() => {
+    const minutes = pomodoroSessions
+      .filter(s => !s.isBreak && s.startedAt.startsWith(todayStr))
+      .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
+    return minutes;
+  }, [pomodoroSessions, todayStr]);
+
+  const pomodoroWeek = useMemo(() => {
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const minutes = pomodoroSessions
+      .filter(s => {
+        if (s.isBreak) return false;
+        try { return parseISO(s.startedAt) >= start; } catch { return false; }
+      })
+      .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
+    return minutes;
+  }, [pomodoroSessions]);
+
+  // ─── Helpers ───
+  const companyColor = (id: string) => companies.find(c => c.id === id)?.color ?? accentColor;
+  const companyNameFn = (id: string) => companies.find(c => c.id === id)?.name ?? '';
+
+  // Header stat chips
+  const headerChips = [
+    { label: 'Hoje',     value: todayCount,        color: '#356BFF', rgb: accentRgb },
+    { label: 'Em aberto', value: openTasks.length,  color: '#ff9f0a', rgb: '255,159,10' },
+    { label: 'Leads',    value: openLeads.length,   color: '#bf5af2', rgb: '191,90,242' },
+    { label: 'Ideias semana', value: ideasThisWeek.length, color: '#ffd60a', rgb: '255,214,10' },
+  ];
+
+  // Day labels for upcoming groups
+  const dayLabel = (dateStr: string) => {
+    try {
+      const d = parseISO(dateStr);
+      const dow = getDay(d);
+      const labels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      return `${labels[dow]} · ${format(d, "d MMM", { locale: ptBR })}`;
+    } catch { return dateStr; }
   };
-  const noteSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const handleNoteDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
-    if (over && active.id !== over.id) reorderQuickNotes(active.id as string, over.id as string);
-  };
-
-  // Quick-add state
-  const [qaCompany, setQaCompany]   = useState(companies[0]?.id ?? '');
-  const [qaSubClient, setQaSub]     = useState('');
-  const [qaType, setQaType]         = useState<TaskType>('feed');
-  const [qaOpen, setQaOpen]         = useState(false);
-
-  const qaSubs = subClients.filter(s => !s.deletedAt && s.companyId === qaCompany);
-
-  const handleQuickAdd = () => {
-    const subId = qaSubClient || qaSubs[0]?.id;
-    if (!qaCompany || !subId) return;
-    const seq = nextSequence(qaCompany, subId, qaType);
-    addTask({ companyId: qaCompany, subClientId: subId, taskType: qaType, sequence: seq, date: todayStr, status: 'todo', allDay: true });
-    showToast('Tarefa adicionada para hoje ✓');
-    setTimeout(hideToast, 3000);
-  };
-
-  const companyStats = companies
-    .filter(c => !c.deletedAt && selectedCompanies.includes(c.id))
-    .map(c => ({
-      company: c,
-      total: filtered.filter(t => t.companyId === c.id).length,
-      done: filtered.filter(t => t.companyId === c.id && t.status === 'done').length,
-    }))
-    .filter(x => x.total > 0)
-    .sort((a, b) => b.total - a.total);
-
-  const goKanban = () => { setViewMode('kanban'); onNavigate('tarefas'); };
-
-  // Productivity heatmap — tarefas concluídas por dia da semana
-  const DOW_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-  const heatmapCounts = DOW_LABELS.map((_, i) => {
-    return tasks.filter(t => {
-      if (t.deletedAt || t.status !== 'done' || t.inbox) return false;
-      try { const d = parseISO(t.date); const dow = getDay(d); return (dow === 0 ? 6 : dow - 1) === i; }
-      catch { return false; }
-    }).length;
-  });
-  const heatMax = Math.max(1, ...heatmapCounts);
 
   return (
-    <div style={{ padding: '32px 36px', height: '100%', overflowY: 'auto' }}>
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6 }}>
-          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-        </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.5px' }}>
-          {greeting} 👋
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--t2)', marginTop: 4 }}>
-          Você tem <strong style={{ color: '#64C4FF' }}>{todayTasks.filter(t => t.status !== 'done').length}</strong> tarefa{todayTasks.filter(t => t.status !== 'done').length !== 1 ? 's' : ''} pendente{todayTasks.filter(t => t.status !== 'done').length !== 1 ? 's' : ''} hoje.
-        </p>
-
-        {todayTasks.length > 0 && (
-          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ flex: 1, height: 4, background: 'var(--b1)', borderRadius: 2, overflow: 'hidden', maxWidth: 320 }}>
-              <motion.div
-                style={{ height: '100%', background: todayPct === 100 ? '#30d158' : '#356BFF', borderRadius: 2 }}
-                initial={{ width: 0 }}
-                animate={{ width: `${todayPct}%` }}
-                transition={{ duration: 0.5, ease: 'easeOut', delay: 0.3 }}
-              />
-            </div>
-            <span style={{ fontSize: 11, color: todayPct === 100 ? '#30d158' : 'var(--t3)', fontWeight: 600 }}>
-              {doneTodayCnt}/{todayTasks.length} hoje
-            </span>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* ═══ Compact sticky header ═══════════════════════════════════════════ */}
+      <div style={{ padding: '14px 20px', flexShrink: 0, borderBottom: '1px solid var(--b2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', marginBottom: 2 }}>Dashboard</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px' }}>
+            Olá, <span style={{ color: accentColor }}>{firstName}</span>
           </div>
-        )}
-      </motion.div>
+        </div>
 
-      {/* Quick-add */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} style={{ marginBottom: 28 }}>
-        {!qaOpen ? (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {headerChips.map(k => (
+            <div key={k.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: `rgba(${k.rgb},0.08)`, border: `1px solid rgba(${k.rgb},0.2)` }}>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: `rgba(${k.rgb},0.6)` }}>{k.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: k.color }}>{k.value}</span>
+            </div>
+          ))}
+
           <button
-            onClick={() => setQaOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 12, background: 'var(--s1)', border: '1px dashed var(--b2)', color: 'var(--t3)', fontSize: 13, cursor: 'pointer', transition: 'all .15s', width: '100%', maxWidth: 420 }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#356BFF'; (e.currentTarget as HTMLElement).style.color = '#64C4FF'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
-          >
-            <FiZap size={13} /> Adicionar tarefa para hoje...
+            onClick={() => onNavigate('tarefas')}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 14px rgba(53,107,255,0.35)' }}>
+            <FiPlus size={12} /> Nova
           </button>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 12, background: 'var(--s1)', border: '1px solid #356BFF55', maxWidth: 600, flexWrap: 'wrap' }}>
-            <FiZap size={13} style={{ color: '#356BFF', flexShrink: 0 }} />
-            {/* Company */}
-            <select value={qaCompany} onChange={e => { setQaCompany(e.target.value); setQaSub(''); }}
-              style={{ background: 'var(--ib)', border: '1px solid var(--b2)', borderRadius: 7, padding: '5px 8px', color: 'var(--t1)', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-              {companies.filter(c => !c.deletedAt).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {/* Subclient */}
-            <select value={qaSubClient || (qaSubs[0]?.id ?? '')} onChange={e => setQaSub(e.target.value)}
-              style={{ background: 'var(--ib)', border: '1px solid var(--b2)', borderRadius: 7, padding: '5px 8px', color: 'var(--t1)', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-              {qaSubs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            {/* Type */}
-            <select value={qaType} onChange={e => setQaType(e.target.value as TaskType)}
-              style={{ background: 'var(--ib)', border: '1px solid var(--b2)', borderRadius: 7, padding: '5px 8px', color: 'var(--t1)', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-              {TASK_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
-            <button onClick={handleQuickAdd}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 14px', borderRadius: 8, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              <FiPlus size={12} /> Adicionar
-            </button>
-            <button onClick={() => setQaOpen(false)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', fontSize: 12, padding: '4px 6px', borderRadius: 6 }}>
-              Cancelar
-            </button>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 32 }}>
-        <StatCard label="Total de Tarefas" value={total}  color="#356BFF" Icon={FiTrendingUp} onClick={goKanban} />
-        <StatCard label="A Fazer"          value={todo}   color="#ff9f0a" Icon={FiCircle}      onClick={() => { setFilterPriority(null); goKanban(); }} />
-        <StatCard label="Em Andamento"     value={doing}  color="#64C4FF" Icon={FiClock}       onClick={goKanban} />
-        <StatCard label="Concluídas"       value={done}   color="#30d158" Icon={FiCheckCircle} onClick={goKanban} />
+        </div>
       </div>
 
-      {/* Company breakdown */}
-      {companyStats.length > 0 && (
-        <div style={{ marginBottom: 24, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {companyStats.map(({ company, total: t, done: d }) => (
-            <div key={company.id} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '7px 12px', borderRadius: 99,
-              background: `${company.color}12`, border: `1px solid ${company.color}30`,
-            }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: company.color }} />
-              <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 500 }}>{company.name}</span>
-              <span style={{ fontSize: 11, color: company.color, fontWeight: 700 }}>{d}/{t}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Heatmap + Inbox row */}
-      <div style={{ display: 'grid', gridTemplateColumns: inboxTasks.length > 0 ? '1fr 1fr' : '1fr', gap: 20, marginBottom: 20 }}>
-        {/* Heatmap */}
-        <div style={{ background: 'var(--s1)', border: '1px solid var(--b1)', borderRadius: 16, padding: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-            Produtividade por dia
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 60 }}>
-            {DOW_LABELS.map((label, i) => {
-              const count = heatmapCounts[i];
-              const pct = count / heatMax;
-              return (
-                <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 9, color: 'var(--t4)', fontWeight: 600 }}>{count || ''}</span>
-                  <div style={{ width: '100%', height: Math.max(4, pct * 40), borderRadius: 4, background: pct > 0.66 ? '#30d158' : pct > 0.33 ? '#356BFF' : 'var(--b2)', transition: 'height .3s' }} />
-                  <span style={{ fontSize: 9, color: 'var(--t4)' }}>{label}</span>
+      {/* ═══ Body ═══════════════════════════════════════════════════════════ */}
+      <div className="bento-grid bento-sidebar" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 20px', gridAutoRows: 'min-content' }}>
+        {/* ─── MAIN COLUMN ─────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          {/* Hoje */}
+          <Card>
+            <CardHeader
+              icon={<FiCheckCircle size={13} />}
+              title="Hoje"
+              accent="#356BFF"
+              right={
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)' }}>
+                  {todayTasks.filter(t => t.status === 'done').length}/{todayCount}
+                </span>
+              }
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {todayTasks.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '22px 0', color: 'var(--t4)', fontSize: 12 }}>Dia livre. Aproveite!</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {todayTasks.slice(0, 8).map((task, i) => (
+                    <motion.div key={task.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
+                      <TaskRow
+                        task={task}
+                        color={companyColor(task.companyId)}
+                        title={getTaskTitle(task, companies, subClients)}
+                        companyName={companyNameFn(task.companyId)}
+                        onClick={() => onTaskClick(task)}
+                      />
+                    </motion.div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Inbox */}
-        {inboxTasks.length > 0 && (
-          <div style={{ background: 'rgba(53,107,255,0.05)', border: '1px solid rgba(53,107,255,0.15)', borderRadius: 16, padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#64C4FF', marginBottom: 14 }}>
-              <FiInbox size={12} /> Inbox ({inboxTasks.length})
+              )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {inboxTasks.slice(0, 5).map((task, i) => {
-                const color = companyColor(task.companyId);
-                const title = getTaskTitle(task, companies, subClients);
-                return (
-                  <motion.button key={task.id} onClick={() => onTaskClick(task)}
-                    initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-                    style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: `${color}10`, border: `1px solid ${color}25`, cursor: 'pointer', transition: 'all .15s' }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = `${color}22`)}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = `${color}10`)}
-                  >
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 11, fontWeight: 500, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
-                    <span style={{ fontSize: 9, color: '#64C4FF', background: 'rgba(53,107,255,0.12)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>inbox</span>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+          </Card>
 
-      {/* Notas Rápidas */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        style={{ background: 'var(--s1)', border: '1px solid var(--b1)', borderRadius: 16, padding: 20, marginBottom: 20 }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <FiEdit3 size={12} style={{ color: '#64C4FF' }} />
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#64C4FF' }}>
-            Notas Rápidas
-          </span>
-          {quickNotes.length > 0 && (() => {
-            const pending = quickNotes.filter(n => !n.checked).length;
-            return (
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--t4)', background: 'var(--s2)', borderRadius: 99, padding: '1px 6px' }}>
-                {pending} pendente{pending !== 1 ? 's' : ''}
-              </span>
-            );
-          })()}
-        </div>
-
-        {/* Input + chips numa linha só */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <input
-              value={noteInput}
-              onChange={e => setNoteInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAddNote(); }}
-              placeholder="Nova nota..."
-              style={{
-                width: 180, padding: '6px 10px', borderRadius: 99,
-                border: '1px solid var(--b2)', background: 'var(--ib)',
-                color: 'var(--t1)', fontSize: 12, outline: 'none',
-              }}
+          {/* Esta semana */}
+          <Card>
+            <CardHeader
+              icon={<FiTrendingUp size={13} />}
+              title="Esta semana"
+              accent={accentColor}
             />
-            <button
-              onClick={handleAddNote}
-              disabled={!noteInput.trim()}
-              style={{
-                width: 28, height: 28, borderRadius: 99, flexShrink: 0,
-                background: noteInput.trim() ? '#356BFF' : 'var(--s2)',
-                border: 'none', cursor: noteInput.trim() ? 'pointer' : 'default',
-                color: noteInput.trim() ? '#fff' : 'var(--t4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all .15s',
-              }}
-            >
-              <FiPlus size={13} />
-            </button>
-          </div>
+            <div style={{ padding: '14px 16px 16px' }}>
+              <WeeklyBars tasks={tasks} accentColor={accentColor} accentRgb={accentRgb} />
+            </div>
+          </Card>
 
-          {/* Divisor vertical */}
-          {quickNotes.length > 0 && (
-            <div style={{ width: 1, height: 20, background: 'var(--b2)', flexShrink: 0 }} />
-          )}
+          {/* CRM em aberto */}
+          <Card>
+            <CardHeader
+              icon={<FiUsers size={13} />}
+              title="CRM em aberto"
+              accent="#bf5af2"
+              right={
+                <button onClick={() => onNavigate('crm')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  Ver <FiArrowRight size={11} />
+                </button>
+              }
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {sortedOpenLeads.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '22px 0', color: 'var(--t4)', fontSize: 12 }}>Nenhum lead em aberto.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {sortedOpenLeads.map((lead, i) => {
+                    const stageColor = LEAD_STAGE_COLOR[lead.stage];
+                    return (
+                      <motion.button
+                        key={lead.id}
+                        initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+                        onClick={() => onNavigate('crm')}
+                        style={{
+                          width: '100%', textAlign: 'left',
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 10px', borderRadius: 8,
+                          background: 'transparent', border: '1px solid transparent',
+                          cursor: 'pointer', transition: 'background .12s',
+                        }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor, flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {lead.name}
+                        </span>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: stageColor, flexShrink: 0 }}>
+                          {LEAD_STAGE_LABEL[lead.stage]}
+                        </span>
+                        {lead.temperature === 'quente' && (
+                          <span style={{ fontSize: 11 }}>🔥</span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
 
-          {/* Chips — sortable */}
-          <DndContext sensors={noteSensors} collisionDetection={closestCenter} onDragEnd={handleNoteDragEnd}>
-            <SortableContext items={quickNotes.map(n => n.id)} strategy={rectSortingStrategy}>
-              {quickNotes.map(note => (
-                <HomeNoteRow
-                  key={note.id}
-                  id={note.id}
-                  text={note.text}
-                  checked={note.checked}
-                  onToggle={() => { toggleQuickNote(note.id); playCheck(); }}
-                  onDelete={() => { deleteQuickNote(note.id); playDelete(); }}
-                />
+          {/* Próximos 7 dias */}
+          <Card>
+            <CardHeader
+              icon={<FiClock size={13} />}
+              title="Próximos 7 dias"
+              accent="#64d2ff"
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {upcomingByDay.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '22px 0', color: 'var(--t4)', fontSize: 12 }}>Agenda livre.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {upcomingByDay.map(group => (
+                    <div key={group.date}>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--t4)', padding: '0 10px 6px' }}>
+                        {dayLabel(group.date)}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {group.tasks.map(task => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            color={companyColor(task.companyId)}
+                            title={getTaskTitle(task, companies, subClients)}
+                            companyName={companyNameFn(task.companyId)}
+                            onClick={() => onTaskClick(task)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* ─── RIGHT COLUMN ───────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          {/* Pomodoro mini-stat */}
+          <Card>
+            <CardHeader
+              icon={<FiClock size={13} />}
+              title="Pomodoro"
+              accent="#ff453a"
+            />
+            <div style={{ padding: '14px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t4)' }}>Hoje</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px', lineHeight: 1.1 }}>
+                  {pomodoroToday}<span style={{ fontSize: 11, color: 'var(--t3)', fontWeight: 600, marginLeft: 3 }}>min</span>
+                </div>
+              </div>
+              <div style={{ width: 1, height: 32, background: 'var(--b1)' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t4)' }}>Semana</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px', lineHeight: 1.1 }}>
+                  {pomodoroWeek}<span style={{ fontSize: 11, color: 'var(--t3)', fontWeight: 600, marginLeft: 3 }}>min</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Atrasadas */}
+          <Card style={{ border: '1px solid rgba(255,69,58,0.22)' }}>
+            <CardHeader
+              icon={<FiAlertTriangle size={13} />}
+              title="Atrasadas"
+              accent="#ff453a"
+              right={overdue.length > 0 ? (
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#ff453a' }}>{overdue.length}</span>
+              ) : undefined}
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {overdue.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--t4)', fontSize: 12 }}>Nada em atraso.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {overdue.map((task, i) => (
+                    <motion.div key={task.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
+                      <button
+                        onClick={() => onTaskClick(task)}
+                        style={{
+                          width: '100%', textAlign: 'left',
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 10px', borderRadius: 8,
+                          background: 'transparent', border: '1px solid transparent',
+                          cursor: 'pointer', transition: 'background .12s',
+                          minWidth: 0,
+                        }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.08)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ff453a', flexShrink: 0, boxShadow: '0 0 6px rgba(255,69,58,0.6)' }} />
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {getTaskTitle(task, companies, subClients)}
+                        </span>
+                        <span style={{ fontSize: 10, color: '#ff453a', fontWeight: 700, flexShrink: 0 }}>
+                          {format(parseISO(task.date), "d MMM", { locale: ptBR })}
+                        </span>
+                      </button>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Ideia da semana */}
+          <Card>
+            <CardHeader
+              icon={<FiZap size={13} />}
+              title="Ideia da semana"
+              accent="#ffd60a"
+              right={
+                <button onClick={() => onNavigate('ideias')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  Ver <FiArrowRight size={11} />
+                </button>
+              }
+            />
+            <div style={{ padding: '14px 16px 16px' }}>
+              {!ideaOfWeek ? (
+                <div style={{ textAlign: 'center', padding: '14px 0 6px', color: 'var(--t4)', fontSize: 12 }}>
+                  Nenhuma ideia ainda.
+                </div>
+              ) : (
+                <button
+                  onClick={() => onNavigate('ideias')}
+                  style={{
+                    width: '100%', textAlign: 'left',
+                    background: 'rgba(255,214,10,0.06)',
+                    border: '1px solid rgba(255,214,10,0.22)',
+                    borderRadius: 10, padding: '12px 14px',
+                    cursor: 'pointer', transition: 'all .15s',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.1)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.35)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.06)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.22)'; }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {ideaOfWeek.title || '(sem título)'}
+                  </div>
+                  {ideaOfWeek.description && (
+                    <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {ideaOfWeek.description}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: '#ffd60a', marginTop: 2 }}>
+                    Revisitar
+                  </div>
+                </button>
+              )}
+            </div>
+          </Card>
+
+          {/* Atalhos */}
+          <Card>
+            <CardHeader
+              icon={<FiArrowRight size={13} />}
+              title="Atalhos"
+              accent={accentColor}
+            />
+            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {([
+                { label: 'Empresas', icon: <FiBriefcase size={14} />, page: 'empresas' as PageType, color: '#64C4FF', rgb: '100,196,255' },
+                { label: 'CRM',      icon: <FiUsers size={14} />,     page: 'crm' as PageType,      color: '#bf5af2', rgb: '191,90,242' },
+                { label: 'To Do',    icon: <FiCheckSquare size={14} />, page: 'todo' as PageType,    color: '#30d158', rgb: '48,209,88' },
+                { label: 'Ideias',   icon: <FiZap size={14} />,       page: 'ideias' as PageType,   color: '#ffd60a', rgb: '255,214,10' },
+              ]).map(s => (
+                <button
+                  key={s.label}
+                  onClick={() => onNavigate(s.page)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '14px 8px', borderRadius: 10,
+                    background: `rgba(${s.rgb},0.06)`, border: `1px solid rgba(${s.rgb},0.18)`,
+                    color: s.color, cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `rgba(${s.rgb},0.12)`; (e.currentTarget as HTMLElement).style.borderColor = `rgba(${s.rgb},0.35)`; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `rgba(${s.rgb},0.06)`; (e.currentTarget as HTMLElement).style.borderColor = `rgba(${s.rgb},0.18)`; }}
+                >
+                  {s.icon}
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase' }}>{s.label}</span>
+                </button>
               ))}
-            </SortableContext>
-          </DndContext>
-
-          {quickNotes.length === 0 && (
-            <span style={{ fontSize: 12, color: 'var(--t4)' }}>
-              Nenhuma nota ainda
-            </span>
-          )}
-        </div>
-      </motion.div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: overdue.length > 0 ? '1fr 1fr 1fr' : '1fr 1fr', gap: 20 }}>
-        {/* Overdue */}
-        {overdue.length > 0 && (
-          <div style={{ background: 'rgba(255,69,58,0.06)', border: '1px solid rgba(255,69,58,0.15)', borderRadius: 16, padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#ff453a', marginBottom: 14 }}>
-              <FiAlertTriangle size={12} /> Atrasadas ({overdue.length})
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {overdue.map((task, i) => {
-                const color = companyColor(task.companyId);
-                const title = getTaskTitle(task, companies, subClients);
-                return (
-                  <motion.button
-                    key={task.id}
-                    onClick={() => onTaskClick(task)}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    style={{
-                      width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', borderRadius: 10,
-                      background: 'rgba(255,69,58,0.08)', border: '1px solid rgba(255,69,58,0.2)',
-                      cursor: 'pointer', transition: 'all .15s',
-                    }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.15)')}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.08)')}
-                  >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 11, fontWeight: 500, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {title}
-                    </span>
-                    <span style={{ fontSize: 10, color: '#ff453a', fontWeight: 600, flexShrink: 0 }}>{task.date}</span>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Today */}
-        <div style={{ background: 'var(--s1)', border: '1px solid var(--b1)', borderRadius: 16, padding: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-            Hoje
-          </div>
-          {todayTasks.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--t4)', fontSize: 13 }}>Dia livre! ✨</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {todayTasks.map((task, i) => {
-                const color = companyColor(task.companyId);
-                const title = getTaskTitle(task, companies, subClients);
-                return (
-                  <motion.button
-                    key={task.id}
-                    onClick={() => onTaskClick(task)}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    style={{
-                      width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', borderRadius: 10, background: `${color}15`,
-                      border: `1px solid ${color}30`, cursor: 'pointer', transition: 'all .15s',
-                    }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = `${color}25`)}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = `${color}15`)}
-                  >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: 'var(--t1)', textDecoration: task.status === 'done' ? 'line-through' : 'none', opacity: task.status === 'done' ? 0.5 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {title}
-                    </span>
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99,
-                      background: `${STATUS_COLOR[task.status]}22`, color: STATUS_COLOR[task.status],
-                    }}>
-                      {STATUS_LABEL[task.status]}
-                    </span>
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Upcoming */}
-        <div style={{ background: 'var(--s1)', border: '1px solid var(--b1)', borderRadius: 16, padding: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-            Próximos 7 dias
-          </div>
-          {upcoming.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--t4)', fontSize: 13 }}>Agenda livre 🎉</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {upcoming.map((task, i) => {
-                const color = companyColor(task.companyId);
-                const title = getTaskTitle(task, companies, subClients);
-                return (
-                  <motion.button
-                    key={task.id}
-                    onClick={() => onTaskClick(task)}
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    style={{
-                      width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', borderRadius: 10, background: 'var(--s1)',
-                      border: '1px solid var(--b1)', cursor: 'pointer', transition: 'all .15s',
-                    }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s1)')}
-                  >
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
-                    <span style={{ fontSize: 10, color: 'var(--t4)', flexShrink: 0 }}>
-                      {format(parseISO(task.date), "d MMM", { locale: ptBR })}
-                    </span>
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
+          </Card>
         </div>
       </div>
 
-      {showConfetti && (
-        <div className="confetti-container">
-          {Array.from({ length: 30 }).map((_, i) => (
-            <div
-              key={i}
-              className="confetti-piece"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${50 + Math.random() * 30}%`,
-                background: ['#ff453a', '#ff9f0a', '#30d158', '#64C4FF', '#bf5af2', '#356BFF'][i % 6],
-                animationDelay: `${Math.random() * 0.5}s`,
-                animationDuration: `${1.5 + Math.random() * 1}s`,
-              }}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

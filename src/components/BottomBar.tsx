@@ -1,9 +1,11 @@
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FiChevronLeft, FiChevronRight, FiTarget, FiX } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiUploadCloud } from 'react-icons/fi';
 import { MdViewKanban, MdCalendarMonth, MdViewWeek, MdCalendarViewDay } from 'react-icons/md';
+import { motion } from 'framer-motion';
+import { useId } from 'react';
 import { useTaskStore } from '../store/tasks';
-import type { ViewMode, Priority, TaskType } from '../types';
+import type { ViewMode } from '../types';
 
 const VIEWS: { id: ViewMode; label: string; Icon: React.ElementType }[] = [
   { id: 'kanban', label: 'Kanban', Icon: MdViewKanban },
@@ -12,33 +14,23 @@ const VIEWS: { id: ViewMode; label: string; Icon: React.ElementType }[] = [
   { id: 'month',  label: 'Mês',    Icon: MdCalendarMonth },
 ];
 
-const PRIORITY_FILTERS: { value: Priority; label: string; color: string }[] = [
-  { value: 'alta',  label: 'ALT', color: '#ff453a' },
-  { value: 'media', label: 'MED', color: '#ff9f0a' },
-  { value: 'baixa', label: 'BAI', color: '#64C4FF' },
-];
+const barHexToRgb = (hex: string): string => {
+  const v = hex.replace('#', '');
+  const c = v.length === 3 ? v.split('').map(x => x + x).join('') : v;
+  return `${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)}`;
+};
 
-const TYPE_FILTERS: { value: TaskType; label: string }[] = [
-  { value: 'feed',      label: 'Feed' },
-  { value: 'story',     label: 'Story' },
-  { value: 'carrossel', label: 'Carro' },
-  { value: 'reels',     label: 'Reels' },
-  { value: 'thumb',     label: 'Thumb' },
-];
+interface BottomBarProps { onImportICS(): void }
 
-export function BottomBar() {
+export function BottomBar({ onImportICS }: BottomBarProps) {
   const {
     viewMode, setViewMode, currentDate, setCurrentDate,
-    tasks, selectedCompanies,
-    hideDone, toggleHideDone,
-    filterPriority, setFilterPriority,
-    filterSubClient,
-    filterTaskType, setFilterTaskType,
-    clearAllFilters,
+    tasks, selectedCompanies, accentColor,
   } = useTaskStore();
+  const accentRgb = barHexToRgb(accentColor);
+  const indicatorId = useId();
 
-  const goToday   = () => setCurrentDate(new Date());
-  const focusMode = () => { setViewMode('day'); setCurrentDate(new Date()); };
+  const goToday = () => setCurrentDate(new Date());
 
   const goPrev = () => {
     if (viewMode === 'month' || viewMode === 'kanban') setCurrentDate(subMonths(currentDate, 1));
@@ -75,142 +67,92 @@ export function BottomBar() {
     return { total: base.length, done: base.filter(t => t.status === 'done').length };
   })();
 
-  const anyFilterActive = hideDone || !!filterPriority || !!filterSubClient || !!filterTaskType;
-
-  const navBtn = (onClick: () => void, children: React.ReactNode) => (
+  const navBtn = (onClick: () => void, children: React.ReactNode, title?: string) => (
     <button
       onClick={onClick}
+      title={title}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '6px 8px', borderRadius: 8, background: 'transparent',
-        border: 'none', cursor: 'pointer', color: 'var(--t2)',
+        width: 32, height: 32, borderRadius: 8, background: 'transparent',
+        border: 'none', cursor: 'pointer', color: 'var(--t3)',
         transition: 'all .15s',
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
     >
       {children}
     </button>
   );
 
+  const donePct = periodCount.total > 0 ? (periodCount.done / periodCount.total) * 100 : 0;
+
   return (
     <div style={{
       height: 54,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 20px',
-      background: 'var(--modal-bg)',
-      borderTop: '1px solid var(--b1)',
-      backdropFilter: 'blur(12px)',
-      flexShrink: 0, gap: 12,
+      padding: '0 16px',
+      flexShrink: 0, gap: 12, minWidth: 0,
     }}>
-      {/* Left: date nav + count */}
+      {/* Left: date nav + title + count pill */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
-        {navBtn(goPrev, <FiChevronLeft size={16} />)}
-        {navBtn(goToday, <span style={{ fontSize: 12, fontWeight: 500, padding: '0 2px' }}>Hoje</span>)}
-        {navBtn(goNext, <FiChevronRight size={16} />)}
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--t2)', marginLeft: 4, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {navBtn(goPrev, <FiChevronLeft size={15} />, 'Anterior')}
+        <button
+          onClick={goToday}
+          style={{
+            padding: '6px 12px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--b2)',
+            color: 'var(--t2)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            transition: 'all .15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = accentColor; (e.currentTarget as HTMLElement).style.color = accentColor; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
+        >
+          Hoje
+        </button>
+        {navBtn(goNext, <FiChevronRight size={15} />, 'Próximo')}
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', marginLeft: 8, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {getTitle()}
         </span>
-        {viewMode !== 'kanban' && (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'var(--s1)', color: 'var(--t3)', marginLeft: 6, flexShrink: 0 }}>
-            {periodCount.done}/{periodCount.total}
-          </span>
+        {viewMode !== 'kanban' && periodCount.total > 0 && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 8, flexShrink: 0,
+            padding: '3px 10px', borderRadius: 99,
+            background: donePct === 100 ? 'rgba(48,209,88,0.14)' : `rgba(${accentRgb}, 0.14)`,
+            border: `1px solid ${donePct === 100 ? 'rgba(48,209,88,0.28)' : `rgba(${accentRgb}, 0.28)`}`,
+          }}>
+            <div style={{ width: 24, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${donePct}%`, background: donePct === 100 ? '#30d158' : accentColor, boxShadow: donePct === 100 ? '0 0 6px rgba(48,209,88,0.6)' : `0 0 6px rgba(${accentRgb}, 0.6)` }} />
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 700, color: donePct === 100 ? '#30d158' : accentColor }}>
+              {periodCount.done}/{periodCount.total}
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Center: filters */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, flexWrap: 'nowrap' }}>
+      {/* Center: Import ICS (only on calendar views) */}
+      {viewMode !== 'kanban' && (
         <button
-          onClick={focusMode}
-          title="Focar em hoje"
+          onClick={onImportICS}
+          title="Importar .ics do Apple Calendar"
           style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '4px 10px', borderRadius: 8, fontSize: 11,
-            background: 'transparent', border: '1px solid var(--b2)',
-            color: 'var(--t3)', cursor: 'pointer', transition: 'all .15s',
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 9,
+            background: 'var(--s2)', border: '1px solid var(--b2)',
+            cursor: 'pointer', color: 'var(--t3)',
+            fontSize: 11, fontWeight: 600, transition: 'all .15s',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#356BFF'; (e.currentTarget as HTMLElement).style.borderColor = '#356BFF55'; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = accentColor; (e.currentTarget as HTMLElement).style.borderColor = accentColor; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; }}
         >
-          <FiTarget size={11} /> Hoje
+          <FiUploadCloud size={12} /> Importar .ics
         </button>
+      )}
 
-        <button
-          onClick={toggleHideDone}
-          style={{
-            padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: hideDone ? 600 : 400,
-            background: hideDone ? 'rgba(48,209,88,0.12)' : 'transparent',
-            border: `1px solid ${hideDone ? '#30d15855' : 'var(--b2)'}`,
-            color: hideDone ? '#30d158' : 'var(--t3)',
-            cursor: 'pointer', transition: 'all .15s',
-          }}
-        >
-          ✓ Feito
-        </button>
-
-        {PRIORITY_FILTERS.map(({ value, label, color }) => {
-          const active = filterPriority === value;
-          return (
-            <button
-              key={value}
-              onClick={() => setFilterPriority(value)}
-              style={{
-                padding: '4px 9px', borderRadius: 8, fontSize: 10, fontWeight: active ? 700 : 400,
-                background: active ? `${color}18` : 'transparent',
-                border: `1px solid ${active ? `${color}55` : 'var(--b2)'}`,
-                color: active ? color : 'var(--t3)',
-                cursor: 'pointer', transition: 'all .15s',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-
-        {TYPE_FILTERS.map(({ value, label }) => {
-          const active = filterTaskType === value;
-          return (
-            <button
-              key={value}
-              onClick={() => setFilterTaskType(value)}
-              style={{
-                padding: '4px 9px', borderRadius: 8, fontSize: 10, fontWeight: active ? 700 : 400,
-                background: active ? 'rgba(100,196,255,0.12)' : 'transparent',
-                border: `1px solid ${active ? 'rgba(100,196,255,0.4)' : 'var(--b1)'}`,
-                color: active ? '#64C4FF' : 'var(--t4)',
-                cursor: 'pointer', transition: 'all .15s',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-
-        {anyFilterActive && (
-          <button
-            onClick={clearAllFilters}
-            title="Limpar filtros"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '4px 8px', borderRadius: 8, fontSize: 10,
-              background: 'rgba(53,107,255,0.12)',
-              border: '1px solid rgba(53,107,255,0.3)',
-              color: '#64C4FF', cursor: 'pointer', transition: 'all .15s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(53,107,255,0.2)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(53,107,255,0.12)'; }}
-          >
-            <FiX size={10} /> Limpar
-          </button>
-        )}
-      </div>
-
-      {/* Right: view switcher */}
+      {/* Right: view switcher (Segmented-style com indicador deslizante) */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 2,
-        background: 'var(--s1)',
-        border: '1px solid var(--b2)',
-        borderRadius: 12, padding: 3, flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: 0, position: 'relative',
+        background: 'var(--s2)', border: '1px solid var(--b2)',
+        borderRadius: 99, padding: 3, flexShrink: 0,
       }}>
         {VIEWS.map(({ id, label, Icon }) => {
           const active = viewMode === id;
@@ -219,18 +161,29 @@ export function BottomBar() {
               key={id}
               onClick={() => setViewMode(id)}
               style={{
+                position: 'relative', zIndex: 1,
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '6px 14px', borderRadius: 9,
-                background: active ? '#356BFF' : 'transparent',
-                border: 'none', cursor: 'pointer',
-                color: active ? '#fff' : 'var(--t2)',
-                fontSize: 12, fontWeight: active ? 600 : 400,
-                transition: 'all .15s',
-                boxShadow: active ? '0 2px 10px rgba(53,107,255,0.4)' : 'none',
+                padding: '6px 14px', borderRadius: 99,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: active ? '#fff' : 'var(--t3)',
+                fontSize: 11, fontWeight: 600,
+                transition: 'color .18s',
+                whiteSpace: 'nowrap',
               }}
-              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
             >
+              {active && (
+                <motion.div
+                  layoutId={`view-indicator-${indicatorId}`}
+                  style={{
+                    position: 'absolute', inset: 0, zIndex: -1,
+                    background: accentColor, borderRadius: 99,
+                    boxShadow: `0 0 14px -2px rgba(${accentRgb}, 0.7), 0 0 28px -8px rgba(${accentRgb}, 0.5)`,
+                  }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                />
+              )}
               <Icon size={13} /> {label}
             </button>
           );

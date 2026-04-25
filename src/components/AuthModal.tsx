@@ -32,7 +32,7 @@ export function AuthModal({ onClose }: { onClose?: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         style={{
           position: 'relative',
-          background: 'var(--modal-bg)', border: '1px solid var(--b2)',
+          background: 'var(--modal-bg)',
           borderRadius: 20, padding: '36px 32px', width: 360,
           boxShadow: '0 30px 80px rgba(0,0,0,0.4)',
         }}
@@ -99,7 +99,7 @@ export function AuthModal({ onClose }: { onClose?: () => void }) {
                   placeholder="email@exemplo.com"
                   style={{
                     width: '100%', padding: '10px 12px 10px 36px', borderRadius: 10,
-                    background: 'var(--s1)', border: '1px solid var(--b2)',
+                    background: 'var(--s1)',
                     color: 'var(--t1)', fontSize: 13, outline: 'none',
                     boxSizing: 'border-box',
                   }}
@@ -120,7 +120,7 @@ export function AuthModal({ onClose }: { onClose?: () => void }) {
                   placeholder="••••••••"
                   style={{
                     width: '100%', padding: '10px 12px 10px 36px', borderRadius: 10,
-                    background: 'var(--s1)', border: '1px solid var(--b2)',
+                    background: 'var(--s1)',
                     color: 'var(--t1)', fontSize: 13, outline: 'none',
                     boxSizing: 'border-box',
                   }}
@@ -169,12 +169,12 @@ export function AuthModal({ onClose }: { onClose?: () => void }) {
               onClick={() => setGuestMode(true)}
               style={{
                 padding: '10px', borderRadius: 12,
-                background: 'var(--s2)', border: '1px solid var(--b2)',
+                background: 'var(--s2)',
                 color: 'var(--t2)', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                transition: 'border-color .15s, color .15s',
+                transition: 'color .15s',
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b3)'; (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
             >
               Continuar como Convidado
             </button>

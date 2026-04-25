@@ -11,4 +11,9 @@ export default defineConfig(({ command }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+  },
 }))

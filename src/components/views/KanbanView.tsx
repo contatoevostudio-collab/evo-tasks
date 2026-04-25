@@ -14,6 +14,7 @@ import {
   useSensors,
   useDroppable,
 } from '@dnd-kit/core';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
 import {
   SortableContext,
   useSortable,
@@ -21,7 +22,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Task, TaskStatus, Priority } from '../../types';
+import type { Task, TaskStatus, Priority, TaskCategory } from '../../types';
 import { getTaskTitle } from '../../types';
 import { useTaskStore } from '../../store/tasks';
 import { playDrop } from '../../lib/sounds';
@@ -46,7 +47,7 @@ function sortByPriority(tasks: Task[]): Task[] {
 }
 
 function KanbanCard({ task, onClick, compact }: { task: Task; onClick: (task: Task) => void; compact: boolean }) {
-  const { companies, subClients } = useTaskStore();
+  const { companies, subClients, accentColor } = useTaskStore();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
@@ -71,8 +72,6 @@ function KanbanCard({ task, onClick, compact }: { task: Task; onClick: (task: Ta
         exit={{ opacity: 0, scale: 0.9 }}
         style={{
           background: 'var(--s1)',
-          border: isOverdue ? '1px solid rgba(255,69,58,0.3)' : '1px solid var(--b2)',
-          borderLeft: `3px solid ${isOverdue ? '#ff453a' : color}`,
           borderRadius: 12, padding: compact ? '8px 10px' : '12px 14px',
           cursor: 'pointer', transition: 'all .15s',
         }}
@@ -113,7 +112,7 @@ function KanbanCard({ task, onClick, compact }: { task: Task; onClick: (task: Ta
               {!compact && (
                 <span style={{
                   fontSize: 10,
-                  color: isOverdue ? '#ff453a' : isTaskToday ? '#356BFF' : 'var(--t4)',
+                  color: isOverdue ? '#ff453a' : isTaskToday ? accentColor : 'var(--t4)',
                   fontWeight: isOverdue || isTaskToday ? 600 : 400,
                 }}>
                   {isOverdue ? '⚠ ' : ''}{format(parseISO(task.date), "d MMM", { locale: ptBR })}
@@ -147,9 +146,64 @@ function KanbanCard({ task, onClick, compact }: { task: Task; onClick: (task: Ta
                 ))}
               </div>
             )}
+
+            {/* Art version / legenda / referência tags */}
+            {((task.versions && task.versions.length > 0) || task.copy || (task.references && task.references.length > 0)) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                {task.versions?.map((v, i) => (
+                  <span key={i} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(53,107,255,0.15)', color: '#64C4FF', fontWeight: 600 }}>
+                    {v.label}
+                  </span>
+                ))}
+                {task.copy && (
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(48,209,88,0.12)', color: '#30d158', fontWeight: 600 }}>
+                    Legenda
+                  </span>
+                )}
+                {task.references && task.references.length > 0 && (
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(191,90,242,0.12)', color: '#bf5af2', fontWeight: 600 }}>
+                    Referência
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+function SwimlaneCell({
+  companyId, status, tasks, onTaskClick, compact,
+}: {
+  companyId: string; status: TaskStatus; tasks: Task[];
+  onTaskClick: (task: Task) => void; compact: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `sw:${companyId}:${status}` });
+  const { accentColor } = useTaskStore();
+  const accentRgb = (() => { const v = accentColor.replace('#', ''); const c = v.length === 3 ? v.split('').map(x => x+x).join('') : v; return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`; })();
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        background: isOver ? `rgba(${accentRgb}, 0.12)` : 'var(--s1)',
+        border: `1px solid ${isOver ? `rgba(${accentRgb}, 0.4)` : 'var(--b2)'}`,
+        boxShadow: isOver ? `0 0 18px -4px rgba(${accentRgb}, 0.4)` : 'none',
+        borderRadius: 10, minHeight: 60, padding: 8,
+        display: 'flex', flexDirection: 'column', gap: 6,
+        transition: 'background .15s, border-color .15s, box-shadow .15s',
+      }}
+    >
+      <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        {tasks.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 11, color: isOver ? accentColor : 'var(--t4)', fontWeight: isOver ? 600 : 400, transition: 'color .15s' }}>
+            {isOver ? 'Solte aqui' : '—'}
+          </div>
+        ) : tasks.map(task => (
+          <KanbanCard key={task.id} task={task} onClick={onTaskClick} compact={compact} />
+        ))}
+      </SortableContext>
     </div>
   );
 }
@@ -164,7 +218,8 @@ function Column({
   compact: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
-  const { companies } = useTaskStore();
+  const { companies, accentColor } = useTaskStore();
+  const accentRgb = (() => { const v = accentColor.replace('#', ''); const c = v.length === 3 ? v.split('').map(x => x+x).join('') : v; return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`; })();
 
   const companyCounts = companies
     .map(c => ({ company: c, count: tasks.filter(t => t.companyId === c.id).length }))
@@ -174,11 +229,10 @@ function Column({
     <div style={{
       display: 'flex', flexDirection: 'column', flex: 1,
       minWidth: compact ? 220 : 280, maxWidth: compact ? 320 : 400, borderRadius: 16, overflow: 'hidden',
-      background: isOver ? 'rgba(53,107,255,0.08)' : 'var(--s1)',
-      border: `1px solid ${isOver ? `${color}55` : 'var(--b2)'}`,
+      background: isOver ? `rgba(${accentRgb}, 0.08)` : 'var(--s1)',
       transition: 'all 0.15s',
     }}>
-      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: '1px solid var(--b1)' }}>
+      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon size={13} style={{ color }} />
           <span style={{ fontSize: 13, fontWeight: 700, color }}>{label}</span>
@@ -237,11 +291,13 @@ function Column({
 }
 
 export function KanbanView({ onTaskClick, onAddTask }: Props) {
+  const store = useTaskStore();
   const {
     tasks, selectedCompanies, updateTaskStatus, hideDone, filterPriority,
-    filterSubClient, filterTaskType, companies, subClients,
-    kanbanOrder, setKanbanOrder,
-  } = useTaskStore();
+    filterSubClient, filterTaskType, filterTaskCategory, setFilterTaskCategory,
+    companies, subClients, kanbanOrder, setKanbanOrder,
+  } = store;
+  const accentColor = store.accentColor;
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [swimlanes, setSwimlanes] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -255,7 +311,8 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
     !t.inbox &&
     (!filterPriority || t.priority === filterPriority) &&
     (!filterSubClient || t.subClientId === filterSubClient) &&
-    (!filterTaskType || t.taskType === filterTaskType)
+    (!filterTaskType || t.taskType === filterTaskType) &&
+    (!filterTaskCategory || (t.taskCategory ?? 'criacao') === filterTaskCategory)
   );
 
   const getColumnTasks = (status: TaskStatus) => {
@@ -284,8 +341,20 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
     const activeTaskObj = tasks.find(t => t.id === activeId);
     if (!activeTaskObj) return;
 
+    // Swimlane cell droppable — "sw:companyId:status"
+    if (overId.startsWith('sw:')) {
+      const parts = overId.split(':');
+      const newStatus = parts[2] as TaskStatus;
+      if (!validStatuses.includes(newStatus)) return;
+      if (activeTaskObj.status === newStatus) return;
+      updateTaskStatus(activeId, newStatus);
+      setKanbanOrder(activeTaskObj.status, kanbanOrder[activeTaskObj.status].filter(id => id !== activeId));
+      setKanbanOrder(newStatus, [...kanbanOrder[newStatus].filter(id => id !== activeId), activeId]);
+      return;
+    }
+
     if (validStatuses.includes(overId as TaskStatus)) {
-      // Dropped on column droppable
+      // Dropped on column droppable (non-swimlane mode)
       const newStatus = overId as TaskStatus;
       if (activeTaskObj.status === newStatus) return;
 
@@ -327,6 +396,25 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
     !c.deletedAt && selectedCompanies.includes(c.id) && filteredTasks.some(t => t.companyId === c.id)
   );
 
+  // KPIs (calculados a partir de filteredTasks, sem o hideDone)
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const weekAgo = format(addDays(new Date(), -7), 'yyyy-MM-dd');
+  const kpiTotalOpen = filteredTasks.filter(t => t.status !== 'done').length;
+  const kpiOverdue = filteredTasks.filter(t => t.status !== 'done' && t.date < today).length;
+  const kpiHighPrio = filteredTasks.filter(t => t.status !== 'done' && t.priority === 'alta').length;
+  const kpiDoneWeek = filteredTasks.filter(t => t.status === 'done' && t.date >= weekAgo).length;
+  const kpiDoing = filteredTasks.filter(t => t.status === 'doing').length;
+
+  const accentRgbLocal = (() => { const v = accentColor.replace('#', ''); const c = v.length === 3 ? v.split('').map(x => x+x).join('') : v; return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`; })();
+
+  const KPIS = [
+    { label: 'Aberto',      value: kpiTotalOpen, color: accentColor, rgb: accentRgbLocal },
+    { label: 'Atrasadas',   value: kpiOverdue,   color: '#ff453a',   rgb: '255,69,58' },
+    { label: 'Em andamento', value: kpiDoing,    color: '#64C4FF',   rgb: '100,196,255' },
+    { label: 'Alta prio',   value: kpiHighPrio,  color: '#ff9f0a',   rgb: '255,159,10' },
+    { label: 'Feitas 7d',   value: kpiDoneWeek,  color: '#30d158',   rgb: '48,209,88' },
+  ];
+
   const toggleBtn = (active: boolean, onClick: () => void, title: string, Icon: React.ElementType, label: string) => (
     <button
       onClick={onClick}
@@ -334,9 +422,9 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-        background: active ? '#356BFF22' : 'var(--s1)',
-        border: active ? '1px solid #356BFF55' : '1px solid var(--b2)',
-        color: active ? '#64C4FF' : 'var(--t3)',
+        background: active ? `${accentColor}22` : 'var(--s1)',
+        border: active ? `1px solid ${accentColor}55` : '1px solid var(--b2)',
+        color: active ? accentColor : 'var(--t3)',
         cursor: 'pointer', transition: 'all .15s',
       }}
     >
@@ -344,10 +432,50 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
     </button>
   );
 
+  const TASK_CATEGORIES: { id: TaskCategory; label: string; color: string }[] = [
+    { id: 'criacao', label: 'Criação',  color: accentColor },
+    { id: 'reuniao', label: 'Reunião',  color: '#ff9f0a' },
+    { id: 'pessoal', label: 'Pessoal',  color: '#30d158' },
+    { id: 'eventos', label: 'Eventos',  color: '#bf5af2' },
+  ];
+
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} modifiers={[snapCenterToCursor]}>
+      {/* KPI bar */}
+      <div style={{ padding: '10px 24px 0', display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+        {KPIS.map((k) => (
+          <div key={k.label} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '6px 12px', borderRadius: 10,
+            background: 'var(--s1)', border: `1px solid rgba(${k.rgb}, 0.2)`,
+            backgroundImage: `radial-gradient(circle at 110% 100%, rgba(${k.rgb}, 0.12), transparent 65%)`,
+            boxShadow: `0 0 14px -6px rgba(${k.rgb}, 0.3)`,
+          }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t4)' }}>{k.label}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: k.color, textShadow: k.value > 0 ? `0 0 6px rgba(${k.rgb}, 0.5)` : 'none' }}>{k.value}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Toolbar */}
-      <div style={{ padding: '10px 24px 0', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+      <div style={{ padding: '10px 24px 0', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        {/* Category filters */}
+        <button onClick={() => setFilterTaskCategory(null)}
+          style={{ padding: '3px 12px', borderRadius: 99, fontSize: 11, fontWeight: filterTaskCategory === null ? 700 : 400, border: 'none', cursor: 'pointer', transition: 'all .15s', background: filterTaskCategory === null ? 'rgba(100,196,255,0.15)' : 'transparent', color: filterTaskCategory === null ? '#64C4FF' : 'var(--t4)' }}
+          onMouseEnter={e => { if (filterTaskCategory !== null) (e.currentTarget as HTMLElement).style.color = '#64C4FF'; }}
+          onMouseLeave={e => { if (filterTaskCategory !== null) (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+        >Todos</button>
+        {TASK_CATEGORIES.map(cat => {
+          const active = filterTaskCategory === cat.id;
+          return (
+            <button key={cat.id} onClick={() => setFilterTaskCategory(cat.id)}
+              style={{ padding: '3px 12px', borderRadius: 99, fontSize: 11, fontWeight: active ? 700 : 400, border: 'none', cursor: 'pointer', transition: 'all .15s', background: active ? `${cat.color}22` : 'transparent', color: active ? cat.color : 'var(--t4)' }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = cat.color; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+            >{cat.label}</button>
+          );
+        })}
+        <div style={{ flex: 1 }} />
         {toggleBtn(compact, () => setCompact(s => !s), 'Modo compacto', FiMinimize2, 'Compacto')}
         {toggleBtn(swimlanes, () => setSwimlanes(s => !s), 'Agrupar por empresa', FiLayers, 'Swimlanes')}
       </div>
@@ -389,13 +517,14 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
                   filteredTasks.filter(t => t.companyId === company.id && t.status === status && (!hideDone || status !== 'done'))
                 );
                 return (
-                  <div key={status} style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 10, minHeight: 60, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {colTasks.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 11, color: 'var(--t4)' }}>—</div>
-                    ) : colTasks.map(task => (
-                      <KanbanCard key={task.id} task={task} onClick={onTaskClick} compact={compact} />
-                    ))}
-                  </div>
+                  <SwimlaneCell
+                    key={status}
+                    companyId={company.id}
+                    status={status}
+                    tasks={colTasks}
+                    onTaskClick={onTaskClick}
+                    compact={compact}
+                  />
                 );
               })}
             </div>
@@ -403,21 +532,48 @@ export function KanbanView({ onTaskClick, onAddTask }: Props) {
         </div>
       )}
 
-      <DragOverlay>
-        {activeTask && (
-          <div style={{ opacity: 0.9, transform: 'rotate(2deg) scale(1.04)' }}>
+      <DragOverlay dropAnimation={null}>
+        {activeTask && (() => {
+          const company = companies.find(c => c.id === activeTask.companyId);
+          const sub = subClients.find(s => s.id === activeTask.subClientId);
+          const color = activeTask.colorOverride ?? company?.color ?? '#636366';
+          return (
             <div style={{
               background: 'var(--s2)',
-              border: '1px solid var(--b3)',
-              borderLeft: `3px solid ${activeTask.colorOverride ?? companies.find(c => c.id === activeTask.companyId)?.color ?? '#356BFF'}`,
-              borderRadius: 12, padding: '12px 14px',
+              border: `1px solid ${accentColor}`,
+              borderRadius: 12,
+              padding: compact ? '8px 10px' : '12px 14px',
+              width: compact ? 220 : 280,
+              boxShadow: `0 16px 40px rgba(0,0,0,0.5), 0 0 24px -4px ${accentColor}66`,
+              cursor: 'grabbing',
             }}>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--t1)' }}>
-                {getTaskTitle(activeTask, companies, subClients)}
-              </p>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, marginTop: 4 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: compact ? 11 : 13, fontWeight: 500, lineHeight: 1.4, color: 'var(--t1)', wordBreak: 'break-word' }}>
+                    {getTaskTitle(activeTask, companies, subClients)}
+                  </p>
+                  {!compact && sub && <p style={{ fontSize: 11, marginTop: 3, color: 'var(--t3)' }}>{sub.name}</p>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: compact ? 4 : 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 600, background: `${color}22`, color }}>
+                      {company?.name ?? '?'}
+                    </span>
+                    {activeTask.priority && (
+                      <span style={{
+                        fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 700,
+                        background: `${PRIORITY_COLOR[activeTask.priority]}20`,
+                        color: PRIORITY_COLOR[activeTask.priority],
+                        textTransform: 'uppercase', letterSpacing: '0.5px',
+                      }}>
+                        {activeTask.priority === 'media' ? 'MED' : activeTask.priority === 'alta' ? 'ALT' : 'BAI'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </DragOverlay>
     </DndContext>
   );

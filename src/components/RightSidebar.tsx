@@ -32,23 +32,22 @@ export function RightSidebar() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', height: '100vh', flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', gap: 8, flexShrink: 0 }}>
 
       {/* Expanded panel */}
       {open && (
         <div style={{
-          width: 256, height: '100vh',
+          width: 256,
           display: 'flex', flexDirection: 'column',
           background: 'var(--sidebar-bg)',
-          borderLeft: '1px solid var(--b1)',
+          borderRadius: 16,
           overflow: 'hidden',
         }}>
           {/* Header */}
           <div style={{
-            height: 36, flexShrink: 0,
+            height: 44, flexShrink: 0,
             display: 'flex', alignItems: 'center',
-            padding: '0 12px',
-            borderBottom: '1px solid var(--b1)',
+            padding: '0 14px',
           }}>
             <span style={{
               fontSize: 9, fontWeight: 700, letterSpacing: '2px',
@@ -59,7 +58,7 @@ export function RightSidebar() {
             {quickNotes.length > 0 && (
               <span style={{
                 marginLeft: 8, fontSize: 9, fontWeight: 600,
-                color: 'var(--t4)', background: 'var(--s1)',
+                color: 'var(--t4)', background: 'var(--s2)',
                 borderRadius: 99, padding: '1px 5px',
               }}>
                 {quickNotes.length}
@@ -68,7 +67,7 @@ export function RightSidebar() {
           </div>
 
           {/* Add input */}
-          <div style={{ padding: '10px 10px 6px', flexShrink: 0 }}>
+          <div style={{ padding: '0 10px 8px', flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: 6 }}>
               <input
                 ref={inputRef}
@@ -77,9 +76,9 @@ export function RightSidebar() {
                 onKeyDown={handleKey}
                 placeholder="Nova nota..."
                 style={{
-                  flex: 1, padding: '7px 10px', borderRadius: 8,
-                  border: '1px solid var(--b2)',
-                  background: 'var(--ib)', color: 'var(--t1)',
+                  flex: 1, padding: '7px 10px', borderRadius: 10,
+                  border: 'none',
+                  background: 'var(--s2)', color: 'var(--t1)',
                   fontSize: 12, outline: 'none',
                 }}
               />
@@ -126,25 +125,27 @@ export function RightSidebar() {
         </div>
       )}
 
-      {/* Always-visible toggle tab */}
-      <div
-        onClick={() => setOpen(o => !o)}
-        title={open ? 'Fechar Notas Rápidas' : 'Abrir Notas Rápidas'}
-        style={{
-          width: 20, height: '100vh', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--sidebar-bg)',
-          borderLeft: '1px solid var(--b1)',
-          cursor: 'pointer',
-          transition: 'background .15s',
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s1)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-bg)'; }}
-      >
-        {open
-          ? <FiChevronRight size={11} style={{ color: 'var(--t4)' }} />
-          : <FiChevronLeft size={11} style={{ color: 'var(--t4)' }} />
-        }
+      {/* Circle toggle button — centered vertically */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          title={open ? 'Fechar Notas Rápidas' : 'Abrir Notas Rápidas'}
+          style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: 'var(--sidebar-bg)',
+            border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--t4)', transition: 'all .15s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; (e.currentTarget as HTMLElement).style.color = '#64C4FF'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-bg)'; (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+        >
+          {open
+            ? <FiChevronRight size={14} />
+            : <FiChevronLeft size={14} />
+          }
+        </button>
       </div>
     </div>
   );

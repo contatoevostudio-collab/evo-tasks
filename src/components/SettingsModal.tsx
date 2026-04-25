@@ -12,14 +12,10 @@ const PRESET_COLORS = [
 ];
 
 const SURFACE = 'var(--s1)';
-const BORDER  = 'var(--b2)';
 
 const THEMES: { id: Theme; label: string; bg: string; textColor: string }[] = [
-  { id: 'dark-blue', label: 'Azul Escuro', bg: '#080C18', textColor: '#fff' },
-  { id: 'dark-pure', label: 'Preto Puro',  bg: '#050505', textColor: '#fff' },
-  { id: 'dark-warm', label: 'Dark Warm',   bg: '#0d0907', textColor: '#fff' },
-  { id: 'light-soft', label: 'Claro Soft', bg: '#F2F2F7', textColor: '#000' },
-  { id: 'light-pure', label: 'Branco Puro', bg: '#FFFFFF', textColor: '#000' },
+  { id: 'dark-blue',  label: 'Escuro', bg: '#080C18', textColor: '#fff' },
+  { id: 'light-soft', label: 'Claro',  bg: '#F2F2F7', textColor: '#000' },
 ];
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
@@ -78,6 +74,7 @@ export function SettingsModal({ onClose }: Props) {
     addCompany, updateCompany, deleteCompany,
     addSubClient, updateSubClient, deleteSubClient,
     theme, setTheme, replaceAll,
+    compactMode, toggleCompactMode,
   } = useTaskStore();
 
   const [selectedId,   setSelectedId]   = useState<string>(companies[0]?.id ?? '');
@@ -185,7 +182,7 @@ export function SettingsModal({ onClose }: Props) {
     <button onClick={() => setActiveTab(id)} style={{
       padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: activeTab === id ? 600 : 400,
       background: activeTab === id ? 'rgba(53,107,255,0.15)' : 'transparent',
-      border: `1px solid ${activeTab === id ? 'rgba(53,107,255,0.3)' : 'transparent'}`,
+      border: 'none',
       color: activeTab === id ? '#64C4FF' : 'var(--t3)',
       cursor: 'pointer', transition: 'all .15s',
     }}>
@@ -198,12 +195,13 @@ export function SettingsModal({ onClose }: Props) {
       <motion.div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <motion.div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={onClose} />
         <motion.div
-          style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: 680, margin: '0 16px', borderRadius: 20, overflow: 'hidden', maxHeight: '85vh', display: 'flex', flexDirection: 'column', background: 'var(--modal-bg)', border: '1px solid var(--b3)', boxShadow: '0 40px 100px rgba(0,0,0,0.4)' }}
+          className="glass-panel"
+          style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: 680, margin: '0 16px', borderRadius: 20, overflow: 'hidden', maxHeight: '85vh', display: 'flex', flexDirection: 'column', background: 'var(--modal-bg)', boxShadow: '0 40px 100px rgba(0,0,0,0.4)' }}
           initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }}
           transition={{ type: 'spring', damping: 26, stiffness: 320 }}
         >
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', flexShrink: 0 }}>
             <div>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--t1)' }}>Configurações</h2>
               <p style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>Gerencie empresas, aparência e dados</p>
@@ -217,7 +215,7 @@ export function SettingsModal({ onClose }: Props) {
           </div>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', gap: 6, padding: '12px 22px', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 6, padding: '12px 22px', flexShrink: 0 }}>
             {tabBtn('empresas',   'Empresas')}
             {tabBtn('aparencia',  'Aparência')}
             {tabBtn('dados',      'Dados')}
@@ -231,14 +229,14 @@ export function SettingsModal({ onClose }: Props) {
             {activeTab === 'empresas' && (
               <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: '100%' }}>
                 {/* Left */}
-                <div style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', padding: '0 8px', marginBottom: 6 }}>Empresas</div>
                     {companies.filter(c => !c.deletedAt).map(c => (
                       <button key={c.id} onClick={() => setSelectedId(c.id)} style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px', borderRadius: 10, marginBottom: 2,
                         background: selectedId === c.id ? `${c.color}18` : 'transparent',
-                        border: `1px solid ${selectedId === c.id ? `${c.color}40` : 'transparent'}`,
+                        border: 'none',
                         cursor: 'pointer', transition: 'all .15s',
                       }}>
                         <div style={{ width: 9, height: 9, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
@@ -250,12 +248,12 @@ export function SettingsModal({ onClose }: Props) {
                       </button>
                     ))}
                   </div>
-                  <div style={{ padding: '8px 8px 12px', flexShrink: 0, borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ padding: '8px 8px 12px', flexShrink: 0 }}>
                     {showNew ? (
                       <div style={{ background: SURFACE, borderRadius: 10, padding: 12 }}>
                         <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') addCo(); if (e.key === 'Escape') setShowNew(false); }}
-                          placeholder="Nome..." style={{ width: '100%', background: 'var(--ib)', border: '1px solid var(--b3)', borderRadius: 7, padding: '7px 9px', color: 'var(--t1)', fontSize: 13, outline: 'none', marginBottom: 8 }} />
+                          placeholder="Nome..." style={{ width: '100%', background: 'var(--ib)', borderRadius: 7, padding: '7px 9px', color: 'var(--t1)', fontSize: 13, outline: 'none', marginBottom: 8 }} />
                         <ColorPicker value={newColor} onChange={setNewColor} />
                         <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                           <button onClick={() => setShowNew(false)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'var(--s2)', border: 'none', color: 'var(--t2)', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
@@ -321,9 +319,9 @@ export function SettingsModal({ onClose }: Props) {
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                       padding: '16px 20px', borderRadius: 14, cursor: 'pointer', transition: 'all .15s',
                       background: theme === t.id ? 'rgba(53,107,255,0.12)' : SURFACE,
-                      border: `1px solid ${theme === t.id ? 'rgba(53,107,255,0.4)' : BORDER}`,
+                      border: 'none',
                     }}>
-                      <div style={{ width: 48, height: 32, borderRadius: 8, background: t.bg, border: '1px solid var(--b3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 48, height: 32, borderRadius: 8, background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {theme === t.id && <FiCheck size={12} color="#64C4FF" />}
                       </div>
                       <span style={{ fontSize: 12, fontWeight: theme === t.id ? 600 : 400, color: theme === t.id ? '#64C4FF' : 'var(--t3)' }}>
@@ -335,6 +333,35 @@ export function SettingsModal({ onClose }: Props) {
                 <p style={{ marginTop: 12, fontSize: 11, color: 'var(--t4)' }}>
                   O tema afeta a cor de fundo e o esquema de cores da aplicação.
                 </p>
+
+                {/* Compact mode toggle (#45) */}
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--b1)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>Interface</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: SURFACE, borderRadius: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)' }}>Modo Compacto</div>
+                      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3 }}>Reduz bordas arredondadas para uma aparência mais densa</div>
+                    </div>
+                    <button
+                      onClick={toggleCompactMode}
+                      style={{
+                        width: 44, height: 26, borderRadius: 13,
+                        background: compactMode ? '#356BFF' : 'var(--b2)',
+                        border: 'none', cursor: 'pointer',
+                        position: 'relative', flexShrink: 0,
+                        transition: 'background .2s',
+                      }}
+                    >
+                      <div style={{
+                        position: 'absolute', top: 3, left: compactMode ? 21 : 3,
+                        width: 20, height: 20, borderRadius: '50%',
+                        background: '#fff',
+                        transition: 'left .2s',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                      }} />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -348,7 +375,7 @@ export function SettingsModal({ onClose }: Props) {
                   <button onClick={handleExport} style={{
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     padding: '14px 20px', borderRadius: 12, cursor: 'pointer', transition: 'all .15s',
-                    background: 'rgba(48,209,88,0.08)', border: '1px solid rgba(48,209,88,0.25)',
+                    background: 'rgba(48,209,88,0.08)',
                     color: '#30d158', fontSize: 13, fontWeight: 600,
                   }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(48,209,88,0.15)'; }}
@@ -362,7 +389,6 @@ export function SettingsModal({ onClose }: Props) {
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     padding: '14px 20px', borderRadius: 12, cursor: 'pointer', transition: 'all .15s',
                     background: importOk ? 'rgba(48,209,88,0.1)' : 'rgba(53,107,255,0.08)',
-                    border: `1px solid ${importOk ? 'rgba(48,209,88,0.3)' : 'rgba(53,107,255,0.25)'}`,
                     color: importOk ? '#30d158' : '#64C4FF', fontSize: 13, fontWeight: 600,
                   }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(53,107,255,0.15)'; }}
@@ -377,7 +403,7 @@ export function SettingsModal({ onClose }: Props) {
                 <button onClick={handleIcsExport} style={{
                   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   padding: '12px 20px', borderRadius: 12, cursor: 'pointer', transition: 'all .15s', marginBottom: 16,
-                  background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.25)',
+                  background: 'rgba(255,159,10,0.08)',
                   color: '#ff9f0a', fontSize: 13, fontWeight: 600,
                 }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,159,10,0.15)'; }}
@@ -387,7 +413,7 @@ export function SettingsModal({ onClose }: Props) {
                 </button>
 
                 {importError && (
-                  <p style={{ fontSize: 12, color: '#ff453a', background: 'rgba(255,69,58,0.1)', border: '1px solid rgba(255,69,58,0.2)', padding: '8px 12px', borderRadius: 8 }}>
+                  <p style={{ fontSize: 12, color: '#ff453a', background: 'rgba(255,69,58,0.1)', padding: '8px 12px', borderRadius: 8 }}>
                     {importError}
                   </p>
                 )}
