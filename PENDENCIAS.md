@@ -4,13 +4,11 @@
 
 ## 🎯 Status atual (2026-04-25)
 
-**Em produção** (https://task.evostudiolab.com.br): Ondas 1, 2, 3A, 3B, 3C.
-
-**Aguardando push + deploy:** Onda 4 — Workspaces (fundação completa em 6 commits). Bundle 348kB / 94.7kB gzip.
+**Em produção** (https://task.evostudiolab.com.br): Ondas 1, 2, 3A, 3B, 3C, 4, 5 + Polish pós-MVP Onda 4.
 
 ### Próximo passo concreto
-1. Push origin/main + deploy prod fechando Onda 4
-2. Onda 5 (features de agência) ou polish pós-MVP de Onda 4 (workspace counts no NavSidebar, SearchModal respeitando lente, injeção automática de workspaceId nos add* actions)
+1. Onda 6: Time Tracking dedicado (linka com Pomodoro+Tarefa)
+2. Onda 3D opcional (histórico de versões — snapshot on edit pra Idea e Proposal)
 
 ## ✅ Histórico do que já está integrado
 
@@ -60,164 +58,25 @@
 - **Fase 5 — Switcher:** componente `WorkspaceSwitcher` na NavSidebar com workspace ativo (avatar com foto opcional ou inicial em gradiente da paleta) + lente (Só ativo / Todos / Combinar). `WorkspaceModal` pra criar/editar (nome, tipo, paleta, foto). Badge laranja quando lente !== 'active'.
 - **Fase 6 — Filtros:** `useVisibleWorkspaceIds()` reativo + helper `isInLens()`. Aplicado em todas as views principais. Items sem workspaceId aparecem em qualquer lente (legacy fallback).
 
+### Polish pós-MVP Onda 4 (2026-04-25)
+- NavSidebar `countFor` filtra counts de tarefas por `isInLens`
+- SearchModal filtra tasks/companies/leads/ideas pela lente dentro do `useMemo`
+- `addTask`/`addCompany`/`addLead` auto-injetam `activeWorkspaceId` quando não fornecido
+- NotificationsPanel + `useNotificationsCount` filtram todas as entidades pela lente
+
+### Onda 5 — Features de agência (2026-04-25)
+- **AprovacoesPage** — sistema de aprovação de conteúdo: `ContentApproval`, `ContentAsset`, `ContentComment`, share link `/aprovar/:token`, fluxo rascunho→enviado→visualizado→alteracao/aprovado/postado, `useContentApprovalsStore`
+- **EditorialPage** — calendário mensal de tasks com `taskCategory='criacao'`, dot de status de aprovação em cada chip, navegação por mês, filtro por empresa
+- **FaturasPage** — lista de faturas com cards de resumo (total/pago/pendente/vencido), modal com line items e cálculo automático de subtotal/total, `useInvoicesStore`
+- **BriefingsPage** — formulários por cliente com status (rascunho/enviado/respondido), share link, 7 questões padrão, `useBriefingsStore`
+- **OnboardingPage** — templates de checklist de boas-vindas com steps numerados e expansíveis, `useOnboardingStore`
+- **SnippetsPage** — biblioteca de mensagens prontas com copy, filtro por categoria, contador de usos, `useSnippetsStore`
+- **KPIsPage** — dashboard de 6 métricas (clientes ativos, receita do mês, faturas pendentes, tarefas concluídas, aprovações pendentes, taxa de entrega editorial) + breakdown por empresa
+- **HabitosPage** — tracker de hábitos operacionais com grid dos últimos 7 dias, toggle de conclusão, suporte a frequência diária/semanal/mensal, `useHabitsStore`
+- NavSidebar: novo grupo "Agência" (aprovacoes, editorial, briefings, onboarding) + "Ferramentas" (snippets, habitos) + "Gestão" (faturas, kpis)
+
 ## ❌ Onda 3D (opcional)
 - Histórico de versões — snapshot on edit pra Idea e Proposal (undo profundo)
-
-## 🏗️ Onda 4 — Workspaces (fundação massiva)
-
-Decidido em detalhe na sessão de 2026-04-24: **workspaces COM TIPOS + CROSS-WORKSPACE LENS**.
-
-### Decisões arquiteturais
-
-#### Remover Gaming completamente
-- Apagar `GamesPage.tsx`, `useGameStore`, `usePetsStore`, tipo `ActivePet`, badges/streaks/pets
-- Remover referências de nav, settings, etc. User não quer mais essa frente.
-
-#### Re-design do Freelance workspace
-Não é só "trabalho pra agência" — inclui freela puro também.
-
-`Empresa` ganha campo `tipo: 'agencia' | 'cliente-direto'`:
-- `agencia` — agência te contrata pra atender as marcas dela (tem subclients)
-- `cliente-direto` — marca te contrata direto (sem subclient layer)
-- Página Empresas no Freelance ganha segmentação `[Todas | Agências | Clientes diretos]`
-- Dot de cor por tipo no card
-
-CRM no Freelance: SIM, freelancers também têm pipeline (lida com leads de agência E leads de cliente direto).
-
-#### Hábitos no workspace AGÊNCIA (não pessoal)
-User mudou de ideia: inclui mas no contexto agência, como rotinas operacionais (postar feed seg/qua/sex, revisar pipeline toda sexta, enviar fatura dia 5). NÃO é hábito pessoal.
-
-### 4 tipos de workspace
-
-| Tipo | Uso | Páginas |
-|---|---|---|
-| **Freelance Designer** | Trabalha pra agências OU clientes diretos | Empresas (com tipo agencia/cliente-direto), CRM, Tarefas, Time Tracking, Propostas, Recibos, Finanças PF, Todo, Ideias, Pomodoro |
-| **Agência** | Você É a agência | Clientes (sem subclient), CRM Pipeline, Calendário Editorial, **Aprovações com upload+feedback**, Briefing, Onboarding, Faturas, KPIs, Snippets, **Hábitos operacionais**, Tarefas, Finanças PJ |
-| **Pessoal** | Side projects, vida fora do trabalho | Todo, Ideias, Diário, Pomodoro, Finanças pessoais |
-| **Em branco** | Custom | Liga/desliga features manualmente |
-
-### ⭐ Cross-workspace integration — "Lentes"
-
-Decisão chave. Não é só workspace ativo — tem uma "lente" (lens) global que controla quais workspaces aparecem nas listas.
-
-Nav do app ganha 2 controles lado a lado no topo:
-```
-[👤 Freelance ▾]   [🔍 Visualizando: 1 workspace ▾]   [🔔]
-   Workspace ATIVO    Lente atual
-```
-
-- **Workspace ATIVO** = onde novos itens são criados, controla quais features aparecem na nav
-- **Lente** = quais workspaces aparecem nas listas/stats das páginas
-
-**4 modos da lente:**
-1. **Só ativo** (padrão) — comportamento atual, foco
-2. **Todos** — mostra dados consolidados de todos os workspaces
-3. **Combinar** (multi-select) — escolhe especificamente quais juntar
-4. **Outro workspace** — visualiza outro sem mudar o ativo
-
-**Comportamento por página com lente "Todos" ou "Combinar":**
-- **Finanças**: 3 colunas de saldo lado a lado (Freela / Agência / Pessoal) + saldo consolidado no topo. Cada transação com badge da cor do workspace.
-- **Ideias**: grid mostra ideias de todos os selecionados, cada uma com badge de workspace.
-- **Tarefas/Calendário**: tarefas de todos, cor da bolinha = cor do workspace.
-- **CRM/Empresas/Propostas**: lente funciona mas geralmente menos útil isolar.
-- **Pomodoro/Notificações**: SEMPRE cross-workspace (você é uma pessoa), não respondem à lente.
-
-**Regra crítica**: criar item SEMPRE cria no workspace ATIVO (mesmo com lente "Todos").
-
-```ts
-interface ViewLens {
-  mode: 'active' | 'all' | 'multi' | 'other';
-  selectedWorkspaceIds?: string[];
-}
-const visibleWorkspaceIds = useViewLens().getVisibleIds();
-items.filter(i => visibleWorkspaceIds.includes(i.workspaceId))
-```
-
-Lente ATIVA aparece visualmente clara (badge colorido no header) pra usuário nunca esquecer que tá vendo cross-workspace.
-
-### Implementação geral
-- Novo tipo `Workspace { id, name, type, color, settings, createdAt }`
-- Novo store `useWorkspaceStore` com `activeWorkspaceId` + `workspaces[]` + `lens: ViewLens`
-- `workspaceId: string` em TODAS as entidades transacionais (Task, Company, Subclient, Lead, Idea, Proposal, Transaction, RecurringBill, Goal, Card, Invoice, ContentApproval)
-- Filtros usam a lente, não só `activeWorkspaceId`
-- `WorkspaceSettings.enabledPages: PageType[]` controla nav
-- Migração: dados atuais → workspace `Freelance Design` (tipo: freelance). User cria `Minha Agência` zerada.
-
-### Decisões finais (respondidas em 2026-04-25)
-1. **Tema/cor:** paletas padrão pré-definidas, user escolhe entre elas (sem color picker custom)
-2. **Logo/avatar do switcher:** foto opcional via upload; sem foto, mostra só o nome (ex: "Pessoal" = nome da pessoa, "Agência" = nome da agência da pessoa)
-3. **Stats da HomePage:** TUDO segue a lente sem exceção (lente "Todos" entrega cross-workspace quando user quiser)
-4. **Pomodoro:** sempre global, ignora workspace e lente. **Notificações:** global por default + filtro opcional dentro do painel (chip "Todos | Freelance | Agência | Pessoal")
-
-## 🚀 Onda 5 — Features de agência
-
-### Aprovações — sistema completo
-
-**Modelo:**
-```ts
-type ContentType = 'card' | 'carrossel' | 'reels' | 'story' | 'video' | 'apresentacao' | 'moodboard' | 'site' | 'identidade' | 'outro';
-
-interface ContentAsset {
-  id: string;
-  url: string;          // imagem/vídeo/PDF (Supabase Storage)
-  type: ContentType;
-  position: number;     // pra carrossel/apresentação multi-slide
-  comments?: ContentComment[]; // pin em coordenada x,y do asset
-}
-
-interface ContentComment {
-  id: string;
-  area?: { x: number; y: number }; // pin no asset
-  text: string;
-  fromClient: boolean;
-  resolved: boolean;
-  createdAt: string;
-}
-
-interface ContentApproval {
-  id: string;
-  workspaceId: string;
-  taskId?: string;       // linka com calendário editorial
-  clientId: string;
-  title: string;
-  type: ContentType;
-  assets: ContentAsset[];
-  status: 'rascunho' | 'enviado' | 'visualizado' | 'alteracao' | 'aprovado' | 'postado';
-  shareToken: string;    // URL pública /aprovar/:token
-  feedback?: string;
-  createdAt: string;
-  sentAt?: string;
-  viewedAt?: string;
-  decidedAt?: string;
-}
-```
-
-**Flow:**
-1. Designer cria item, faz upload dos assets (Supabase Storage)
-2. Marca como "Enviado" → gera link público `/aprovar/:token`
-3. Cliente abre link (sem login, ou com PIN simples)
-4. Cliente vê galeria, pode:
-   - Clicar em coordenada do asset pra adicionar comentário ancorado
-   - Escrever feedback livre
-   - Botão "Pedir alteração" → status "Alteração", envia notificação
-   - Botão "Aprovar" → status "Aprovado"
-5. Designer recebe notificação, vê comentários ancorados
-6. Faz ajustes, atualiza assets, reenvia
-7. Aprovado → calendário editorial muda automaticamente pra "Pronto pra postar"
-
-**Vínculo com Calendário Editorial:**
-- Cada célula do calendário mostra status da aprovação (badge: rascunho/enviado/aprovado)
-- Click na célula abre aprovação ou cria nova
-- View "Aprovações" lista o que tá `awaiting` há mais de N dias com idade
-
-### Outras features (uma por vez)
-1. **Calendário Editorial** — view alternativa de tasks com `taskCategory='criacao'`, layout marcas×dias com drag-drop, mini "feed grid" do Insta
-2. **Faturas** — emissão formal com numeração e PDF
-3. **Briefing estruturado** — formulário fixo por cliente, link compartilhável
-4. **Onboarding playbook** — checklist de boas-vindas
-5. **Snippets** — biblioteca de mensagens prontas
-6. **KPIs comerciais** — MRR, CAC, churn, ticket médio, LTV
-7. **Hábitos operacionais** — rotinas/cadências da agência
 
 ## 🌐 Onda 6 — Cross-workspace
 - **Time Tracking** dedicado (linka com Pomodoro+Tarefa)
@@ -231,11 +90,11 @@ interface ContentApproval {
 
 ## 🎯 Roadmap consolidado
 
-1. **AGORA:** push + deploy Onda 4
-2. Polish pós-MVP de Onda 4: NavSidebar counts pela lente, SearchModal pela lente, injetar workspaceId no add* actions, filtro local no NotificationsPanel
-3. Onda 3D opcional (histórico de versões)
-4. Onda 5: features de agência (Editorial, Aprovações, Faturas, Briefing, Onboarding, Snippets, KPIs)
-5. Onda 6: Time Tracking + cross-workspace polish
+1. ~~push + deploy Onda 4~~ ✅
+2. ~~Polish pós-MVP de Onda 4~~ ✅
+3. ~~Onda 5: features de agência~~ ✅
+4. **AGORA:** Onda 6 — Time Tracking dedicado (linka com Pomodoro+Tarefa)
+5. Onda 3D opcional (histórico de versões)
 6. (opcional, com aprovação) Onda 4-original: Google Calendar OAuth + webhooks + IA
 
 ---
