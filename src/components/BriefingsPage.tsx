@@ -22,6 +22,19 @@ export function BriefingsPage() {
   const [showTrash, setShowTrash] = useState(false);
   const [editingBriefing, setEditingBriefing] = useState<Briefing | null>(null);
 
+  // N = new briefing
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'n' && e.key !== 'N') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      setShowNew(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const active = useMemo(() => briefings.filter(b => !b.deletedAt), [briefings]);
   const trashed = useMemo(() => briefings.filter(b => !!b.deletedAt), [briefings]);
 
@@ -84,11 +97,24 @@ export function BriefingsPage() {
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-          <span style={{ fontSize: 36 }}>📋</span>
-          <p style={{ fontSize: 13, color: 'var(--t4)', margin: 0 }}>
-            {active.length === 0 ? 'Nenhum briefing. Crie o primeiro!' : 'Nenhum briefing neste status.'}
-          </p>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
+          <div style={{ width: 60, height: 60, borderRadius: 18, background: 'var(--s1)', border: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>📋</div>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t2)', margin: '0 0 4px' }}>
+              {active.length === 0 ? 'Nenhum briefing ainda' : 'Nenhum briefing neste status'}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--t4)', margin: 0 }}>
+              {active.length === 0 ? 'Crie um briefing e envie o link para seu cliente preencher' : 'Mude o filtro de status acima para ver outros briefings'}
+            </p>
+          </div>
+          {active.length === 0 && (
+            <button
+              onClick={() => setShowNew(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, background: accentColor, border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600 }}
+            >
+              <FiPlus size={14} /> Criar primeiro briefing
+            </button>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -151,34 +177,104 @@ export function BriefingsPage() {
                   </button>
                 </div>
 
-                {/* Questions list */}
+                {/* Expanded content */}
                 {isOpen && (
-                  <div style={{ borderTop: '1px solid var(--b1)', padding: '10px 16px 14px' }}>
-                    {b.questions.length === 0 ? (
-                      <p style={{ fontSize: 12, color: 'var(--t4)', margin: '6px 0', textAlign: 'center' }}>Nenhuma pergunta</p>
-                    ) : (
-                      <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {b.questions.map((q, i) => (
-                          <li key={q.id} style={{ display: 'flex', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--s2)' }}>
-                            <span style={{ fontSize: 11, color: accentColor, fontWeight: 700, flexShrink: 0, width: 16, textAlign: 'right' }}>{i + 1}.</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: q.required ? 600 : 400 }}>{q.label}</span>
-                              {q.required && <span style={{ marginLeft: 4, color: '#ff453a', fontSize: 11 }}>*</span>}
-                              <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--t4)', padding: '1px 5px', borderRadius: 4, background: 'var(--s1)' }}>{q.type}</span>
-                              {q.answer && (
-                                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--t1)', background: `${accentColor}10`, borderRadius: 6, padding: '5px 8px', borderLeft: `2px solid ${accentColor}` }}>
-                                  {String(q.answer)}
+                  <div style={{ borderTop: '1px solid var(--b1)' }}>
+
+                    {/* Toolbar */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'rgba(0,0,0,0.12)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--t4)', flex: 1 }}>
+                        {b.questions.length} pergunta{b.questions.length !== 1 ? 's' : ''}
+                        {b.questions.filter(q => q.required).length > 0 && (
+                          <> · <span style={{ color: '#ff453a' }}>{b.questions.filter(q => q.required).length}</span> obrigatória{b.questions.filter(q => q.required).length > 1 ? 's' : ''}</>
+                        )}
+                      </span>
+                      {b.status !== 'respondido' && (
+                        <button
+                          onClick={e => { e.stopPropagation(); copyLink(b); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, background: 'transparent', border: '1px solid var(--b2)', color: copied === b.id ? '#30d158' : 'var(--t4)', fontSize: 11, cursor: 'pointer', transition: 'all .15s' }}
+                        >
+                          {copied === b.id ? <FiCheck size={10} /> : <FiLink size={10} />}
+                          {copied === b.id ? 'Copiado!' : 'Copiar link'}
+                        </button>
+                      )}
+                      <button
+                        onClick={e => { e.stopPropagation(); setEditingBriefing(b); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, background: `${accentColor}15`, border: `1px solid ${accentColor}35`, color: accentColor, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        <FiEdit2 size={11} /> Editar perguntas
+                      </button>
+                    </div>
+
+                    {/* Responses section (status = respondido) */}
+                    {b.status === 'respondido' && (
+                      <div style={{ padding: '14px 16px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#30d158', boxShadow: '0 0 6px #30d15860', flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#30d158', textTransform: 'uppercase', letterSpacing: '1.2px' }}>Respostas do cliente</span>
+                          {b.respondedAt && (
+                            <span style={{ fontSize: 10, color: 'var(--t4)' }}>
+                              · {format(new Date(b.respondedAt), "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          {b.questions.map((q, i) => (
+                            <div key={q.id} style={{ background: q.answer ? `${accentColor}08` : 'var(--s2)', border: `1px solid ${q.answer ? `${accentColor}22` : 'var(--b1)'}`, borderRadius: 10, padding: '10px 14px' }}>
+                              <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: q.answer ? 6 : 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ color: accentColor, fontWeight: 700 }}>{i + 1}.</span>
+                                <span style={{ flex: 1 }}>{q.label}</span>
+                                {q.required && <span style={{ color: '#ff453a', fontSize: 10 }}>✱</span>}
+                              </div>
+                              {q.answer ? (
+                                <div style={{ fontSize: 13, color: 'var(--t1)', lineHeight: 1.55 }}>
+                                  {Array.isArray(q.answer)
+                                    ? (q.answer as string[]).map((a, ai) => (
+                                        <span key={ai} style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6, marginBottom: 3, padding: '2px 8px', borderRadius: 5, background: `${accentColor}15`, border: `1px solid ${accentColor}25`, color: accentColor, fontSize: 12 }}>{a}</span>
+                                      ))
+                                    : String(q.answer)
+                                  }
                                 </div>
+                              ) : (
+                                <div style={{ fontSize: 11, color: 'var(--t4)', fontStyle: 'italic', marginTop: 4 }}>Não respondida</div>
                               )}
                             </div>
-                          </li>
-                        ))}
-                      </ol>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                    {b.respondedAt && (
-                      <p style={{ fontSize: 11, color: '#30d158', margin: '8px 0 0' }}>
-                        ✓ Respondido em {format(new Date(b.respondedAt), "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
-                      </p>
+
+                    {/* Question list preview (not responded) */}
+                    {b.status !== 'respondido' && (
+                      <div style={{ padding: '8px 16px 14px' }}>
+                        {b.questions.length === 0 ? (
+                          <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 24, opacity: 0.5 }}>📋</span>
+                            <p style={{ fontSize: 12, color: 'var(--t4)', margin: 0, textAlign: 'center' }}>
+                              Nenhuma pergunta. Clique em <strong style={{ color: accentColor }}>Editar perguntas</strong> acima para adicionar.
+                            </p>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {b.questions.map((q, i) => (
+                              <div key={q.id} style={{ display: 'flex', gap: 8, padding: '5px 6px', borderRadius: 6, alignItems: 'center' }}>
+                                <span style={{ fontSize: 10, color: accentColor, fontWeight: 700, flexShrink: 0, width: 18, textAlign: 'right', opacity: 0.7 }}>{i + 1}</span>
+                                <span style={{ flex: 1, fontSize: 12, color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.label}</span>
+                                {q.required && <span style={{ color: '#ff453a', fontSize: 10, flexShrink: 0 }}>✱</span>}
+                                <span style={{ fontSize: 9, color: 'var(--t4)', padding: '2px 6px', borderRadius: 4, background: 'var(--s2)', border: '1px solid var(--b1)', flexShrink: 0 }}>
+                                  {q.type === 'long' ? 'longo' : q.type === 'select' ? 'escolha' : q.type === 'multi' ? 'múltipla' : q.type}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {b.status === 'enviado' && (
+                          <p style={{ fontSize: 11, color: 'var(--t4)', margin: '10px 0 0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ fontSize: 13 }}>💬</span>
+                            As respostas do cliente aparecerão aqui após o preenchimento.
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -324,8 +420,11 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ background: 'var(--modal-bg)', borderRadius: 18, padding: 24, width: 580, maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--t1)', flex: 1 }}>Editar briefing</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--t4)', marginBottom: 2 }}>Editar briefing</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{briefing.title}</div>
+          </div>
           <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', padding: 4 }}><FiX size={16} /></button>
         </div>
 
@@ -362,6 +461,13 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
                   <option value="select">Escolha única</option>
                   <option value="multi">Múltipla escolha</option>
                 </select>
+                <button
+                  onClick={() => updateQuestion(briefing.id, q.id, { required: !q.required })}
+                  title={q.required ? 'Obrigatória — clique para tornar opcional' : 'Opcional — clique para tornar obrigatória'}
+                  style={{ width: 26, height: 26, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, fontWeight: 700, transition: 'all .15s', background: q.required ? 'rgba(255,69,58,0.12)' : 'none', border: q.required ? '1px solid rgba(255,69,58,0.3)' : '1px solid transparent', color: q.required ? '#ff453a' : 'var(--t4)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,69,58,0.3)'; }}
+                  onMouseLeave={e => { if (!q.required) { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; } }}
+                >✱</button>
                 <button onClick={() => removeQuestion(briefing.id, q.id)}
                   style={{ width: 26, height: 26, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}

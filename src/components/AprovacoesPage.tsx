@@ -62,6 +62,19 @@ export function AprovacoesPage() {
     setShowNew(true);
   };
 
+  // N = new approval
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'n' && e.key !== 'N') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (companies.filter(c => !c.deletedAt).length > 0) setShowNew(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [companies]);
+
   const handleNewFolder = () => {
     if (companies.filter(c => !c.deletedAt).length === 0) {
       alert('Crie uma empresa primeiro');

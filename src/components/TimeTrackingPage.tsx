@@ -292,6 +292,22 @@ export function TimeTrackingPage() {
     setTimerDesc('');
   };
 
+  // Space bar = toggle timer (when not focused on input)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      const { activeTimer: t, startTimer: start, stopTimer: stop } = useTimeTrackingStore.getState();
+      if (t) stop();
+      else start({ workspaceId: activeWorkspaceId ?? undefined });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId]);
+
   const timerTask = activeTimer?.taskId ? getTaskLabel(activeTimer.taskId) : null;
   const timerLinkedTask = activeTimer?.taskId ? tasks.find(t => t.id === activeTimer.taskId) ?? null : null;
   const timerCompany = timerLinkedTask?.companyId ? companies.find(c => c.id === timerLinkedTask.companyId) ?? null : null;
