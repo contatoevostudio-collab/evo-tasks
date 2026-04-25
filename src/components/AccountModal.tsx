@@ -92,8 +92,10 @@ export function AccountModal({ onClose, onOpenBackup }: Props) {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
+      // ⚠️ Foto fica APENAS no localStorage. NUNCA salvar em user_metadata
+      // do Supabase auth — isso vai pro JWT toda hora e causa header > 8KB
+      // que o Cloudflare rejeita com 520. (incidente 2026-04-25)
       setUserPhoto(dataUrl);
-      supabase.auth.updateUser({ data: { photoUrl: dataUrl } }).catch(console.error);
     };
     reader.readAsDataURL(file);
   };

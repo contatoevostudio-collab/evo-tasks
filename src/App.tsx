@@ -96,7 +96,8 @@ export default function App() {
         // Load profile tied to this account, clear any leftover from another account
         const meta = user.user_metadata ?? {};
         useTaskStore.getState().setUserName(meta.displayName ?? '');
-        useTaskStore.getState().setUserPhoto(meta.photoUrl ?? '');
+        // photoUrl NÃO é mais lido do user_metadata — fica só em localStorage
+        // (incidente 2026-04-25: PNG base64 no JWT estourava header e dava 520)
         loadFromSupabase(user.id).catch(console.error);
       }
     } else {
