@@ -15,6 +15,68 @@ import type { ContentApproval, ContentType, ApprovalStatus, ContentAsset, Approv
 
 const TYPE_OPTIONS: ContentType[] = ['card', 'carrossel', 'reels', 'story', 'video', 'apresentacao', 'moodboard', 'site', 'identidade', 'outro'];
 
+const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function todayParts() {
+  const t = new Date();
+  return { d: t.getDate(), m: t.getMonth() + 1, y: t.getFullYear() };
+}
+function parseDateParts(iso?: string) {
+  if (!iso) return todayParts();
+  const [y, m, d] = iso.split('-').map(Number);
+  return { d, m, y };
+}
+function composeDateStr(d: number, m: number, y: number) {
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function DatePartsInput({ value, onChange }: { value?: string; onChange: (v: string) => void }) {
+  const init = parseDateParts(value);
+  const [d, setD] = useState(init.d);
+  const [m, setM] = useState(init.m);
+  const [y, setY] = useState(init.y);
+
+  const inputStyle: React.CSSProperties = {
+    padding: '5px 7px', borderRadius: 7,
+    background: 'var(--ib)', border: '1px solid var(--b2)',
+    color: 'var(--t1)', fontSize: 12, outline: 'none',
+    textAlign: 'center', boxSizing: 'border-box',
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
+    letterSpacing: '0.8px', color: 'var(--t4)', marginBottom: 3,
+  };
+
+  const emit = (nd: number, nm: number, ny: number) => onChange(composeDateStr(nd, nm, ny));
+
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <span style={labelStyle}>Dia</span>
+        <input type="number" min={1} max={31} value={d}
+          onChange={e => { const v = Math.min(31, Math.max(1, Number(e.target.value))); setD(v); emit(v, m, y); }}
+          style={{ ...inputStyle, width: 48 }}
+        />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <span style={labelStyle}>Mês</span>
+        <select value={m} onChange={e => { const v = Number(e.target.value); setM(v); emit(d, v, y); }}
+          style={{ ...inputStyle, paddingLeft: 6, paddingRight: 6, cursor: 'pointer' }}
+        >
+          {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
+        </select>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <span style={labelStyle}>Ano</span>
+        <input type="number" min={2020} max={2040} value={y}
+          onChange={e => { const v = Number(e.target.value); setY(v); emit(d, m, v); }}
+          style={{ ...inputStyle, width: 62 }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function AprovacoesPage() {
   const { companies } = useTaskStore();
   const visibleIds = useVisibleWorkspaceIds();
@@ -587,7 +649,7 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(companies[0]?.id ?? '');
   const [type, setType] = useState<ContentType>('carrossel');
-  const [postDate, setPostDate] = useState('');
+  const [postDate, setPostDate] = useState(() => { const { d, m, y } = todayParts(); return composeDateStr(d, m, y); });
 
   const submit = () => {
     if (!title.trim() || !clientId) return;
@@ -649,11 +711,9 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
           </div>
 
           <div>
-            <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6, display: 'block' }}>Data de postagem</label>
-            <input type="date" value={postDate} onChange={e => setPostDate(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 13 }}
-            />
-            <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 4 }}>Aparece no Calendário Editorial a partir desta data</div>
+            <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8, display: 'block' }}>Data de postagem</label>
+            <DatePartsInput value={postDate} onChange={setPostDate} />
+            <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 6 }}>Aparece no Calendário Editorial a partir desta data</div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -875,12 +935,12 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
 
             {/* Data de postagem */}
             <div style={{ flexShrink: 0, padding: '12px 16px', borderBottom: '1px solid var(--b1)' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6 }}>Data de postagem</div>
-              <input type="date" value={approval.postDate ?? ''}
-                onChange={e => updateApproval(approval.id, { postDate: e.target.value || undefined })}
-                style={{ width: '100%', padding: '6px 8px', borderRadius: 7, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8 }}>Data de postagem</div>
+              <DatePartsInput
+                value={approval.postDate}
+                onChange={v => updateApproval(approval.id, { postDate: v })}
               />
-              {approval.postDate && <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 4 }}>Aparece no Calendário Editorial</div>}
+              <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 6 }}>Aparece no Calendário Editorial</div>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
