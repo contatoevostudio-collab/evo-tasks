@@ -340,6 +340,25 @@ export interface Task {
   deletedAt?: string;      // ISO — soft-delete (lixeira de 30 dias)
 }
 
+export interface TaskTemplate {
+  id: string;
+  name: string;                  // rótulo dado pelo user (ex.: "Reels semanal Cliente X")
+  taskCategory?: TaskCategory;
+  taskType: TaskType;
+  customType?: string;
+  companyId?: string;
+  subClientId?: string;
+  priority?: Priority;
+  estimate?: number;             // minutos
+  notes?: string;
+  copy?: string;
+  hookIdea?: string;
+  references?: string[];
+  tags?: string[];
+  recurrence?: RecurrenceType;
+  createdAt: string;
+}
+
 const TASK_TYPE_LABELS: Partial<Record<TaskType, string>> = {
   feed: 'FEED', story: 'STORY', carrossel: 'CARROSSEL', reels: 'REELS',
   thumb: 'THUMB', site: 'SITE', identidade: 'IDENTIDADE', video: 'VÍDEO', outro: 'OUTRO',

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Company, SubClient, Lead, LeadInteraction, LeadStage, TaskStatus, TaskType, TaskCategory, ViewMode, Priority, Theme, QuickNote, TodoItem, TodoItemStatus, TodoContext, CalendarEvent, CalendarEventCategory, PomodoroSession, PaymentRecord, CompanyInteraction } from '../types';
+import type { Task, TaskTemplate, Company, SubClient, Lead, LeadInteraction, LeadStage, TaskStatus, TaskType, TaskCategory, ViewMode, Priority, Theme, QuickNote, TodoItem, TodoItemStatus, TodoContext, CalendarEvent, CalendarEventCategory, PomodoroSession, PaymentRecord, CompanyInteraction } from '../types';
 import { format } from 'date-fns';
 import { syncTask, removeTask, syncCompany, removeCompany, syncSubClient, removeSubClient, syncLead, removeLead, syncQuickNote, removeQuickNote, syncTodoItem, removeTodoItem, syncCalendarEvent, removeCalendarEvent } from '../lib/supabaseSync';
 import { useAuthStore } from './auth';
@@ -208,6 +208,12 @@ interface TaskStore {
   deleteCalendarEvent(id: string): void;
   setCalendarCategoryFilter(f: CalendarEventCategory | 'todos'): void;
 
+  // Task templates (Onda 3C)
+  taskTemplates: TaskTemplate[];
+  addTaskTemplate(t: Omit<TaskTemplate, 'id' | 'createdAt'>): string;
+  updateTaskTemplate(id: string, updates: Partial<TaskTemplate>): void;
+  deleteTaskTemplate(id: string): void;
+
   // Helper
   nextSequence(companyId: string, subClientId: string, taskType: TaskType): number;
 }
@@ -250,6 +256,7 @@ export const useTaskStore = create<TaskStore>()(
       todoItems: [],
       calendarEvents: [],
       calendarCategoryFilter: 'todos' as const,
+      taskTemplates: [],
 
       addTask: (task) => {
         const id = crypto.randomUUID();
@@ -860,6 +867,23 @@ export const useTaskStore = create<TaskStore>()(
       },
       setCalendarCategoryFilter: (f) => set({ calendarCategoryFilter: f }),
 
+      addTaskTemplate: (t) => {
+        const id = crypto.randomUUID();
+        const full: TaskTemplate = { ...t, id, createdAt: new Date().toISOString() };
+        set(state => ({ taskTemplates: [full, ...state.taskTemplates] }));
+        return id;
+      },
+      updateTaskTemplate: (id, updates) => {
+        set(state => ({
+          taskTemplates: state.taskTemplates.map(tpl =>
+            tpl.id === id ? { ...tpl, ...updates } : tpl,
+          ),
+        }));
+      },
+      deleteTaskTemplate: (id) => {
+        set(state => ({ taskTemplates: state.taskTemplates.filter(tpl => tpl.id !== id) }));
+      },
+
       nextSequence: (companyId, subClientId, taskType) => {
         const { tasks } = get();
         const count = tasks.filter(
@@ -885,6 +909,7 @@ export const useTaskStore = create<TaskStore>()(
         todoItems: state.todoItems,
         calendarEvents: state.calendarEvents,
         calendarCategoryFilter: state.calendarCategoryFilter,
+        taskTemplates: state.taskTemplates,
         compactMode: state.compactMode,
         sidebarWidth: state.sidebarWidth,
         homeLayout: state.homeLayout,

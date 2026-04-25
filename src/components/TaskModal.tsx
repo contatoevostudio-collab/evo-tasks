@@ -3,12 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiX, FiTrash2, FiCalendar, FiImage, FiSmartphone,
   FiLayers, FiFilm, FiMonitor, FiEdit3, FiCopy,
-  FiPlus, FiCheck, FiArchive, FiClock, FiGlobe, FiPenTool, FiRepeat,
+  FiPlus, FiCheck, FiArchive, FiClock, FiGlobe, FiPenTool, FiRepeat, FiBookmark,
 } from 'react-icons/fi';
 import { format, parseISO, addWeeks, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { playAdd, playDelete, playCheck } from '../lib/sounds';
-import type { Task, TaskStatus, TaskType, Priority, SubTask, ArtVersion } from '../types';
+import type { Task, TaskStatus, TaskType, Priority, SubTask, ArtVersion, TaskTemplate } from '../types';
 import { getTaskTitle } from '../types';
 import { useTaskStore } from '../store/tasks';
 import { useProposalsStore } from '../store/proposals';
@@ -111,6 +111,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
     nextSequence, addSubClient, toggleArchive,
     addSubTask, toggleSubTask, deleteSubTask,
     tasks, theme, showToast, hideToast,
+    taskTemplates, addTaskTemplate, deleteTaskTemplate,
   } = useTaskStore();
 
   const isLight = theme.startsWith('light');
@@ -158,6 +159,53 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
   const [versions,    setVersions]    = useState(task?.versions ?? []);
   const [newVerNotes, setNewVerNotes] = useState('');
   const [showLegenda, setShowLegenda] = useState<boolean>(!!(task?.copy || task?.hookIdea || (task?.references && task.references.length > 0)));
+
+  // Templates (Onda 3C) — aplicar/salvar
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+
+  const applyTemplate = (tpl: TaskTemplate) => {
+    if (tpl.companyId)    setCompanyId(tpl.companyId);
+    if (tpl.subClientId)  setSubClientId(tpl.subClientId);
+    if (tpl.taskCategory) setTaskCategory(tpl.taskCategory);
+    setTaskType(tpl.taskType);
+    if (tpl.customType)   setCustomType(tpl.customType);
+    if (tpl.priority) { setPriority(tpl.priority); setShowPriority(true); }
+    if (tpl.estimate !== undefined) setEstimate(tpl.estimate);
+    if (tpl.notes)        { setNotes(tpl.notes); setShowNotes(true); }
+    if (tpl.copy)         { setCopy(tpl.copy); setShowLegenda(true); }
+    if (tpl.hookIdea)     { setHookIdea(tpl.hookIdea); setShowLegenda(true); }
+    if (tpl.references && tpl.references.length > 0) { setReferences(tpl.references); setShowLegenda(true); }
+    if (tpl.tags && tpl.tags.length > 0) setTags(tpl.tags);
+    if (tpl.recurrence)   setRecurrence(tpl.recurrence);
+    showToast(`Template "${tpl.name}" aplicado`);
+    setTimeout(hideToast, 2400);
+  };
+
+  const handleSaveAsTemplate = () => {
+    const name = templateName.trim();
+    if (!name || !taskType) return;
+    addTaskTemplate({
+      name,
+      taskCategory: (taskCategory || undefined) as TaskCategory | undefined,
+      taskType: taskType as TaskType,
+      customType: taskType === 'outro' ? (customType || undefined) : undefined,
+      companyId: companyId || undefined,
+      subClientId: subClientId || undefined,
+      priority: showPriority ? priority : undefined,
+      estimate: estimate !== '' ? Number(estimate) : undefined,
+      notes: showNotes && notes.trim() ? notes.trim() : undefined,
+      copy: copy.trim() || undefined,
+      hookIdea: hookIdea.trim() || undefined,
+      references: references.length > 0 ? references : undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      recurrence: recurrence !== 'none' ? (recurrence as 'weekly' | 'monthly') : undefined,
+    });
+    setTemplateName('');
+    setShowSaveTemplate(false);
+    showToast(`Template "${name}" salvo`);
+    setTimeout(hideToast, 2400);
+  };
 
   const filteredSubClients = subClients
     .filter(s => !s.deletedAt && s.companyId === companyId)
@@ -409,6 +457,50 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
                 <FiX size={16} />
               </button>
             </div>
+
+            {/* 0 · TEMPLATES — só na criação */}
+            {!task && taskTemplates.length > 0 && (
+              <div>
+                <span style={labelStyle}>Templates</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {taskTemplates.map(tpl => (
+                    <div
+                      key={tpl.id}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'var(--s1)', borderRadius: 999,
+                        border: '1px solid var(--b2)', padding: '0 0 0 4px',
+                      }}
+                    >
+                      <button
+                        onClick={() => applyTemplate(tpl)}
+                        title={`Aplicar: ${tpl.name}`}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          background: 'transparent', border: 'none', padding: '4px 8px',
+                          color: 'var(--t2)', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                        }}
+                      >
+                        <FiBookmark size={10} style={{ color: 'var(--t4)' }} />
+                        {tpl.name}
+                      </button>
+                      <button
+                        onClick={() => deleteTaskTemplate(tpl.id)}
+                        title="Excluir template"
+                        style={{
+                          background: 'transparent', border: 'none', cursor: 'pointer',
+                          color: 'var(--t4)', padding: '4px 6px', display: 'flex', alignItems: 'center',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                      >
+                        <FiX size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 1 · EMPRESA */}
             <div>
@@ -1003,7 +1095,59 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
                 </div>
               ) : <div />}
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Salvar como template — visível quando há tipo definido */}
+                {taskType && (
+                  showSaveTemplate ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        autoFocus
+                        value={templateName}
+                        onChange={e => setTemplateName(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleSaveAsTemplate();
+                          if (e.key === 'Escape') { setShowSaveTemplate(false); setTemplateName(''); }
+                        }}
+                        placeholder="Nome do template..."
+                        style={{
+                          padding: '7px 10px', borderRadius: 8, fontSize: 11,
+                          background: 'var(--ib)', border: '1px solid var(--b3)',
+                          color: 'var(--t1)', outline: 'none', width: 160,
+                        }}
+                      />
+                      <button
+                        onClick={handleSaveAsTemplate}
+                        disabled={!templateName.trim()}
+                        style={{
+                          padding: '7px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                          background: templateName.trim() ? '#356BFF' : 'var(--s2)',
+                          border: 'none', color: templateName.trim() ? '#fff' : 'var(--t4)',
+                          cursor: templateName.trim() ? 'pointer' : 'not-allowed',
+                        }}
+                      >Salvar</button>
+                      <button
+                        onClick={() => { setShowSaveTemplate(false); setTemplateName(''); }}
+                        title="Cancelar"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, display: 'flex' }}
+                      ><FiX size={12} /></button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowSaveTemplate(true)}
+                      title="Salvar configuração atual como template"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '7px 12px', borderRadius: 8, fontSize: 11, fontWeight: 500,
+                        background: 'transparent', border: '1px solid var(--b2)',
+                        color: 'var(--t3)', cursor: 'pointer', transition: 'all .15s',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--b3)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; }}
+                    >
+                      <FiBookmark size={11} /> Template
+                    </button>
+                  )
+                )}
                 <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 500, background: 'var(--s1)', border: '1px solid var(--b2)', color: 'var(--t3)', cursor: 'pointer', transition: 'all .15s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t1)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
