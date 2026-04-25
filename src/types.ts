@@ -11,6 +11,7 @@ export interface CalendarEvent {
   color?: string;
   notes?: string;
   createdAt: string;
+  workspaceId?: string;       // Onda 4 — workspace owner
 }
 export type TaskCategory = 'criacao' | 'reuniao' | 'pessoal' | 'eventos';
 
@@ -104,6 +105,7 @@ export interface Proposal {
   notes?: string;
   linkedLeadId?: string;     // proposta originada de qual lead
   linkedCompanyId?: string;  // se aceita, qual empresa
+  workspaceId?: string;      // Onda 4
 }
 export type IdeaTag = 'negocio' | 'pessoal' | 'design' | 'marketing' | 'dev' | 'outro';
 export type IdeaStatus = 'rascunho' | 'desenvolvendo' | 'executada' | 'arquivada';
@@ -132,6 +134,7 @@ export interface Idea {
   pinOrder?: number;       // for drag-reorder pinned
   updatedAt?: string;      // ISO
   deletedAt?: string;      // ISO — soft delete (trash)
+  workspaceId?: string;    // Onda 4
   createdAt: string;
 }
 
@@ -149,6 +152,7 @@ export interface Transaction {
   date: string; // yyyy-MM-dd
   status: TransactionStatus;
   createdAt: string;
+  workspaceId?: string;        // Onda 4
 }
 
 export interface FinancialGoal {
@@ -159,6 +163,7 @@ export interface FinancialGoal {
   target: number;
   current: number;
   createdAt: string;
+  workspaceId?: string;        // Onda 4
 }
 
 export type CardBrand = 'visa' | 'mastercard' | 'amex' | 'elo' | 'hipercard' | 'paypal' | 'nubank' | 'outro';
@@ -172,6 +177,7 @@ export interface Card {
   color: string; // hex for gradient
   fullNumber?: string; // optional — stored client-side only
   createdAt: string;
+  workspaceId?: string;        // Onda 4
 }
 
 export interface RecurringBill {
@@ -184,6 +190,7 @@ export interface RecurringBill {
   isRecurring?: boolean; // default true — false = conta única, "quita" após pagar
   paidMonths: string[]; // 'yyyy-MM'
   createdAt: string;
+  workspaceId?: string;        // Onda 4
 }
 export type Priority = 'alta' | 'media' | 'baixa';
 export type Theme = 'dark-blue' | 'light-soft';
@@ -216,6 +223,7 @@ export interface TodoItem {
   subtasks?: SubTask[]; // #41
   context?: TodoContext; // #42
   priority?: Priority;   // #43
+  workspaceId?: string;  // Onda 4
 }
 
 export interface PomodoroSession {
@@ -258,6 +266,7 @@ export interface Lead {
   createdAt: string;
   convertedToCompanyId?: string;
   deletedAt?: string;       // ISO — soft-delete (lixeira de 30 dias)
+  workspaceId?: string;     // Onda 4
 }
 
 export type PaymentStatus = 'pago' | 'pendente' | 'atrasado';
@@ -309,6 +318,8 @@ export interface Company {
   interactions?: CompanyInteraction[];
   compactMode?: boolean;      // exibir lista de empresas compacta
   deletedAt?: string;         // ISO — soft-delete (lixeira de 30 dias)
+  workspaceId?: string;       // Onda 4
+  empresaTipo?: 'agencia' | 'cliente-direto'; // Onda 4 — tipo de relação no workspace Freelance
 }
 
 export interface SubClient {
@@ -324,6 +335,7 @@ export interface SubClient {
   avatar?: string;          // initials override
   feedbackScore?: number;   // média 1–5
   deletedAt?: string;       // ISO — soft-delete (lixeira de 30 dias)
+  workspaceId?: string;     // Onda 4 (herda da Company tipicamente)
 }
 
 export type RecurrenceType = 'weekly' | 'monthly';
@@ -369,6 +381,7 @@ export interface Task {
   recurrenceRule?: RecurrenceRule; // Onda 3C — recurrence inteligente (sobrescreve recurrence quando presente)
   recurrenceParentId?: string; // links gerados ao pai
   deletedAt?: string;      // ISO — soft-delete (lixeira de 30 dias)
+  workspaceId?: string;    // Onda 4
 }
 
 export interface TaskTemplate {
