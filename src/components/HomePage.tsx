@@ -1,18 +1,21 @@
-import { useState, useMemo } from 'react';
-import { format, parseISO, isAfter, isBefore, startOfToday, addDays, getDay, getISOWeek, startOfWeek } from 'date-fns';
+import { useMemo } from 'react';
+import { format, parseISO, isBefore, startOfToday, addDays, getDay, startOfWeek, subWeeks, subMonths, startOfMonth, endOfMonth, differenceInCalendarDays, eachDayOfInterval, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import {
-  FiPlus, FiZap, FiAlertTriangle, FiArrowRight,
-  FiCheckSquare, FiUsers, FiBriefcase, FiClock,
-  FiCheckCircle, FiTrendingUp, FiSun, FiTarget, FiCalendar,
+  FiPlus, FiZap, FiAlertTriangle, FiArrowRight, FiArrowUp, FiArrowDown,
+  FiCheckSquare, FiUsers, FiBriefcase, FiClock, FiCheckCircle,
+  FiSun, FiTarget, FiCalendar, FiDollarSign, FiTrendingUp, FiActivity,
+  FiPieChart, FiAlertCircle, FiRotateCw,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
-import { useIdeasStore, TAG_CONFIG as IDEA_TAG_CONFIG } from '../store/ideas';
+import { useIdeasStore } from '../store/ideas';
+import { useInvoicesStore } from '../store/invoices';
+import { useContentApprovalsStore } from '../store/contentApprovals';
 import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { useAuthStore } from '../store/auth';
 import { getTaskTitle } from '../types';
-import type { Task, TaskStatus, PageType, LeadStage } from '../types';
+import type { Task, PageType, LeadStage } from '../types';
 
 const homeHexToRgb = (hex: string): string => {
   const clean = hex.replace('#', '');
@@ -23,13 +26,13 @@ const homeHexToRgb = (hex: string): string => {
   return `${r},${g},${b}`;
 };
 
+const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const fmtBRLfull = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 interface Props {
   onTaskClick: (task: Task) => void;
   onNavigate: (page: PageType) => void;
 }
-
-const STATUS_COLOR: Record<TaskStatus, string> = { todo: '#ff9f0a', doing: '#64C4FF', done: '#30d158' };
-const STATUS_LABEL: Record<TaskStatus, string> = { todo: 'A Fazer', doing: 'Fazendo', done: 'Feito' };
 
 const LEAD_STAGE_LABEL: Record<LeadStage, string> = {
   prospeccao: 'Prospecção', contato: 'Contato', proposta: 'Proposta',
@@ -40,28 +43,13 @@ const LEAD_STAGE_COLOR: Record<LeadStage, string> = {
   negociacao: '#ff375f', fechado: '#30d158',
 };
 
-// ─── Card primitive ─────────────────────────────────────────────────────────
-function Card({
-  children, style, accentLeft, blueGlow, hero,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-  accentLeft?: string;
-  blueGlow?: boolean;
-  hero?: boolean;
-}) {
-  // #4 — Borda azul nos cards importantes ; #7 — Glow azul sutil
-  const baseShadow = blueGlow
-    ? '0 0 0 1px rgba(53,107,255,0.10), 0 8px 28px rgba(0,0,0,0.32), 0 0 30px rgba(53,107,255,0.05)'
-    : '0 1px 0 rgba(255,255,255,0.02), 0 6px 22px rgba(0,0,0,0.28)';
+// ═══ Card primitive ═══════════════════════════════════════════════════════
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: hero ? undefined : 'var(--s1)',
-      borderRadius: 16,
-      border: blueGlow ? '1px solid rgba(53,107,255,0.28)' : '1px solid var(--b2)',
+      background: 'var(--s1)', borderRadius: 14, border: '1px solid var(--b2)',
       overflow: 'hidden', position: 'relative',
-      boxShadow: baseShadow,
-      ...(accentLeft ? { borderLeft: `3px solid ${accentLeft}` } : {}),
+      boxShadow: '0 1px 0 rgba(255,255,255,0.02), 0 6px 22px rgba(0,0,0,0.28)',
       ...style,
     }}>
       {children}
@@ -69,246 +57,348 @@ function Card({
   );
 }
 
-// ─── Card header with icon in colored bubble ─────────────────────────────────
-function CardHeader({
-  icon, title, accent, right, white,
-}: { icon: React.ReactNode; title: string; accent: string; right?: React.ReactNode; white?: boolean }) {
+function CardHeader({ icon, title, accent, right }: { icon: React.ReactNode; title: string; accent: string; right?: React.ReactNode }) {
   const rgb = homeHexToRgb(accent);
   return (
-    <div style={{
-      padding: '12px 16px',
-      borderBottom: white ? '1px solid rgba(255,255,255,0.14)' : '1px solid var(--b1)',
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
+    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', gap: 10 }}>
       <div style={{
         width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-        background: white ? 'rgba(255,255,255,0.18)' : `rgba(${rgb},0.14)`,
-        border: white ? '1px solid rgba(255,255,255,0.28)' : `1px solid rgba(${rgb},0.22)`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: white ? '#fff' : accent,
+        background: `rgba(${rgb},0.14)`, border: `1px solid rgba(${rgb},0.22)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent,
       }}>
         {icon}
       </div>
-      <span style={{
-        fontSize: 11, fontWeight: 700, letterSpacing: '1.4px', textTransform: 'uppercase',
-        color: white ? 'rgba(255,255,255,0.95)' : '#ffffff',
-        flex: 1,
-      }}>{title}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.4px', textTransform: 'uppercase', color: '#ffffff', flex: 1 }}>{title}</span>
       {right}
     </div>
   );
 }
 
-// ─── Empty state with optional CTA ──────────────────────────────────────────
-function EmptyState({ icon, text, cta, onCta, iconColor = 'rgba(255,255,255,0.45)' }: { icon: React.ReactNode; text: string; cta?: string; onCta?: () => void; iconColor?: string }) {
+// ═══ KPI tile (top row metrics) ═══════════════════════════════════════════
+function KpiTile({
+  label, value, delta, deltaPositiveIsGood = true, icon, color, sparkline, suffix,
+}: {
+  label: string; value: string | number;
+  delta?: number;            // % variation, can be negative
+  deltaPositiveIsGood?: boolean;
+  icon: React.ReactNode; color: string;
+  sparkline?: number[];
+  suffix?: string;
+}) {
+  const rgb = homeHexToRgb(color);
+  const deltaSign = delta === undefined ? 0 : (delta > 0 ? 1 : delta < 0 ? -1 : 0);
+  const deltaGood = deltaPositiveIsGood ? deltaSign > 0 : deltaSign < 0;
+  const deltaColor = deltaSign === 0 ? 'rgba(255,255,255,0.4)' : (deltaGood ? '#30d158' : '#ff453a');
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '28px 16px' }}>
-      <div style={{
-        width: 48, height: 48, borderRadius: 12,
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.10)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: iconColor,
-      }}>
-        {icon}
+    <div style={{
+      borderRadius: 14,
+      background: `linear-gradient(160deg, rgba(${rgb},0.10) 0%, var(--s1) 60%)`,
+      border: `1px solid rgba(${rgb},0.22)`,
+      padding: '14px 16px', position: 'relative', overflow: 'hidden',
+      boxShadow: `0 6px 18px rgba(${rgb},0.08), 0 1px 0 rgba(255,255,255,0.04) inset`,
+      display: 'flex', flexDirection: 'column', gap: 8,
+      minHeight: 110,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          width: 26, height: 26, borderRadius: 7,
+          background: `rgba(${rgb},0.18)`, border: `1px solid rgba(${rgb},0.3)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0,
+        }}>
+          {icon}
+        </div>
+        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1.4px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)', flex: 1 }}>{label}</span>
       </div>
-      <div style={{ fontSize: 13, color: '#ffffff', fontWeight: 600, textAlign: 'center', letterSpacing: '-0.1px' }}>{text}</div>
-      {cta && onCta && (
-        <button
-          onClick={onCta}
-          style={{
-            marginTop: 4, padding: '7px 14px', borderRadius: 8,
-            background: 'rgba(53,107,255,0.18)',
-            border: '1px solid rgba(53,107,255,0.4)',
-            color: '#ffffff', fontSize: 11, fontWeight: 700,
-            letterSpacing: '0.4px', cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            transition: 'all .15s',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLElement).style.background = 'rgba(53,107,255,0.32)';
-            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(53,107,255,0.6)';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLElement).style.background = 'rgba(53,107,255,0.18)';
-            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(53,107,255,0.4)';
-          }}
-        >
-          <FiPlus size={11} /> {cta}
-        </button>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ fontSize: 26, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.6px', lineHeight: 1 }}>{value}</span>
+        {suffix && <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.55)' }}>{suffix}</span>}
+      </div>
+      {delta !== undefined && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: deltaColor }}>
+          {deltaSign > 0 ? <FiArrowUp size={10} /> : deltaSign < 0 ? <FiArrowDown size={10} /> : null}
+          {deltaSign === 0 ? '—' : `${Math.abs(delta).toFixed(0)}% vs anterior`}
+        </div>
+      )}
+      {sparkline && sparkline.length > 1 && (
+        <div style={{ marginTop: 4 }}>
+          <Sparkline values={sparkline} color={color} />
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Task row ───────────────────────────────────────────────────────────────
-function TaskRow({
-  task, color, title, companyName, showDate, onClick, onBlue,
-}: {
-  task: Task; color: string; title: string; companyName: string;
-  showDate?: boolean; onClick?: () => void; onBlue?: boolean;
-}) {
-  const [hovered, setHovered] = useState(false);
+// ═══ Mini sparkline (SVG) ═════════════════════════════════════════════════
+function Sparkline({ values, color, height = 28 }: { values: number[]; color: string; height?: number }) {
+  const rgb = homeHexToRgb(color);
+  const W = 100, H = height;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 4) - 2;
+    return [x, y];
+  });
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]},${p[1]}`).join(' ');
+  const areaD = `${pathD} L ${W},${H} L 0,${H} Z`;
+  const id = `spark-${color.replace('#', '')}`;
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: '100%', textAlign: 'left',
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '9px 11px',
-        background: hovered
-          ? (onBlue ? 'rgba(255,255,255,0.14)' : 'var(--s2)')
-          : (onBlue ? 'rgba(255,255,255,0.06)' : 'transparent'),
-        border: onBlue ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
-        borderRadius: 9,
-        cursor: 'pointer', transition: 'background .12s, border-color .12s',
-        minWidth: 0,
-      }}
-    >
-      <span style={{
-        width: 7, height: 7, borderRadius: '50%',
-        background: onBlue ? '#ffffff' : color, flexShrink: 0,
-        boxShadow: onBlue ? '0 0 6px rgba(255,255,255,0.6)' : `0 0 6px ${color}88`,
-      }} />
-      <span style={{
-        flex: 1, minWidth: 0,
-        fontSize: 12.5, fontWeight: 500,
-        color: onBlue ? '#ffffff' : '#ffffff',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-        {title}
-      </span>
-      {companyName && (
-        <span style={{
-          fontSize: 9, fontWeight: 700,
-          color: onBlue ? 'rgba(255,255,255,0.85)' : color,
-          flexShrink: 0, opacity: 0.85,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          maxWidth: 80,
-        }}>
-          {companyName}
-        </span>
-      )}
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontSize: 10, fontWeight: 600,
-        color: onBlue ? 'rgba(255,255,255,0.92)' : STATUS_COLOR[task.status],
-        flexShrink: 0, whiteSpace: 'nowrap',
-      }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: onBlue ? '#fff' : STATUS_COLOR[task.status] }} />
-        {STATUS_LABEL[task.status]}
-      </span>
-      {showDate && (
-        <span style={{ fontSize: 10, color: onBlue ? 'rgba(255,255,255,0.7)' : 'var(--t3)', flexShrink: 0, minWidth: 36, textAlign: 'right' }}>
-          {format(parseISO(task.date), "d MMM", { locale: ptBR })}
-        </span>
-      )}
-    </button>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={`rgba(${rgb},0.4)`} />
+          <stop offset="100%" stopColor={`rgba(${rgb},0)`} />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#${id})`} />
+      <path d={pathD} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-// ─── Weekly bar chart ───────────────────────────────────────────────────────
-function WeeklyBars({ tasks, accentColor, accentRgb }: { tasks: Task[]; accentColor: string; accentRgb: string }) {
-  const today = new Date();
-  const todayStr = format(today, 'yyyy-MM-dd');
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const counts = days.map(d => {
-    const dateStr = format(d, 'yyyy-MM-dd');
-    return tasks.filter(t => t.status === 'done' && !t.deletedAt && !t.inbox && t.date === dateStr).length;
+// ═══ Area chart (faturamento 6 meses) ═════════════════════════════════════
+function AreaChart({
+  series, accentColor, accentRgb, height = 180, formatY = (v: number) => fmtBRL(v),
+}: {
+  series: { label: string; value: number }[];
+  accentColor: string; accentRgb: string; height?: number;
+  formatY?: (v: number) => string;
+}) {
+  const W = 600, H = height, padL = 50, padR = 12, padT = 16, padB = 30;
+  const max = Math.max(...series.map(s => s.value), 1);
+  const niceMax = Math.ceil(max * 1.1 / 1000) * 1000 || 1000;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const points = series.map((s, i) => {
+    const x = padL + (i / Math.max(1, series.length - 1)) * innerW;
+    const y = padT + (1 - s.value / niceMax) * innerH;
+    return { x, y, ...s };
   });
-  const maxCount = Math.max(1, ...counts);
-  const total = counts.reduce((s, n) => s + n, 0);
-  const CHART_H = 80;
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+  const areaD = `${pathD} L ${points[points.length - 1].x},${padT + innerH} L ${padL},${padT + innerH} Z`;
+  const yTicks = [0, 0.5, 1].map(t => Math.round(niceMax * t));
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: '#ffffff', fontWeight: 600, opacity: 0.85 }}>{total} concluída{total !== 1 ? 's' : ''} esta semana</span>
-      </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: CHART_H, padding: '14px 0 0' }}>
-        {days.map((day, i) => {
-          const count = counts[i];
-          const pct = count / maxCount;
-          const dateStr = format(day, 'yyyy-MM-dd');
-          const isToday = dateStr === todayStr;
-          const hasData = count > 0;
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={`rgba(${accentRgb},0.45)`} />
+          <stop offset="100%" stopColor={`rgba(${accentRgb},0.02)`} />
+        </linearGradient>
+      </defs>
+      {yTicks.map((t, i) => {
+        const y = padT + (1 - t / niceMax) * innerH;
+        return (
+          <g key={i}>
+            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="3 3" />
+            <text x={padL - 6} y={y + 3} fontSize={9} fill="rgba(255,255,255,0.45)" textAnchor="end" fontWeight={600}>{formatY(t)}</text>
+          </g>
+        );
+      })}
+      <path d={areaD} fill="url(#area-fill)" />
+      <path d={pathD} fill="none" stroke={accentColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r={3.5} fill={accentColor} stroke="#0b1028" strokeWidth={2} />
+          <text x={p.x} y={H - 8} fontSize={9} fontWeight={600} fill="rgba(255,255,255,0.55)" textAnchor="middle">{p.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
 
-          let barBg: string;
-          let barShadow: string = 'none';
-          if (isToday) {
-            barBg = `linear-gradient(180deg, ${accentColor} 0%, rgba(${accentRgb},0.45) 100%)`;
-            barShadow = `0 0 14px -2px rgba(${accentRgb}, 0.7)`;
-          } else if (hasData) {
-            barBg = 'linear-gradient(180deg, #30d158 0%, rgba(48,209,88,0.45) 100%)';
-            barShadow = '0 0 10px -4px rgba(48,209,88,0.5)';
-          } else {
-            barBg = `linear-gradient(180deg, rgba(${accentRgb},0.18) 0%, rgba(${accentRgb},0.04) 100%)`;
-          }
-          const barHeight = hasData ? Math.max(8, pct * (CHART_H - 22)) : 6;
-
-          return (
-            <div key={dateStr} style={{
-              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'flex-end', gap: 4, height: '100%', position: 'relative',
-            }}>
-              {hasData && (
-                <span style={{
-                  position: 'absolute', bottom: barHeight + 22,
-                  fontSize: 9, fontWeight: 700,
-                  color: isToday ? accentColor : '#30d158',
-                  lineHeight: 1,
-                }}>{count}</span>
-              )}
-              <motion.div
-                initial={{ height: 4 }}
-                animate={{ height: barHeight }}
-                transition={{ duration: 0.4, ease: 'easeOut', delay: i * 0.04 }}
-                style={{
-                  width: '70%', maxWidth: 22,
-                  borderTopLeftRadius: 6, borderTopRightRadius: 6,
-                  borderBottomLeftRadius: 2, borderBottomRightRadius: 2,
-                  background: barBg, boxShadow: barShadow,
-                }}
-              />
-              <span style={{
-                fontSize: 9,
-                fontWeight: isToday ? 800 : 600,
-                color: isToday ? accentColor : 'rgba(255,255,255,0.55)',
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase',
-              }}>
-                {format(day, 'EEE', { locale: ptBR }).slice(0, 3)}
+// ═══ CRM funnel (horizontal stages) ═══════════════════════════════════════
+function CrmFunnel({ stages, onClick }: { stages: { stage: LeadStage; count: number; value: number }[]; onClick?: () => void }) {
+  const max = Math.max(...stages.map(s => s.count), 1);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '14px 16px 16px' }}>
+      {stages.map(s => {
+        const color = LEAD_STAGE_COLOR[s.stage];
+        const rgb = homeHexToRgb(color);
+        const pct = (s.count / max) * 100;
+        return (
+          <div key={s.stage} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#ffffff', letterSpacing: '0.4px' }}>
+                {LEAD_STAGE_LABEL[s.stage]}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>
+                {s.count} {s.value > 0 && `· ${fmtBRL(s.value)}`}
               </span>
             </div>
-          );
-        })}
+            <div style={{ height: 10, borderRadius: 6, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.max(2, pct)}%` }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
+                style={{
+                  height: '100%',
+                  background: `linear-gradient(90deg, ${color}, rgba(${rgb},0.6))`,
+                  boxShadow: `0 0 10px rgba(${rgb},0.4)`,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══ Donut (distribuição por empresa) ═════════════════════════════════════
+function DonutChart({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
+  const R = 60, STROKE = 18;
+  const C = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 16px 16px' }}>
+      <svg viewBox={`0 0 ${R * 2 + STROKE} ${R * 2 + STROKE}`} width={140} height={140} style={{ flexShrink: 0 }}>
+        <g transform={`translate(${R + STROKE / 2}, ${R + STROKE / 2}) rotate(-90)`}>
+          <circle cx={0} cy={0} r={R} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={STROKE} />
+          {data.map((d, i) => {
+            const frac = d.value / Math.max(1, total);
+            const dash = frac * C;
+            const offset = -acc * C;
+            acc += frac;
+            return (
+              <circle
+                key={i}
+                cx={0} cy={0} r={R} fill="none"
+                stroke={d.color} strokeWidth={STROKE}
+                strokeDasharray={`${dash} ${C}`}
+                strokeDashoffset={offset}
+                strokeLinecap="butt"
+              />
+            );
+          })}
+        </g>
+        <text x="50%" y="48%" textAnchor="middle" fontSize={20} fontWeight={800} fill="#ffffff">{total}</text>
+        <text x="50%" y="62%" textAnchor="middle" fontSize={9} fontWeight={700} fill="rgba(255,255,255,0.5)" letterSpacing="1.2px">TAREFAS</text>
+      </svg>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {data.slice(0, 6).map((d, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0, boxShadow: `0 0 6px ${d.color}88` }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: '#ffffff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {d.label}
+            </span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: 700, flexShrink: 0 }}>
+              {d.value}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function deterministicPick<T>(items: T[], seed: number): T | null {
-  if (items.length === 0) return null;
-  const x = Math.sin(seed) * 10000;
-  const idx = Math.floor((x - Math.floor(x)) * items.length);
-  return items[Math.abs(idx) % items.length];
+// ═══ Heatmap (calendário GitHub-style 12 semanas) ═════════════════════════
+function ProductivityHeatmap({ counts }: { counts: Map<string, number> }) {
+  const today = new Date();
+  // 84 dias = 12 semanas
+  const start = subDays(startOfWeek(today, { weekStartsOn: 1 }), 11 * 7);
+  const days = eachDayOfInterval({ start, end: today });
+  const max = Math.max(...Array.from(counts.values()), 1);
+
+  // arrange by week column
+  const weeks: Date[][] = [];
+  let currentWeek: Date[] = [];
+  days.forEach(d => {
+    currentWeek.push(d);
+    if (getDay(d) === 0) { weeks.push(currentWeek); currentWeek = []; }
+  });
+  if (currentWeek.length > 0) weeks.push(currentWeek);
+
+  const cell = (d: Date) => {
+    const key = format(d, 'yyyy-MM-dd');
+    const c = counts.get(key) ?? 0;
+    if (c === 0) return 'rgba(255,255,255,0.05)';
+    const intensity = c / max;
+    if (intensity < 0.25) return 'rgba(48,209,88,0.25)';
+    if (intensity < 0.5) return 'rgba(48,209,88,0.45)';
+    if (intensity < 0.75) return 'rgba(48,209,88,0.7)';
+    return '#30d158';
+  };
+
+  return (
+    <div style={{ padding: '14px 16px 16px' }}>
+      <div style={{ display: 'flex', gap: 3 }}>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {Array.from({ length: 7 }).map((_, di) => {
+              const d = week[di];
+              if (!d) return <div key={di} style={{ width: 12, height: 12 }} />;
+              const key = format(d, 'yyyy-MM-dd');
+              const c = counts.get(key) ?? 0;
+              return (
+                <div
+                  key={di}
+                  title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
+                  style={{
+                    width: 12, height: 12, borderRadius: 3,
+                    background: cell(d),
+                    border: '1px solid rgba(255,255,255,0.05)',
+                  }}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>
+        <span>12 semanas</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>Menos</span>
+          {['rgba(255,255,255,0.05)', 'rgba(48,209,88,0.25)', 'rgba(48,209,88,0.45)', 'rgba(48,209,88,0.7)', '#30d158'].map((bg, i) => (
+            <div key={i} style={{ width: 9, height: 9, borderRadius: 2, background: bg }} />
+          ))}
+          <span>Mais</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// ─── HomePage ───────────────────────────────────────────────────────────────
+// ═══ Progress ring (pomodoro daily goal) ══════════════════════════════════
+function ProgressRing({ value, goal, color }: { value: number; goal: number; color: string }) {
+  const R = 26, STROKE = 5;
+  const C = 2 * Math.PI * R;
+  const pct = Math.min(1, value / Math.max(1, goal));
+  return (
+    <svg viewBox={`0 0 ${R * 2 + STROKE} ${R * 2 + STROKE}`} width={62} height={62}>
+      <g transform={`translate(${R + STROKE / 2}, ${R + STROKE / 2}) rotate(-90)`}>
+        <circle cx={0} cy={0} r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={STROKE} />
+        <circle
+          cx={0} cy={0} r={R} fill="none"
+          stroke={color} strokeWidth={STROKE}
+          strokeDasharray={`${pct * C} ${C}`}
+          strokeLinecap="round"
+        />
+      </g>
+      <text x="50%" y="50%" textAnchor="middle" dy="0.34em" fontSize={11} fontWeight={800} fill="#ffffff">
+        {Math.round(pct * 100)}%
+      </text>
+    </svg>
+  );
+}
+
+// ═══ HomePage ═════════════════════════════════════════════════════════════
 export function HomePage({ onTaskClick, onNavigate }: Props) {
   const {
     tasks, companies, subClients, leads, accentColor, pomodoroSessions, userName,
   } = useTaskStore();
   const { ideas } = useIdeasStore();
+  const { invoices } = useInvoicesStore();
+  const { approvals } = useContentApprovalsStore();
   const { user } = useAuthStore();
 
   const accentRgb = homeHexToRgb(accentColor);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayDate = startOfToday();
 
+  // ─── Greeting ─────────────────────────────────────────────────────────
   const firstName = useMemo(() => {
     if (userName && userName.trim()) return userName.trim().split(' ')[0];
     if (user?.user_metadata?.name) return String(user.user_metadata.name).split(' ')[0];
@@ -316,588 +406,569 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
     return 'visitante';
   }, [user, userName]);
 
+  // ─── Filters by lens ──────────────────────────────────────────────────
   const visibleIds = useVisibleWorkspaceIds();
   const activeTasks = tasks.filter(t => !t.archived && !t.inbox && isInLens(t, visibleIds));
-  const todayTasks = activeTasks.filter(t => t.date === todayStr);
-  const todayCount = todayTasks.length;
-  const todayDone = todayTasks.filter(t => t.status === 'done').length;
-  const openTasks = activeTasks.filter(t => t.status !== 'done');
-  const overdue = activeTasks
-    .filter(t => {
-      try { return isBefore(parseISO(t.date), todayDate) && t.status !== 'done'; } catch { return false; }
-    })
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 5);
+  const visibleInvoices = invoices.filter(i => !i.deletedAt && isInLens(i, visibleIds));
+  const visibleApprovals = approvals.filter(a => !a.deletedAt && isInLens(a, visibleIds));
+  const visibleCompanies = companies.filter(c => !c.archived && !c.deletedAt && isInLens(c, visibleIds));
+  const visibleLeads = leads.filter(l => isInLens(l, visibleIds));
 
-  const upcomingByDay = useMemo(() => {
-    const upcoming = activeTasks
-      .filter(t => {
-        try {
-          const d = parseISO(t.date);
-          return isAfter(d, todayDate) && d <= addDays(todayDate, 7) && t.status !== 'done';
-        } catch { return false; }
-      })
-      .sort((a, b) => a.date.localeCompare(b.date));
-    const groups: { date: string; tasks: Task[] }[] = [];
-    upcoming.forEach(t => {
-      const last = groups[groups.length - 1];
-      if (last && last.date === t.date) last.tasks.push(t);
-      else groups.push({ date: t.date, tasks: [t] });
+  // ─── #1 Receita do mês ────────────────────────────────────────────────
+  const revenue = useMemo(() => {
+    const start = startOfMonth(new Date());
+    const prevStart = startOfMonth(subMonths(new Date(), 1));
+    const prevEnd = endOfMonth(subMonths(new Date(), 1));
+    const sumPaid = (from: Date, to: Date | null = null) =>
+      visibleInvoices
+        .filter(i => i.status === 'paga' && i.paidAt && (() => {
+          try {
+            const d = parseISO(i.paidAt);
+            return d >= from && (to ? d <= to : true);
+          } catch { return false; }
+        })())
+        .reduce((s, i) => s + i.total, 0);
+    const current = sumPaid(start);
+    const prev = sumPaid(prevStart, prevEnd);
+    const delta = prev > 0 ? ((current - prev) / prev) * 100 : (current > 0 ? 100 : 0);
+    // Sparkline: 7 dias
+    const days = Array.from({ length: 7 }, (_, i) => format(subDays(new Date(), 6 - i), 'yyyy-MM-dd'));
+    const spark = days.map(d => {
+      return visibleInvoices
+        .filter(inv => inv.status === 'paga' && inv.paidAt?.startsWith(d))
+        .reduce((s, inv) => s + inv.total, 0);
     });
-    return groups;
-  }, [activeTasks, todayDate]);
+    return { current, prev, delta, spark };
+  }, [visibleInvoices]);
 
-  const openLeads = leads.filter(l => l.stage !== 'fechado' && isInLens(l, visibleIds));
-  const sortedOpenLeads = useMemo(() => {
-    const stageOrder: Record<LeadStage, number> = { negociacao: 0, proposta: 1, contato: 2, prospeccao: 3, fechado: 4 };
-    return [...openLeads].sort((a, b) => stageOrder[a.stage] - stageOrder[b.stage]).slice(0, 5);
-  }, [openLeads]);
-
-  const ideasThisWeek = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    return ideas.filter(i => {
-      try { return !i.deletedAt && isInLens(i, visibleIds) && parseISO(i.createdAt) >= start; } catch { return false; }
+  // ─── #2 Tarefas concluídas (semana) ───────────────────────────────────
+  const tasksDoneStats = useMemo(() => {
+    const ws = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const wsPrev = subWeeks(ws, 1);
+    const inRange = (t: Task, from: Date, to: Date) => {
+      try { const d = parseISO(t.date); return d >= from && d < to && t.status === 'done'; } catch { return false; }
+    };
+    const nextWs = addDays(ws, 7);
+    const current = activeTasks.filter(t => inRange(t, ws, nextWs)).length;
+    const prev = activeTasks.filter(t => inRange(t, wsPrev, ws)).length;
+    const delta = prev > 0 ? ((current - prev) / prev) * 100 : (current > 0 ? 100 : 0);
+    const spark = Array.from({ length: 7 }).map((_, i) => {
+      const d = format(addDays(ws, i), 'yyyy-MM-dd');
+      return activeTasks.filter(t => t.status === 'done' && t.date === d).length;
     });
-  }, [ideas, visibleIds]);
+    return { current, delta, spark };
+  }, [activeTasks]);
 
-  const ideaOfWeek = useMemo(() => {
-    const candidates = ideas.filter(i => !i.deletedAt && isInLens(i, visibleIds));
-    return deterministicPick(candidates, getISOWeek(new Date()));
-  }, [ideas, visibleIds]);
+  // ─── #3 Taxa de aprovação (1ª tentativa) ──────────────────────────────
+  const approvalRate = useMemo(() => {
+    const decided = visibleApprovals.filter(a => a.decidedAt && (a.status === 'aprovado' || a.status === 'postado' || a.status === 'alteracao'));
+    if (decided.length === 0) return { rate: 0, total: 0 };
+    const firstTry = decided.filter(a => a.status === 'aprovado' || a.status === 'postado').length;
+    return { rate: Math.round((firstTry / decided.length) * 100), total: decided.length };
+  }, [visibleApprovals]);
 
+  // ─── #4 Horas focadas (pomodoro) ──────────────────────────────────────
   const pomodoroToday = useMemo(() => {
     return pomodoroSessions
       .filter(s => !s.isBreak && s.startedAt.startsWith(todayStr))
       .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
   }, [pomodoroSessions, todayStr]);
+  const POMODORO_GOAL = 120;
 
-  const pomodoroWeek = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    return pomodoroSessions
-      .filter(s => {
-        if (s.isBreak) return false;
-        try { return parseISO(s.startedAt) >= start; } catch { return false; }
+  // ─── #5 Faturamento últimos 6 meses ───────────────────────────────────
+  const revenue6m = useMemo(() => {
+    const months = Array.from({ length: 6 }).map((_, i) => {
+      const d = subMonths(new Date(), 5 - i);
+      return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, 'MMM', { locale: ptBR }) };
+    });
+    return months.map(m => {
+      const value = visibleInvoices
+        .filter(i => i.status === 'paga' && i.paidAt && (() => {
+          try { const d = parseISO(i.paidAt); return d >= m.start && d <= m.end; } catch { return false; }
+        })())
+        .reduce((s, i) => s + i.total, 0);
+      return { label: m.label, value };
+    });
+  }, [visibleInvoices]);
+
+  // ─── #6 Pipeline CRM ──────────────────────────────────────────────────
+  const pipeline = useMemo(() => {
+    const stages: LeadStage[] = ['prospeccao', 'contato', 'proposta', 'negociacao', 'fechado'];
+    return stages.map(stage => {
+      const ls = visibleLeads.filter(l => l.stage === stage);
+      const value = ls.reduce((s, l) => s + (l.budget ? parseFloat(String(l.budget).replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : 0), 0);
+      return { stage, count: ls.length, value };
+    });
+  }, [visibleLeads]);
+
+  // ─── #7 Distribuição por empresa (top 6) ─────────────────────────────
+  const companyDistribution = useMemo(() => {
+    const opens = activeTasks.filter(t => t.status !== 'done');
+    const map = new Map<string, number>();
+    opens.forEach(t => map.set(t.companyId, (map.get(t.companyId) ?? 0) + 1));
+    const arr = Array.from(map.entries()).map(([id, count]) => {
+      const c = companies.find(x => x.id === id);
+      return { label: c?.name ?? '—', value: count, color: c?.color ?? '#64C4FF' };
+    }).sort((a, b) => b.value - a.value);
+    return { items: arr.slice(0, 6), total: opens.length };
+  }, [activeTasks, companies]);
+
+  // ─── #8 Heatmap (84 dias) ─────────────────────────────────────────────
+  const heatmapCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    activeTasks.filter(t => t.status === 'done').forEach(t => {
+      m.set(t.date, (m.get(t.date) ?? 0) + 1);
+    });
+    return m;
+  }, [activeTasks]);
+
+  // ─── #9 Empresas precisando atenção ──────────────────────────────────
+  const attentionCompanies = useMemo(() => {
+    return visibleCompanies.map(c => {
+      const reasons: string[] = [];
+      const cTasks = activeTasks.filter(t => t.companyId === c.id);
+      const lastDate = cTasks.map(t => t.date).sort().reverse()[0];
+      const limit = c.inactivityAlertDays ?? 30;
+      if (lastDate) {
+        const daysSince = differenceInCalendarDays(todayDate, parseISO(lastDate));
+        if (daysSince >= limit) reasons.push(`${daysSince}d sem tarefa`);
+      } else {
+        reasons.push('sem tarefas');
+      }
+      const overdueInv = visibleInvoices.filter(i => i.clientId === c.id && i.status === 'enviada' && i.dueDate && (() => {
+        try { return isBefore(parseISO(i.dueDate!), todayDate); } catch { return false; }
+      })());
+      if (overdueInv.length > 0) reasons.push(`${overdueInv.length} fatura${overdueInv.length > 1 ? 's' : ''} vencida${overdueInv.length > 1 ? 's' : ''}`);
+      return { company: c, reasons };
+    }).filter(x => x.reasons.length > 0).slice(0, 4);
+  }, [visibleCompanies, activeTasks, visibleInvoices, todayDate]);
+
+  // ─── #10 Renovações de contrato ──────────────────────────────────────
+  const renewals = useMemo(() => {
+    return visibleCompanies
+      .filter(c => c.contractRenewal)
+      .map(c => {
+        const d = parseISO(c.contractRenewal!);
+        const daysLeft = differenceInCalendarDays(d, todayDate);
+        return { company: c, daysLeft, date: d };
       })
-      .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
-  }, [pomodoroSessions]);
+      .filter(r => r.daysLeft >= -7 && r.daysLeft <= 30)
+      .sort((a, b) => a.daysLeft - b.daysLeft)
+      .slice(0, 4);
+  }, [visibleCompanies, todayDate]);
 
-  const companyColor = (id: string) => companies.find(c => c.id === id)?.color ?? accentColor;
-  const companyNameFn = (id: string) => companies.find(c => c.id === id)?.name ?? '';
+  // ─── #11 Aprovações pendentes ────────────────────────────────────────
+  const pendingApprovals = useMemo(() => {
+    return visibleApprovals
+      .filter(a => (a.status === 'enviado' || a.status === 'visualizado') && a.sentAt)
+      .map(a => {
+        try {
+          const days = differenceInCalendarDays(todayDate, parseISO(a.sentAt!));
+          return { approval: a, daysWaiting: days };
+        } catch { return null; }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null && x.daysWaiting >= 3)
+      .sort((a, b) => b.daysWaiting - a.daysWaiting)
+      .slice(0, 4);
+  }, [visibleApprovals, todayDate]);
 
-  // #5 — Stat tiles maiores (pra usar dentro do hero)
-  const statTiles = [
-    { label: 'Hoje',         value: todayCount,         icon: <FiCheckCircle size={14} /> },
-    { label: 'Em aberto',    value: openTasks.length,   icon: <FiClock size={14} /> },
-    { label: 'Leads',        value: openLeads.length,   icon: <FiUsers size={14} /> },
-    { label: 'Ideias semana', value: ideasThisWeek.length, icon: <FiZap size={14} /> },
-  ];
+  // ─── #12 Inadimplentes ───────────────────────────────────────────────
+  const overdueInvoices = useMemo(() => {
+    return visibleInvoices
+      .filter(i => i.status === 'enviada' && i.dueDate && (() => {
+        try { return isBefore(parseISO(i.dueDate!), todayDate); } catch { return false; }
+      })())
+      .map(i => {
+        const days = differenceInCalendarDays(todayDate, parseISO(i.dueDate!));
+        return { invoice: i, daysOverdue: days };
+      })
+      .sort((a, b) => b.daysOverdue - a.daysOverdue)
+      .slice(0, 4);
+  }, [visibleInvoices, todayDate]);
 
-  const dayLabel = (dateStr: string) => {
-    try {
-      const d = parseISO(dateStr);
-      const dow = getDay(d);
-      const labels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-      return `${labels[dow]} · ${format(d, "d MMM", { locale: ptBR })}`;
-    } catch { return dateStr; }
-  };
+  // ─── #13 Insight da semana ───────────────────────────────────────────
+  const insight = useMemo(() => {
+    const insights: string[] = [];
+    if (tasksDoneStats.delta > 10) insights.push(`Você concluiu ${Math.round(tasksDoneStats.delta)}% mais tarefas que semana passada. Excelente!`);
+    if (tasksDoneStats.delta < -10) insights.push(`Atenção: produtividade caiu ${Math.round(Math.abs(tasksDoneStats.delta))}% vs semana passada.`);
+    if (revenue.delta > 20) insights.push(`Receita do mês está ${Math.round(revenue.delta)}% acima do mês anterior.`);
+    if (revenue.delta < -10) insights.push(`Receita está ${Math.round(Math.abs(revenue.delta))}% abaixo do mês anterior — vale revisar pipeline.`);
+    if (overdueInvoices.length >= 3) insights.push(`${overdueInvoices.length} faturas vencidas precisam de cobrança.`);
+    if (pendingApprovals.length >= 3) insights.push(`${pendingApprovals.length} aprovações aguardando cliente há +3 dias.`);
+    if (attentionCompanies.length >= 3) insights.push(`${attentionCompanies.length} empresas inativas — vale agendar contato.`);
+    if (approvalRate.rate >= 80 && approvalRate.total >= 5) insights.push(`Taxa de aprovação em 1ª tentativa: ${approvalRate.rate}%. Qualidade alta!`);
+    if (insights.length === 0) {
+      insights.push(`Olá ${firstName}, semana corrente. Continue assim!`);
+    }
+    return insights[0];
+  }, [tasksDoneStats, revenue, overdueInvoices, pendingApprovals, attentionCompanies, approvalRate, firstName]);
 
-  const todayProgress = todayCount > 0 ? (todayDone / todayCount) * 100 : 0;
+  // ─── Header stats / context ──────────────────────────────────────────
+  const todayTasks = activeTasks.filter(t => t.date === todayStr);
+  const overdue = activeTasks
+    .filter(t => { try { return isBefore(parseISO(t.date), todayDate) && t.status !== 'done'; } catch { return false; } });
+
+  const ideasThisWeek = useMemo(() => {
+    const ws = startOfWeek(new Date(), { weekStartsOn: 1 });
+    return ideas.filter(i => {
+      try { return !i.deletedAt && isInLens(i, visibleIds) && parseISO(i.createdAt) >= ws; } catch { return false; }
+    }).length;
+  }, [ideas, visibleIds]);
+
+  const companyName = (id: string) => companies.find(c => c.id === id)?.name ?? '—';
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* ═══ Body ════════════════════════════════════════════════════════════ */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 24px' }}>
-
-        {/* #1 — HERO CARD com gradiente azul forte e saudação grande */}
+        {/* ═══ HERO — saudação + CTA ════════════════════════════════════ */}
         <div style={{
           background: `linear-gradient(135deg, ${accentColor} 0%, #1d4ed8 60%, #1e3a8a 100%)`,
-          borderRadius: 18,
-          padding: '24px 26px 22px',
-          marginBottom: 18,
+          borderRadius: 18, padding: '22px 26px',
           position: 'relative', overflow: 'hidden',
           boxShadow: `0 12px 40px rgba(${accentRgb},0.28), 0 0 0 1px rgba(255,255,255,0.06) inset`,
         }}>
-          {/* Decoração: bolha de luz */}
-          <div style={{
-            position: 'absolute', top: -60, right: -40, width: 220, height: 220,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: -80, left: -30, width: 180, height: 180,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(100,196,255,0.18) 0%, transparent 65%)',
-            pointerEvents: 'none',
-          }} />
-
-          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14, marginBottom: 18 }}>
+          <div style={{ position: 'absolute', top: -60, right: -40, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', marginBottom: 6 }}>Dashboard</div>
-              {/* #1 — saudação gigante em branco */}
-              <div style={{ fontSize: 36, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.9px', lineHeight: 1.05 }}>
-                Olá, <span style={{ color: '#ffffff' }}>{firstName}</span>
-                <span style={{ color: 'rgba(255,255,255,0.85)' }}>.</span>
+              <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.7px', lineHeight: 1.05 }}>
+                Olá, {firstName}<span style={{ color: 'rgba(255,255,255,0.8)' }}>.</span>
               </div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)', marginTop: 6, fontWeight: 500 }}>
-                {todayCount === 0
-                  ? 'Nenhuma tarefa pra hoje. Que tal planejar a semana?'
-                  : `${todayCount} ${todayCount === 1 ? 'tarefa' : 'tarefas'} pra hoje · ${todayDone} ${todayDone === 1 ? 'concluída' : 'concluídas'}`}
+                {todayTasks.length === 0 ? 'Nenhuma tarefa pra hoje.' : `${todayTasks.length} ${todayTasks.length === 1 ? 'tarefa' : 'tarefas'} pra hoje · ${overdue.length} atrasada${overdue.length !== 1 ? 's' : ''} · ${ideasThisWeek} ideia${ideasThisWeek !== 1 ? 's' : ''} essa semana`}
               </div>
             </div>
-
-            {/* #6 — Botão Nova com glow azul */}
             <button
               onClick={() => onNavigate('tarefas')}
               style={{
                 display: 'flex', alignItems: 'center', gap: 7,
                 padding: '11px 20px', borderRadius: 11,
                 background: '#ffffff', border: 'none',
-                color: accentColor, fontSize: 13, fontWeight: 800,
-                cursor: 'pointer',
+                color: accentColor, fontSize: 13, fontWeight: 800, cursor: 'pointer',
                 boxShadow: '0 8px 22px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.4) inset',
-                letterSpacing: '-0.1px', transition: 'transform .12s, box-shadow .12s',
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
-                (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 30px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.5) inset';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 22px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.4) inset';
-              }}
-            >
+                letterSpacing: '-0.1px',
+              }}>
               <FiPlus size={14} /> Nova tarefa
             </button>
           </div>
+        </div>
 
-          {/* #5 — Stat tiles grandes em vidro fosco */}
-          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-            {statTiles.map(s => (
-              <div key={s.label} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '14px 16px', borderRadius: 12,
-                background: 'rgba(255,255,255,0.10)',
-                border: '1px solid rgba(255,255,255,0.18)',
-                backdropFilter: 'blur(8px)',
-              }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: 9,
-                  background: 'rgba(255,255,255,0.16)',
-                  border: '1px solid rgba(255,255,255,0.22)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#ffffff', flexShrink: 0,
-                }}>
-                  {s.icon}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' }}>
-                    {s.label}
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', lineHeight: 1.05, letterSpacing: '-0.6px' }}>
-                    {s.value}
-                  </div>
-                </div>
-              </div>
-            ))}
+        {/* ═══ #13 Insight da semana ═══════════════════════════════════ */}
+        <div style={{
+          padding: '12px 18px', borderRadius: 12,
+          background: `linear-gradient(90deg, rgba(${accentRgb},0.18) 0%, rgba(${accentRgb},0.04) 100%)`,
+          border: `1px solid rgba(${accentRgb},0.28)`,
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+            background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff',
+          }}>
+            <FiActivity size={15} />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1.4px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)' }}>Insight da semana</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#ffffff', marginTop: 2, letterSpacing: '-0.1px' }}>{insight}</div>
           </div>
         </div>
 
-        {/* ═══ Grid principal ═════════════════════════════════════════════════ */}
-        <div className="bento-grid bento-sidebar" style={{ gridAutoRows: 'min-content' }}>
-
-          {/* ─── MAIN COLUMN ─────────────────────────────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-
-            {/* #2 — Card "Hoje" PROTAGONISTA: fundo azul sólido com gradiente */}
-            <div style={{
-              borderRadius: 16,
-              background: `linear-gradient(155deg, ${accentColor} 0%, #1e40af 100%)`,
-              border: '1px solid rgba(255,255,255,0.14)',
-              boxShadow: `0 16px 40px rgba(${accentRgb},0.28), 0 0 0 1px rgba(255,255,255,0.05) inset`,
-              overflow: 'hidden', position: 'relative',
-            }}>
-              {/* Glow decoração */}
-              <div style={{
-                position: 'absolute', top: -50, right: -50, width: 200, height: 200,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255,255,255,0.14) 0%, transparent 70%)',
-                pointerEvents: 'none',
-              }} />
-
-              <CardHeader
-                white
-                icon={<FiCheckCircle size={14} />}
-                title="Hoje"
-                accent="#ffffff"
-                right={
-                  todayCount > 0 ? (
-                    <span style={{
-                      fontSize: 11, fontWeight: 800,
-                      background: todayDone === todayCount ? '#30d158' : 'rgba(255,255,255,0.22)',
-                      color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                      borderRadius: 99, padding: '3px 11px',
-                    }}>
-                      {todayDone}/{todayCount}
-                    </span>
-                  ) : undefined
-                }
-              />
-
-              {todayCount > 0 && (
-                <div style={{ height: 3, background: 'rgba(255,255,255,0.15)', position: 'relative' }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${todayProgress}%` }}
-                    transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}
-                    style={{ height: '100%', background: 'linear-gradient(90deg, #ffffff, #30d158)' }}
-                  />
-                </div>
-              )}
-
-              <div style={{ padding: '12px 12px 14px', position: 'relative' }}>
-                {todayTasks.length === 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '22px 16px' }}>
-                    <div style={{
-                      width: 52, height: 52, borderRadius: 14,
-                      background: 'rgba(255,255,255,0.14)',
-                      border: '1px solid rgba(255,255,255,0.22)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#ffffff',
-                    }}>
-                      <FiSun size={24} />
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.2px' }}>
-                      Dia livre. Aproveite!
-                    </div>
-                    <button
-                      onClick={() => onNavigate('tarefas')}
-                      style={{
-                        marginTop: 4, padding: '8px 16px', borderRadius: 9,
-                        background: 'rgba(255,255,255,0.18)',
-                        border: '1px solid rgba(255,255,255,0.32)',
-                        color: '#ffffff', fontSize: 11, fontWeight: 700,
-                        letterSpacing: '0.4px', cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                      }}
-                    >
-                      <FiPlus size={11} /> Adicionar tarefa
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {todayTasks.slice(0, 8).map((task, i) => (
-                      <motion.div key={task.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
-                        <TaskRow
-                          task={task}
-                          color={companyColor(task.companyId)}
-                          title={getTaskTitle(task, companies, subClients)}
-                          companyName={companyNameFn(task.companyId)}
-                          onClick={() => onTaskClick(task)}
-                          onBlue
-                        />
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
+        {/* ═══ KPI top row (4 tiles) ═══════════════════════════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <KpiTile
+            label="Receita do mês"
+            value={fmtBRL(revenue.current)}
+            delta={revenue.delta}
+            icon={<FiDollarSign size={13} />} color="#30d158"
+            sparkline={revenue.spark}
+          />
+          <KpiTile
+            label="Tarefas concluídas (semana)"
+            value={tasksDoneStats.current}
+            delta={tasksDoneStats.delta}
+            icon={<FiCheckSquare size={13} />} color={accentColor}
+            sparkline={tasksDoneStats.spark}
+          />
+          <KpiTile
+            label="Taxa de aprovação"
+            value={approvalRate.rate}
+            suffix={`% · ${approvalRate.total} ${approvalRate.total === 1 ? 'item' : 'itens'}`}
+            icon={<FiCheckCircle size={13} />} color="#bf5af2"
+          />
+          <div style={{
+            borderRadius: 14,
+            background: 'linear-gradient(160deg, rgba(255,69,58,0.10) 0%, var(--s1) 60%)',
+            border: '1px solid rgba(255,69,58,0.22)',
+            padding: '14px 16px', position: 'relative', overflow: 'hidden',
+            boxShadow: '0 6px 18px rgba(255,69,58,0.08), 0 1px 0 rgba(255,255,255,0.04) inset',
+            display: 'flex', alignItems: 'center', gap: 12, minHeight: 110,
+          }}>
+            <ProgressRing value={pomodoroToday} goal={POMODORO_GOAL} color="#ff453a" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <FiClock size={12} style={{ color: '#ff453a' }} />
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)' }}>Foco hoje</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.5px', lineHeight: 1 }}>
+                {pomodoroToday}<span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.55)', marginLeft: 3 }}>min</span>
+              </div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+                Meta: {POMODORO_GOAL} min
               </div>
             </div>
-
-            {/* Esta semana */}
-            <Card blueGlow>
-              <CardHeader
-                icon={<FiTrendingUp size={14} />}
-                title="Esta semana"
-                accent={accentColor}
-              />
-              <div style={{ padding: '14px 16px 16px' }}>
-                <WeeklyBars tasks={tasks} accentColor={accentColor} accentRgb={accentRgb} />
-              </div>
-            </Card>
-
-            {/* CRM em aberto */}
-            <Card>
-              <CardHeader
-                icon={<FiUsers size={14} />}
-                title="CRM em aberto"
-                accent="#bf5af2"
-                right={
-                  <button onClick={() => onNavigate('crm')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ffffff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, opacity: 0.85 }}>
-                    Ver <FiArrowRight size={11} />
-                  </button>
-                }
-              />
-              <div style={{ padding: '10px 10px 12px' }}>
-                {sortedOpenLeads.length === 0 ? (
-                  <EmptyState icon={<FiTarget size={20} />} text="Nenhum lead em aberto." cta="Criar lead" onCta={() => onNavigate('crm')} iconColor="#bf5af2" />
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {sortedOpenLeads.map((lead, i) => {
-                      const stageColor = LEAD_STAGE_COLOR[lead.stage];
-                      return (
-                        <motion.button
-                          key={lead.id}
-                          initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                          onClick={() => onNavigate('crm')}
-                          style={{
-                            width: '100%', textAlign: 'left',
-                            display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '9px 11px', borderRadius: 9,
-                            background: 'transparent', border: '1px solid transparent',
-                            cursor: 'pointer', transition: 'background .12s',
-                          }}
-                          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
-                          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
-                        >
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor, flexShrink: 0, boxShadow: `0 0 6px ${stageColor}88` }} />
-                          <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {lead.name}
-                          </span>
-                          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: stageColor, flexShrink: 0 }}>
-                            {LEAD_STAGE_LABEL[lead.stage]}
-                          </span>
-                          {lead.temperature === 'quente' && (
-                            <span style={{
-                              fontSize: 8, fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase',
-                              color: '#ff453a', background: 'rgba(255,69,58,0.16)',
-                              border: '1px solid rgba(255,69,58,0.3)',
-                              borderRadius: 99, padding: '1px 6px', flexShrink: 0,
-                            }}>Quente</span>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Próximos 7 dias */}
-            <Card>
-              <CardHeader
-                icon={<FiClock size={14} />}
-                title="Próximos 7 dias"
-                accent="#64d2ff"
-              />
-              <div style={{ padding: '10px 10px 12px' }}>
-                {upcomingByDay.length === 0 ? (
-                  <EmptyState icon={<FiCalendar size={20} />} text="Agenda livre nos próximos dias." cta="Adicionar tarefa" onCta={() => onNavigate('tarefas')} iconColor="#64d2ff" />
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {upcomingByDay.map((group, gi) => (
-                      <div key={group.date} style={{ display: 'flex', gap: 0 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0, paddingTop: 6 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#64d2ff', boxShadow: '0 0 8px rgba(100,210,255,0.6)', flexShrink: 0 }} />
-                          {gi < upcomingByDay.length - 1 && (
-                            <div style={{ width: 1, flex: 1, background: 'linear-gradient(180deg, rgba(100,210,255,0.35) 0%, transparent 100%)', minHeight: 24, marginTop: 2 }} />
-                          )}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0, paddingBottom: gi < upcomingByDay.length - 1 ? 10 : 0 }}>
-                          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#64d2ff', padding: '4px 10px 5px' }}>
-                            {dayLabel(group.date)}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {group.tasks.map(task => (
-                              <TaskRow
-                                key={task.id}
-                                task={task}
-                                color={companyColor(task.companyId)}
-                                title={getTaskTitle(task, companies, subClients)}
-                                companyName={companyNameFn(task.companyId)}
-                                onClick={() => onTaskClick(task)}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          {/* ─── RIGHT COLUMN ───────────────────────────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-
-            {/* Pomodoro */}
-            <Card style={{ background: 'linear-gradient(160deg, rgba(255,69,58,0.08) 0%, var(--s1) 50%)' }}>
-              <CardHeader
-                icon={<FiClock size={14} />}
-                title="Pomodoro"
-                accent="#ff453a"
-              />
-              <div style={{ padding: '14px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>Hoje</div>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.6px', lineHeight: 1.1 }}>
-                    {pomodoroToday}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 700, marginLeft: 3 }}>min</span>
-                  </div>
-                </div>
-                <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.1)' }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>Semana</div>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.6px', lineHeight: 1.1 }}>
-                    {pomodoroWeek}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 700, marginLeft: 3 }}>min</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Atrasadas */}
-            <Card style={{ border: '1px solid rgba(255,69,58,0.32)', background: 'linear-gradient(160deg, rgba(255,69,58,0.07) 0%, var(--s1) 45%)' }}>
-              <CardHeader
-                icon={<FiAlertTriangle size={14} />}
-                title="Atrasadas"
-                accent="#ff453a"
-                right={overdue.length > 0 ? (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', background: '#ff453a', borderRadius: 99, padding: '2px 9px' }}>
-                    {overdue.length}
-                  </span>
-                ) : undefined}
-              />
-              <div style={{ padding: '10px 10px 12px' }}>
-                {overdue.length === 0 ? (
-                  <EmptyState icon={<FiCheckCircle size={20} />} text="Nada em atraso." iconColor="#30d158" />
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {overdue.map((task, i) => (
-                      <motion.div key={task.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
-                        <button
-                          onClick={() => onTaskClick(task)}
-                          style={{
-                            width: '100%', textAlign: 'left',
-                            display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '9px 11px', borderRadius: 9,
-                            background: 'transparent', border: '1px solid transparent',
-                            cursor: 'pointer', transition: 'background .12s', minWidth: 0,
-                          }}
-                          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.10)')}
-                          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
-                        >
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ff453a', flexShrink: 0, boxShadow: '0 0 6px rgba(255,69,58,0.6)' }} />
-                          <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {getTaskTitle(task, companies, subClients)}
-                          </span>
-                          <span style={{ fontSize: 10, color: '#ff453a', fontWeight: 800, flexShrink: 0 }}>
-                            {format(parseISO(task.date), "d MMM", { locale: ptBR })}
-                          </span>
-                        </button>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Ideia da semana */}
-            <Card>
-              <CardHeader
-                icon={<FiZap size={14} />}
-                title="Ideia da semana"
-                accent="#ffd60a"
-                right={
-                  <button onClick={() => onNavigate('ideias')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ffffff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, opacity: 0.85 }}>
-                    Ver <FiArrowRight size={11} />
-                  </button>
-                }
-              />
-              <div style={{ padding: '14px 16px 16px' }}>
-                {!ideaOfWeek ? (
-                  <EmptyState icon={<FiZap size={20} />} text="Nenhuma ideia ainda." cta="Criar primeira" onCta={() => onNavigate('ideias')} iconColor="#ffd60a" />
-                ) : (() => {
-                  const tagCfg = IDEA_TAG_CONFIG[ideaOfWeek.tag];
-                  return (
-                    <button
-                      onClick={() => onNavigate('ideias')}
-                      style={{
-                        width: '100%', textAlign: 'left',
-                        background: 'rgba(255,214,10,0.08)',
-                        border: '1px solid rgba(255,214,10,0.28)',
-                        borderRadius: 11, padding: '14px 16px',
-                        cursor: 'pointer', transition: 'all .15s',
-                        display: 'flex', flexDirection: 'column', gap: 8,
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.13)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.45)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.08)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.28)'; }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{
-                          fontSize: 9, fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase',
-                          color: tagCfg.color, background: `${tagCfg.color}22`,
-                          border: `1px solid ${tagCfg.color}40`,
-                          borderRadius: 99, padding: '2px 9px',
-                        }}>
-                          {tagCfg.label}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#ffffff', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {ideaOfWeek.title || '(sem título)'}
-                      </div>
-                      {ideaOfWeek.description && (
-                        <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.7)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          {ideaOfWeek.description}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })()}
-              </div>
-            </Card>
-
-            {/* Atalhos */}
-            <Card>
-              <CardHeader
-                icon={<FiArrowRight size={14} />}
-                title="Atalhos"
-                accent={accentColor}
-              />
-              <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {([
-                  { label: 'Empresas', icon: <FiBriefcase size={18} />, page: 'empresas' as PageType, color: '#64C4FF', rgb: '100,196,255' },
-                  { label: 'CRM',      icon: <FiUsers size={18} />,     page: 'crm' as PageType,      color: '#bf5af2', rgb: '191,90,242' },
-                  { label: 'To Do',    icon: <FiCheckSquare size={18} />, page: 'todo' as PageType,   color: '#30d158', rgb: '48,209,88' },
-                  { label: 'Ideias',   icon: <FiZap size={18} />,       page: 'ideias' as PageType,   color: '#ffd60a', rgb: '255,214,10' },
-                ]).map(s => (
-                  <button
-                    key={s.label}
-                    onClick={() => onNavigate(s.page)}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7,
-                      padding: '18px 8px', borderRadius: 11,
-                      background: `rgba(${s.rgb},0.10)`, border: `1px solid rgba(${s.rgb},0.26)`,
-                      color: s.color, cursor: 'pointer', transition: 'all .15s',
-                      position: 'relative', overflow: 'hidden',
-                    }}
-                    onMouseEnter={e => {
-                      const el = e.currentTarget as HTMLElement;
-                      el.style.background = `linear-gradient(160deg, rgba(${s.rgb},0.25) 0%, rgba(${s.rgb},0.10) 100%)`;
-                      el.style.borderColor = `rgba(${s.rgb},0.5)`;
-                      el.style.transform = 'translateY(-1px)';
-                      el.style.boxShadow = `0 8px 24px rgba(${s.rgb},0.25)`;
-                    }}
-                    onMouseLeave={e => {
-                      const el = e.currentTarget as HTMLElement;
-                      el.style.background = `rgba(${s.rgb},0.10)`;
-                      el.style.borderColor = `rgba(${s.rgb},0.26)`;
-                      el.style.transform = 'translateY(0)';
-                      el.style.boxShadow = 'none';
-                    }}
-                  >
-                    {s.icon}
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase', color: '#ffffff' }}>{s.label}</span>
-                  </button>
-                ))}
-              </div>
-            </Card>
           </div>
         </div>
-      </div>
 
+        {/* ═══ Row 2: Faturamento 6m + Pipeline CRM ═══════════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 14 }}>
+          <Card>
+            <CardHeader
+              icon={<FiTrendingUp size={14} />}
+              title="Faturamento — últimos 6 meses"
+              accent={accentColor}
+              right={<span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>{fmtBRLfull(revenue6m.reduce((s, m) => s + m.value, 0))}</span>}
+            />
+            <div style={{ padding: '10px 8px 8px' }}>
+              <AreaChart series={revenue6m} accentColor={accentColor} accentRgb={accentRgb} />
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              icon={<FiTarget size={14} />}
+              title="Pipeline do CRM"
+              accent="#bf5af2"
+              right={<button onClick={() => onNavigate('crm')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ffffff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, opacity: 0.85 }}>Ver <FiArrowRight size={11} /></button>}
+            />
+            <CrmFunnel stages={pipeline} onClick={() => onNavigate('crm')} />
+          </Card>
+        </div>
+
+        {/* ═══ Row 3: Donut + Heatmap ═════════════════════════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)', gap: 14 }}>
+          <Card>
+            <CardHeader
+              icon={<FiPieChart size={14} />}
+              title="Carga por empresa"
+              accent="#64C4FF"
+            />
+            {companyDistribution.total === 0 ? (
+              <div style={{ padding: '36px 20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>
+                Nenhuma tarefa em aberto.
+              </div>
+            ) : (
+              <DonutChart data={companyDistribution.items} total={companyDistribution.total} />
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader
+              icon={<FiActivity size={14} />}
+              title="Produtividade · 12 semanas"
+              accent="#30d158"
+            />
+            <ProductivityHeatmap counts={heatmapCounts} />
+          </Card>
+        </div>
+
+        {/* ═══ Row 4: Atenção + Renovações + Inadimplentes ═════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+          {/* #9 Empresas precisando atenção */}
+          <Card style={{ border: '1px solid rgba(255,159,10,0.28)' }}>
+            <CardHeader
+              icon={<FiAlertTriangle size={14} />}
+              title="Precisam de atenção"
+              accent="#ff9f0a"
+              right={attentionCompanies.length > 0 ? <span style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', background: '#ff9f0a', borderRadius: 99, padding: '2px 9px' }}>{attentionCompanies.length}</span> : undefined}
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {attentionCompanies.length === 0 ? (
+                <div style={{ padding: '20px 12px', textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Tudo em ordem.</div>
+              ) : attentionCompanies.map(({ company, reasons }) => (
+                <button key={company.id} onClick={() => onNavigate('empresas')}
+                  style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 4, padding: '9px 11px', borderRadius: 9, background: 'transparent', border: '1px solid transparent', cursor: 'pointer', marginBottom: 3 }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,159,10,0.08)')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: company.color, boxShadow: `0 0 6px ${company.color}88` }} />
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#ffffff' }}>{company.name}</span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#ff9f0a', fontWeight: 600, paddingLeft: 15 }}>
+                    {reasons.join(' · ')}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {/* #10 Renovações */}
+          <Card>
+            <CardHeader
+              icon={<FiRotateCw size={14} />}
+              title="Renovações próximas"
+              accent="#64d2ff"
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {renewals.length === 0 ? (
+                <div style={{ padding: '20px 12px', textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Nada nos próximos 30 dias.</div>
+              ) : renewals.map(r => {
+                const overdue = r.daysLeft < 0;
+                return (
+                  <button key={r.company.id} onClick={() => onNavigate('empresas')}
+                    style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 9, background: 'transparent', border: '1px solid transparent', cursor: 'pointer', marginBottom: 3 }}
+                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
+                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                  >
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: r.company.color, boxShadow: `0 0 6px ${r.company.color}88`, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.company.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: overdue ? '#ff453a' : (r.daysLeft <= 7 ? '#ff9f0a' : '#64d2ff'), flexShrink: 0 }}>
+                      {overdue ? `${Math.abs(r.daysLeft)}d atrás` : r.daysLeft === 0 ? 'hoje' : `em ${r.daysLeft}d`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* #11 Aprovações pendentes */}
+          <Card>
+            <CardHeader
+              icon={<FiClock size={14} />}
+              title="Aprovações pendentes"
+              accent="#bf5af2"
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {pendingApprovals.length === 0 ? (
+                <div style={{ padding: '20px 12px', textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Nada esperando há +3 dias.</div>
+              ) : pendingApprovals.map(({ approval, daysWaiting }) => (
+                <button key={approval.id} onClick={() => onNavigate('aprovacoes')}
+                  style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 9, background: 'transparent', border: '1px solid transparent', cursor: 'pointer', marginBottom: 3 }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#bf5af2', boxShadow: '0 0 6px rgba(191,90,242,0.6)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{approval.title}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)' }}>{companyName(approval.clientId)}</div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#ff9f0a', flexShrink: 0 }}>{daysWaiting}d</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {/* #12 Inadimplentes */}
+          <Card style={{ border: '1px solid rgba(255,69,58,0.32)' }}>
+            <CardHeader
+              icon={<FiAlertCircle size={14} />}
+              title="Faturas vencidas"
+              accent="#ff453a"
+              right={overdueInvoices.length > 0 ? (
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', background: '#ff453a', borderRadius: 99, padding: '2px 9px' }}>
+                  {fmtBRL(overdueInvoices.reduce((s, x) => s + x.invoice.total, 0))}
+                </span>
+              ) : undefined}
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {overdueInvoices.length === 0 ? (
+                <div style={{ padding: '20px 12px', textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Nenhuma fatura vencida.</div>
+              ) : overdueInvoices.map(({ invoice, daysOverdue }) => (
+                <button key={invoice.id} onClick={() => onNavigate('faturas')}
+                  style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 9, background: 'transparent', border: '1px solid transparent', cursor: 'pointer', marginBottom: 3 }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.08)')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff453a', boxShadow: '0 0 6px rgba(255,69,58,0.6)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#ffffff' }}>#{String(invoice.number).padStart(4, '0')} · {companyName(invoice.clientId)}</div>
+                    <div style={{ fontSize: 10, color: '#ff453a', fontWeight: 700 }}>{daysOverdue}d em atraso · {fmtBRL(invoice.total)}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* ═══ Row final: Hoje + Atalhos ═══════════════════════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 14 }}>
+          <Card style={{ border: '1px solid rgba(53,107,255,0.28)' }}>
+            <CardHeader
+              icon={<FiSun size={14} />}
+              title="Tarefas de hoje"
+              accent={accentColor}
+              right={<button onClick={() => onNavigate('tarefas')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ffffff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, opacity: 0.85 }}>Ver tudo <FiArrowRight size={11} /></button>}
+            />
+            <div style={{ padding: '10px 10px 12px' }}>
+              {todayTasks.length === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center' }}>
+                  <FiCalendar size={28} style={{ color: 'rgba(255,255,255,0.3)', marginBottom: 8 }} />
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>Dia livre. Aproveite!</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {todayTasks.slice(0, 8).map((task, i) => {
+                    const c = companies.find(x => x.id === task.companyId);
+                    return (
+                      <motion.button
+                        key={task.id}
+                        initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+                        onClick={() => onTaskClick(task)}
+                        style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 9, background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                      >
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: c?.color ?? accentColor, boxShadow: `0 0 6px ${c?.color ?? accentColor}88`, flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {getTaskTitle(task, companies, subClients)}
+                        </span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: c?.color ?? accentColor, flexShrink: 0, opacity: 0.85 }}>
+                          {c?.name}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader icon={<FiArrowRight size={14} />} title="Atalhos" accent={accentColor} />
+            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {([
+                { label: 'Empresas', icon: <FiBriefcase size={18} />, page: 'empresas' as PageType, color: '#64C4FF', rgb: '100,196,255' },
+                { label: 'CRM',      icon: <FiUsers size={18} />,     page: 'crm' as PageType,      color: '#bf5af2', rgb: '191,90,242' },
+                { label: 'To Do',    icon: <FiCheckSquare size={18} />, page: 'todo' as PageType,   color: '#30d158', rgb: '48,209,88' },
+                { label: 'Ideias',   icon: <FiZap size={18} />,       page: 'ideias' as PageType,   color: '#ffd60a', rgb: '255,214,10' },
+              ]).map(s => (
+                <button key={s.label} onClick={() => onNavigate(s.page)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '18px 8px', borderRadius: 11, background: `rgba(${s.rgb},0.10)`, border: `1px solid rgba(${s.rgb},0.26)`, color: s.color, cursor: 'pointer', transition: 'all .15s' }}
+                  onMouseEnter={e => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = `linear-gradient(160deg, rgba(${s.rgb},0.25) 0%, rgba(${s.rgb},0.10) 100%)`;
+                    el.style.borderColor = `rgba(${s.rgb},0.5)`;
+                    el.style.transform = 'translateY(-1px)';
+                    el.style.boxShadow = `0 8px 24px rgba(${s.rgb},0.25)`;
+                  }}
+                  onMouseLeave={e => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = `rgba(${s.rgb},0.10)`;
+                    el.style.borderColor = `rgba(${s.rgb},0.26)`;
+                    el.style.transform = 'translateY(0)';
+                    el.style.boxShadow = 'none';
+                  }}
+                >
+                  {s.icon}
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase', color: '#ffffff' }}>{s.label}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+      </div>
     </div>
   );
 }
