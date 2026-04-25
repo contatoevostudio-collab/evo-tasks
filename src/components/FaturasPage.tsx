@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import QRCode from 'qrcode';
 import {
   FiPlus, FiTrash2, FiEdit2, FiX, FiCheck, FiDollarSign,
   FiLink, FiPrinter, FiChevronDown, FiArrowLeft, FiCopy,
@@ -8,6 +9,34 @@ import { ptBR } from 'date-fns/locale';
 import { useInvoicesStore, INVOICE_STATUS_CONFIG } from '../store/invoices';
 import { useTaskStore } from '../store/tasks';
 import type { Invoice, InvoiceStatus, InvoiceItem } from '../types';
+
+// ── QR Code component (client-side, no external service) ─────────────────────
+function PixQRCode({ pixKey, pixName, total }: { pixKey: string; pixName?: string; total: number }) {
+  const [src, setSrc] = useState('');
+  const generate = useCallback(async () => {
+    if (!pixKey) return;
+    try {
+      const payload = generatePixPayload(pixKey, pixName ?? '', total);
+      const url = await QRCode.toDataURL(payload, {
+        width: 140,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      setSrc(url);
+    } catch (e) {
+      console.error('PIX QR error', e);
+    }
+  }, [pixKey, pixName, total]);
+
+  useEffect(() => { generate(); }, [generate]);
+
+  if (!src) return <div style={{ width: 140, height: 140, borderRadius: 10, background: '#f0f0f0' }} />;
+  return (
+    <img src={src} alt="QR Code PIX" width={140} height={140}
+      style={{ borderRadius: 10, display: 'block', background: '#fff' }} />
+  );
+}
 
 type EditState = Invoice | 'new' | null;
 
@@ -713,15 +742,9 @@ export function PublicInvoiceView({
                     Transfira exatamente <strong style={{ color: accent }}>{fmt(inv.total)}</strong> para esta chave PIX.
                   </p>
                 </div>
-                {/* QR Code PIX (EMV BR Code) */}
+                {/* QR Code PIX (EMV BR Code — gerado client-side) */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(generatePixPayload(inv.pixKey, inv.pixName ?? '', inv.total))}&bgcolor=ffffff&color=000000&margin=8`}
-                    alt="QR Code PIX"
-                    width={140}
-                    height={140}
-                    style={{ borderRadius: 10, background: '#fff', display: 'block' }}
-                  />
+                  <PixQRCode pixKey={inv.pixKey} pixName={inv.pixName} total={inv.total} />
                   <span style={{ fontSize: 10, color: 'var(--t4)' }}>Escaneie para pagar</span>
                 </div>
               </div>
