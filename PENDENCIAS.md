@@ -4,14 +4,13 @@
 
 ## 🎯 Status atual (2026-04-25)
 
-**Em produção** (https://task.evostudiolab.com.br): Ondas 1 e 2.
+**Em produção** (https://task.evostudiolab.com.br): Ondas 1, 2, 3A e 3B.
 
-**Resolvido localmente, ainda não deployado:** Ondas 3A + 3B — os 35 conflitos de merge entre as duas foram resolvidos, build limpo (bundle inicial 328kB / gzip 90kB), aguardando commit consolidado + deploy.
+**Aguardando push + deploy:** Onda 3C — Inbox unificada + Task templates + Recurrence inteligente. Branch ahead de origin em 5 commits, bundle 339kB / 92.7kB gzip.
 
 ### Próximo passo concreto
-1. Commit consolidando WIP + staged como "Wave 3A+3B: cross-linking + sync indicator + page transitions + skeleton + soft-delete + lixeira"
-2. Deploy → produção
-3. Começar Onda 3C
+1. Push origin/main + deploy prod fechando 3C
+2. Onda 3D opcional (histórico de versões) ou ir direto pra Onda 4 (Workspaces)
 
 ## ✅ Histórico do que já está integrado
 
@@ -38,7 +37,7 @@
 - Page transitions com AnimatePresence (fade+y±8, 180ms)
 - `PageSkeleton.tsx` com shimmer durante load inicial
 
-### Onda 3B — Soft-delete + Lixeira (resolvido localmente)
+### Onda 3B — Soft-delete + Lixeira
 - `deletedAt?: string` em Task, Lead, Company, SubClient
 - `deleteX` virou soft-delete + novas `permanentlyDeleteX` + `restoreX` + `purgeOldTrash`
 - Filtros `!deletedAt` em todas as listas ativas (Kanban/Month/Week/Day/Home/BottomBar/NavSidebar/Empresas/Search/Archive/TaskModal/Settings)
@@ -47,10 +46,11 @@
 - `purgeOldTrash()` chamado no mount (App.tsx) — limpa items > 30 dias
 - supabase/schema.sql atualizado com coluna `deleted_at`
 
-## ❌ Onda 3C (próxima)
-- **Recurrence inteligente** — extender `recurrence` de Task pra suportar "toda terça e quinta", "primeiro útil do mês", "a cada 2 semanas"
-- **Templates** de tarefa/proposta/ideia
-- **Inbox unificada** — já existe `inbox?: boolean` em Task, falta view de triagem agregada
+### Onda 3C — Inbox + Templates + Recurrence inteligente
+- **Inbox unificada:** nova página `/inbox` agregando Tasks com `inbox:true`, Todos `status:'standby'`, Ideas `status:'rascunho'`. Ações por seção: agendar (date picker inline) · promover · descartar.
+- **Task templates:** novo tipo `TaskTemplate` + `taskTemplates[]` no store. UI no TaskModal: chips de templates no topo (criação) + botão "Template" no rodapé pra salvar config atual. Templates omitem date/status/sequence.
+- **Recurrence inteligente:** novo `RecurrenceRule { freq, interval, byWeekday[], byMonthDay, byMonthWeekday, count }`. Lib `src/lib/recurrence.ts` com `generateOccurrences` + `describeRule`. UI rica em TaskModal: 4 freq buttons + chips de dia da semana + Nth weekday do mês + interval + count limit + resumo descritivo.
+- Casos cobertos: "toda terça e quinta", "primeira segunda do mês", "última sexta", "a cada 2 semanas", "dia 15", "todo dia".
 
 ## ❌ Onda 3D (opcional)
 - Histórico de versões — snapshot on edit pra Idea e Proposal (undo profundo)
@@ -223,13 +223,12 @@ interface ContentApproval {
 
 ## 🎯 Roadmap consolidado
 
-1. **AGORA:** commit + deploy 3A+3B
-2. Onda 3C (recurrence + templates + inbox) — pequena
-3. Onda 3D opcional (histórico de versões)
-4. **Onda 4: Workspaces** — fundação massiva, mexe em tudo
-5. Onda 5: features de agência (Editorial, Aprovações, Faturas, Briefing, Onboarding, Snippets, KPIs)
-6. Onda 6: Time Tracking + cross-workspace polish
-7. (opcional, com aprovação) Onda 4-original: Google Calendar OAuth + webhooks + IA
+1. **AGORA:** push + deploy 3C
+2. Onda 3D opcional (histórico de versões)
+3. **Onda 4: Workspaces** — fundação massiva, mexe em tudo
+4. Onda 5: features de agência (Editorial, Aprovações, Faturas, Briefing, Onboarding, Snippets, KPIs)
+5. Onda 6: Time Tracking + cross-workspace polish
+6. (opcional, com aprovação) Onda 4-original: Google Calendar OAuth + webhooks + IA
 
 ---
 
