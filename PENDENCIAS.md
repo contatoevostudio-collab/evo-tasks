@@ -4,13 +4,13 @@
 
 ## 🎯 Status atual (2026-04-25)
 
-**Em produção** (https://task.evostudiolab.com.br): Ondas 1, 2, 3A e 3B.
+**Em produção** (https://task.evostudiolab.com.br): Ondas 1, 2, 3A, 3B, 3C.
 
-**Aguardando push + deploy:** Onda 3C — Inbox unificada + Task templates + Recurrence inteligente. Branch ahead de origin em 5 commits, bundle 339kB / 92.7kB gzip.
+**Aguardando push + deploy:** Onda 4 — Workspaces (fundação completa em 6 commits). Bundle 348kB / 94.7kB gzip.
 
 ### Próximo passo concreto
-1. Push origin/main + deploy prod fechando 3C
-2. Onda 3D opcional (histórico de versões) ou ir direto pra Onda 4 (Workspaces)
+1. Push origin/main + deploy prod fechando Onda 4
+2. Onda 5 (features de agência) ou polish pós-MVP de Onda 4 (workspace counts no NavSidebar, SearchModal respeitando lente, injeção automática de workspaceId nos add* actions)
 
 ## ✅ Histórico do que já está integrado
 
@@ -51,6 +51,14 @@
 - **Task templates:** novo tipo `TaskTemplate` + `taskTemplates[]` no store. UI no TaskModal: chips de templates no topo (criação) + botão "Template" no rodapé pra salvar config atual. Templates omitem date/status/sequence.
 - **Recurrence inteligente:** novo `RecurrenceRule { freq, interval, byWeekday[], byMonthDay, byMonthWeekday, count }`. Lib `src/lib/recurrence.ts` com `generateOccurrences` + `describeRule`. UI rica em TaskModal: 4 freq buttons + chips de dia da semana + Nth weekday do mês + interval + count limit + resumo descritivo.
 - Casos cobertos: "toda terça e quinta", "primeira segunda do mês", "última sexta", "a cada 2 semanas", "dia 15", "todo dia".
+
+### Onda 4 — Workspaces (fundação)
+- **Fase 1 — Gaming removido:** apaga GamesPage, useGameStore, usePetsStore, ActivePet, 'jogos' PageType, todas as refs nav/sync.
+- **Fase 2 — Tipos + store:** `Workspace`, `WorkspaceType` (freelance/agencia/pessoal/blank), `WorkspacePalette` (8 paletas pré-definidas), `WorkspaceSettings`, `LensMode`, `ViewLens`. `useWorkspacesStore` com `workspaces[]`, `activeWorkspaceId`, `lens`, `getVisibleIds()`, `ensureDefaultWorkspace()`.
+- **Fase 3 — `workspaceId?` opcional** em Task/Company/SubClient/Lead/Idea/Proposal/Transaction/FinancialGoal/Card/RecurringBill/TodoItem/CalendarEvent. Company ganha `empresaTipo: 'agencia' | 'cliente-direto'`.
+- **Fase 4 — Migração:** `bootstrapWorkspaces()` cria default "Freelance Design" + atribui `workspaceId` a todas entidades legacy. Roda no mount.
+- **Fase 5 — Switcher:** componente `WorkspaceSwitcher` na NavSidebar com workspace ativo (avatar com foto opcional ou inicial em gradiente da paleta) + lente (Só ativo / Todos / Combinar). `WorkspaceModal` pra criar/editar (nome, tipo, paleta, foto). Badge laranja quando lente !== 'active'.
+- **Fase 6 — Filtros:** `useVisibleWorkspaceIds()` reativo + helper `isInLens()`. Aplicado em todas as views principais. Items sem workspaceId aparecem em qualquer lente (legacy fallback).
 
 ## ❌ Onda 3D (opcional)
 - Histórico de versões — snapshot on edit pra Idea e Proposal (undo profundo)
@@ -223,9 +231,9 @@ interface ContentApproval {
 
 ## 🎯 Roadmap consolidado
 
-1. **AGORA:** push + deploy 3C
-2. Onda 3D opcional (histórico de versões)
-3. **Onda 4: Workspaces** — fundação massiva, mexe em tudo
+1. **AGORA:** push + deploy Onda 4
+2. Polish pós-MVP de Onda 4: NavSidebar counts pela lente, SearchModal pela lente, injetar workspaceId no add* actions, filtro local no NotificationsPanel
+3. Onda 3D opcional (histórico de versões)
 4. Onda 5: features de agência (Editorial, Aprovações, Faturas, Briefing, Onboarding, Snippets, KPIs)
 5. Onda 6: Time Tracking + cross-workspace polish
 6. (opcional, com aprovação) Onda 4-original: Google Calendar OAuth + webhooks + IA
