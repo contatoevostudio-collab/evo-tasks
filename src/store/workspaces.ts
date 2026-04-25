@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import type { Workspace, WorkspaceType, WorkspaceSettings, WorkspacePalette, ViewLens, PageType } from '../types';
+import { useAuthStore } from './auth';
+import { syncWorkspace, removeWorkspace } from '../lib/supabaseSync';
 
 // ─── Paletas pré-definidas ──────────────────────────────────────────────────
 // User não escolhe cor custom — pega de uma destas.
@@ -69,6 +71,7 @@ interface WorkspacesStore {
   deleteWorkspace(id: string): void;
   setActiveWorkspace(id: string): void;
   setLens(lens: ViewLens): void;
+  replaceAll(workspaces: Workspace[]): void;
 
   // Visible workspace ids resolved against the current lens
   getVisibleIds(): string[];
@@ -120,12 +123,19 @@ export const useWorkspacesStore = create<WorkspacesStore>()(
           workspaces: [...s.workspaces, full],
           activeWorkspaceId: s.activeWorkspaceId ?? id,
         }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) syncWorkspace(full, userId).catch(console.error);
         return id;
       },
       updateWorkspace: (id, updates) => {
         set(s => ({
           workspaces: s.workspaces.map(w => w.id === id ? { ...w, ...updates } : w),
         }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) {
+          const w = useWorkspacesStore.getState().workspaces.find(x => x.id === id);
+          if (w) syncWorkspace(w, userId).catch(console.error);
+        }
       },
       deleteWorkspace: (id) => {
         set(s => {
@@ -135,9 +145,17 @@ export const useWorkspacesStore = create<WorkspacesStore>()(
             : s.activeWorkspaceId;
           return { workspaces: remaining, activeWorkspaceId: newActive };
         });
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) removeWorkspace(id, userId).catch(console.error);
       },
       setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
       setLens: (lens) => set({ lens }),
+      replaceAll: (workspaces) => set(s => ({
+        workspaces,
+        activeWorkspaceId: s.activeWorkspaceId && workspaces.find(w => w.id === s.activeWorkspaceId)
+          ? s.activeWorkspaceId
+          : workspaces[0]?.id ?? null,
+      })),
 
       getVisibleIds: () => {
         const { workspaces, activeWorkspaceId, lens } = get();

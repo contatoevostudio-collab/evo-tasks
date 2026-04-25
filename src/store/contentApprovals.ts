@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ContentApproval, ContentAsset, ContentComment, ApprovalStatus, ApprovalFolder, FolderPeriod } from '../types';
 import { useAuthStore } from './auth';
-import { syncContentApproval, removeContentApproval } from '../lib/supabaseSync';
+import { syncContentApproval, removeContentApproval, syncApprovalFolder } from '../lib/supabaseSync';
 
 interface ContentApprovalsStore {
   approvals: ContentApproval[];
@@ -22,6 +22,7 @@ interface ContentApprovalsStore {
   approve(id: string): void;
   markPosted(id: string): void;
   replaceAll(items: ContentApproval[]): void;
+  replaceFolders(folders: ApprovalFolder[]): void;
   // Folders
   addFolder(p: { workspaceId?: string; clientId: string; name: string; period: FolderPeriod }): string;
   updateFolder(id: string, updates: Partial<ApprovalFolder>): void;
@@ -157,18 +158,31 @@ export const useContentApprovalsStore = create<ContentApprovalsStore>()(
         syncOne(id, get);
       },
       replaceAll: (items) => set({ approvals: items }),
+      replaceFolders: (folders) => set({ folders }),
 
       addFolder: (p) => {
         const id = uid();
         const full: ApprovalFolder = { ...p, id, shareToken: token(), approvalIds: [], createdAt: new Date().toISOString() };
         set(s => ({ folders: [full, ...s.folders] }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) syncApprovalFolder(full, userId).catch(console.error);
         return id;
       },
       updateFolder: (id, updates) => {
         set(s => ({ folders: s.folders.map(f => f.id === id ? { ...f, ...updates } : f) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) {
+          const f = useContentApprovalsStore.getState().folders.find(x => x.id === id);
+          if (f) syncApprovalFolder(f, userId).catch(console.error);
+        }
       },
       deleteFolder: (id) => {
         set(s => ({ folders: s.folders.map(f => f.id === id ? { ...f, deletedAt: new Date().toISOString() } : f) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) {
+          const f = useContentApprovalsStore.getState().folders.find(x => x.id === id);
+          if (f) syncApprovalFolder(f, userId).catch(console.error);
+        }
       },
       addApprovalToFolder: (folderId, approvalId) => {
         set(s => ({

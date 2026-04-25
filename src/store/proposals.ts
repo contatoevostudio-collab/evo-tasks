@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Proposal, ProposalService, PricingOption, BentoSlot } from '../types';
+import { useAuthStore } from './auth';
+import { syncProposal, removeProposal } from '../lib/supabaseSync';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const token = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -48,6 +50,7 @@ interface ProposalsStore {
   addProposal(p: Pick<Proposal, 'clientName' | 'service' | 'validity' | 'status' | 'theme'>): Proposal;
   updateProposal(id: string, updates: Partial<Proposal>): void;
   deleteProposal(id: string): void;
+  replaceAll(proposals: Proposal[]): void;
 }
 
 export const useProposalsStore = create<ProposalsStore>()(
@@ -70,6 +73,8 @@ export const useProposalsStore = create<ProposalsStore>()(
           alteracaoCor: 20,
         };
         set(s => ({ proposals: [full, ...s.proposals] }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) syncProposal(full, userId).catch(console.error);
         return full;
       },
 
@@ -79,11 +84,20 @@ export const useProposalsStore = create<ProposalsStore>()(
             p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
           ),
         }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) {
+          const p = useProposalsStore.getState().proposals.find(x => x.id === id);
+          if (p) syncProposal(p, userId).catch(console.error);
+        }
       },
 
       deleteProposal: (id) => {
         set(s => ({ proposals: s.proposals.filter(p => p.id !== id) }));
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) removeProposal(id, userId).catch(console.error);
       },
+
+      replaceAll: (proposals) => set({ proposals }),
     }),
     { name: 'evo-proposals-storage' }
   )
