@@ -25,18 +25,18 @@ const ALL_PAGES: PageType[] = [
   'home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas',
   'aprovacoes', 'editorial', 'briefings', 'onboarding',
   'todo', 'ideias', 'snippets', 'habitos',
-  'financas', 'faturas', 'kpis', 'arquivo',
+  'financas', 'faturas', 'kpis', 'timetracking', 'arquivo',
 ];
 
 const PAGES_BY_TYPE: Record<WorkspaceType, PageType[]> = {
-  freelance: ['home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas', 'todo', 'financas', 'ideias', 'arquivo'],
+  freelance: ['home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas', 'todo', 'financas', 'ideias', 'timetracking', 'arquivo'],
   agencia:   [
     'home', 'inbox', 'tarefas', 'empresas', 'crm', 'propostas',
     'aprovacoes', 'editorial', 'briefings', 'onboarding',
     'snippets', 'habitos',
-    'financas', 'faturas', 'kpis', 'ideias', 'arquivo',
+    'financas', 'faturas', 'kpis', 'timetracking', 'ideias', 'arquivo',
   ],
-  pessoal:   ['home', 'inbox', 'todo', 'ideias', 'financas', 'arquivo'],
+  pessoal:   ['home', 'inbox', 'todo', 'ideias', 'financas', 'timetracking', 'arquivo'],
   blank:     ALL_PAGES,
 };
 

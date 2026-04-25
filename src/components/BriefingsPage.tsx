@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FiPlus, FiTrash2, FiLink, FiX, FiCheck, FiChevronDown, FiChevronRight, FiSend, FiEdit2 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -281,10 +281,13 @@ function NewBriefingModal({
 }
 
 // ─── Editor de briefing ────────────────────────────────────────────────────
-function BriefingEditorModal({ briefing, accentColor, onClose }: { briefing: Briefing; accentColor: string; onClose: () => void }) {
+function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }: { briefing: Briefing; accentColor: string; onClose: () => void }) {
   const { updateBriefing, addQuestion, removeQuestion, updateQuestion } = useBriefingsStore();
+  const liveBriefing = useBriefingsStore(s => s.briefings.find(b => b.id === initialBriefing.id));
+  const briefing = liveBriefing ?? initialBriefing;
   const [title, setTitle] = useState(briefing.title);
   const [newQ, setNewQ] = useState('');
+  const [newOpts, setNewOpts] = useState<Record<string, string>>({});
 
   const handleTitleBlur = () => {
     if (title.trim() && title.trim() !== briefing.title) updateBriefing(briefing.id, { title: title.trim() });
@@ -296,11 +299,26 @@ function BriefingEditorModal({ briefing, accentColor, onClose }: { briefing: Bri
     setNewQ('');
   };
 
+  const addOption = (qId: string) => {
+    const val = (newOpts[qId] ?? '').trim();
+    if (!val) return;
+    const q = briefing.questions.find(q => q.id === qId);
+    if (!q) return;
+    updateQuestion(briefing.id, qId, { options: [...(q.options ?? []), val] });
+    setNewOpts(p => ({ ...p, [qId]: '' }));
+  };
+
+  const removeOption = (qId: string, idx: number) => {
+    const q = briefing.questions.find(q => q.id === qId);
+    if (!q) return;
+    updateQuestion(briefing.id, qId, { options: q.options?.filter((_, i) => i !== idx) ?? [] });
+  };
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: 'var(--modal-bg)', borderRadius: 18, padding: 24, width: 540, maxHeight: '82vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: 'var(--modal-bg)', borderRadius: 18, padding: 24, width: 580, maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--t1)', flex: 1 }}>Editar briefing</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', padding: 4 }}><FiX size={16} /></button>
@@ -315,31 +333,61 @@ function BriefingEditorModal({ briefing, accentColor, onClose }: { briefing: Bri
         </div>
 
         {/* Perguntas */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t4)' }}>Perguntas ({briefing.questions.length})</label>
           {briefing.questions.map((q, i) => (
-            <div key={q.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: accentColor, fontWeight: 700, flexShrink: 0, width: 20, textAlign: 'right' }}>{i + 1}.</span>
-              <input value={q.label} onChange={e => updateQuestion(briefing.id, q.id, { label: e.target.value })}
-                style={{ flex: 1, padding: '7px 10px', borderRadius: 7, background: 'var(--s1)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 12, outline: 'none', minWidth: 0 }}
-              />
-              <select value={q.type} onChange={e => updateQuestion(briefing.id, q.id, { type: e.target.value as BriefingQuestion['type'] })}
-                style={{ padding: '7px 8px', borderRadius: 7, background: 'var(--s1)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 11, flexShrink: 0 }}
-              >
-                <option value="text">Texto</option>
-                <option value="long">Longo</option>
-                <option value="number">Número</option>
-                <option value="select">Seleção</option>
-              </select>
-              <button onClick={() => removeQuestion(briefing.id, q.id)}
-                style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
-              ><FiTrash2 size={12} /></button>
+            <div key={q.id} style={{ background: 'var(--s1)', border: '1px solid var(--b1)', borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: accentColor, fontWeight: 700, flexShrink: 0, width: 20, textAlign: 'right' }}>{i + 1}.</span>
+                <input value={q.label} onChange={e => updateQuestion(briefing.id, q.id, { label: e.target.value })}
+                  style={{ flex: 1, padding: '6px 10px', borderRadius: 7, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 12, outline: 'none', minWidth: 0 }}
+                />
+                <select value={q.type} onChange={e => updateQuestion(briefing.id, q.id, { type: e.target.value as BriefingQuestion['type'], options: [] })}
+                  style={{ padding: '6px 8px', borderRadius: 7, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 11, flexShrink: 0 }}
+                >
+                  <option value="text">Texto</option>
+                  <option value="long">Longo</option>
+                  <option value="number">Número</option>
+                  <option value="select">Escolha única</option>
+                  <option value="multi">Múltipla escolha</option>
+                </select>
+                <button onClick={() => removeQuestion(briefing.id, q.id)}
+                  style={{ width: 26, height: 26, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                ><FiTrash2 size={12} /></button>
+              </div>
+
+              {/* Options editor for select/multi */}
+              {(q.type === 'select' || q.type === 'multi') && (
+                <div style={{ marginLeft: 26, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {(q.options ?? []).map((opt, oi) => (
+                    <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: q.type === 'multi' ? 10 : 10, height: 10, borderRadius: q.type === 'multi' ? 2 : '50%', border: '1.5px solid var(--t4)', flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 11, color: 'var(--t2)' }}>{opt}</span>
+                      <button onClick={() => removeOption(q.id, oi)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 2, display: 'flex' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                      ><FiX size={10} /></button>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <input value={newOpts[q.id] ?? ''} onChange={e => setNewOpts(p => ({ ...p, [q.id]: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && addOption(q.id)}
+                      placeholder="Nova opção..."
+                      style={{ flex: 1, padding: '5px 8px', borderRadius: 6, background: 'var(--s2)', border: '1px dashed var(--b2)', color: 'var(--t1)', fontSize: 11, outline: 'none' }}
+                    />
+                    <button onClick={() => addOption(q.id)}
+                      style={{ padding: '5px 10px', borderRadius: 6, background: `${accentColor}18`, border: `1px solid ${accentColor}40`, color: accentColor, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                    >+ Opção</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {/* Nova pergunta */}
-          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
             <input value={newQ} onChange={e => setNewQ(e.target.value)} placeholder="Nova pergunta..."
               onKeyDown={e => e.key === 'Enter' && handleAddQ()}
               style={{ flex: 1, padding: '7px 10px', borderRadius: 7, background: 'var(--s1)', border: `1px dashed var(--b2)`, color: 'var(--t1)', fontSize: 12, outline: 'none' }}
@@ -362,73 +410,147 @@ function BriefingEditorModal({ briefing, accentColor, onClose }: { briefing: Bri
 export function PublicBriefingView({ token, onBack }: { token: string; onBack: () => void }) {
   const { briefings, markResponded, updateQuestion } = useBriefingsStore();
   const briefing = briefings.find(b => b.shareToken === token && !b.deletedAt);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitted, setSubmitted] = useState(false);
 
-  const dark: React.CSSProperties = { minHeight: '100vh', background: '#080810', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 };
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'auto';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  const toggleMulti = (qId: string, opt: string) => {
+    setAnswers(p => {
+      const cur = (p[qId] as string[] | undefined) ?? [];
+      return { ...p, [qId]: cur.includes(opt) ? cur.filter(o => o !== opt) : [...cur, opt] };
+    });
+  };
+
+  const dark: React.CSSProperties = { minHeight: '100vh', background: '#07070f', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 };
 
   if (!briefing) return (
     <div style={dark}>
       <div style={{ fontSize: 48 }}>🔍</div>
       <div style={{ fontSize: 20, fontWeight: 700 }}>Briefing não encontrado</div>
-      <div style={{ fontSize: 13, color: '#888', textAlign: 'center', maxWidth: 340 }}>Este link pode ter expirado ou o formulário foi removido.</div>
-      <button onClick={onBack} style={{ marginTop: 8, padding: '10px 22px', borderRadius: 10, background: '#356BFF', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>← Voltar</button>
+      <div style={{ fontSize: 13, color: '#555', textAlign: 'center', maxWidth: 340 }}>Este link pode ter expirado ou o formulário foi removido.</div>
     </div>
   );
 
   if (submitted || briefing.status === 'respondido') return (
     <div style={dark}>
-      <div style={{ fontSize: 60 }}>✅</div>
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(48,209,88,0.12)', border: '1px solid rgba(48,209,88,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>✓</div>
       <div style={{ fontSize: 22, fontWeight: 700 }}>Briefing enviado!</div>
-      <div style={{ fontSize: 14, color: '#aaa', textAlign: 'center', maxWidth: 400 }}>Obrigado! Suas respostas foram recebidas. Em breve entraremos em contato.</div>
+      <div style={{ fontSize: 14, color: '#555', textAlign: 'center', maxWidth: 360 }}>Obrigado! Suas respostas foram recebidas. Em breve entraremos em contato.</div>
     </div>
   );
 
   const handleSubmit = () => {
     briefing.questions.forEach(q => {
-      if (answers[q.id] !== undefined) updateQuestion(briefing.id, q.id, { answer: answers[q.id] });
+      const ans = answers[q.id];
+      if (ans !== undefined) updateQuestion(briefing.id, q.id, { answer: ans });
     });
     markResponded(briefing.id);
     setSubmitted(true);
   };
 
   const required = briefing.questions.filter(q => q.required);
-  const allRequired = required.every(q => (answers[q.id] ?? q.answer as string ?? '').trim());
+  const allRequired = required.every(q => {
+    const a = answers[q.id];
+    if (Array.isArray(a)) return a.length > 0;
+    return (a ?? (q.answer as string) ?? '').toString().trim() !== '';
+  });
+
+  const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: 12, background: '#0e0e1a', border: '1px solid #1e1e32', color: '#fff', fontSize: 14, outline: 'none', fontFamily: 'inherit', transition: 'border-color .15s' };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080810', color: '#fff' }}>
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '36px 20px 80px' }}>
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '2.5px', marginBottom: 10 }}>Briefing</div>
-          <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 6 }}>{briefing.title}</div>
-          {required.length > 0 && <div style={{ fontSize: 12, color: '#666' }}>{required.length} campo{required.length > 1 ? 's' : ''} obrigatório{required.length > 1 ? 's' : ''}</div>}
+    <div style={{ background: '#07070f', color: '#fff', minHeight: '100vh' }}>
+      <div style={{ maxWidth: 660, margin: '0 auto', padding: '52px 24px 100px' }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: 48 }}>
+          <div style={{ fontSize: 10, color: '#333', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: 14, fontWeight: 600 }}>Briefing</div>
+          <h1 style={{ fontSize: 32, fontWeight: 700, margin: '0 0 10px', lineHeight: 1.2 }}>{briefing.title}</h1>
+          {required.length > 0 && (
+            <div style={{ fontSize: 12, color: '#444', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: '#ff453a', fontSize: 14 }}>*</span>
+              {required.length} campo{required.length > 1 ? 's' : ''} obrigatório{required.length > 1 ? 's' : ''}
+            </div>
+          )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        {/* Questions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
           {briefing.questions.map((q, i) => (
             <div key={q.id}>
-              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#ddd', marginBottom: 8 }}>
-                {i + 1}. {q.label}{q.required && <span style={{ color: '#ff453a', marginLeft: 4 }}>*</span>}
+              <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#e0e0f0', marginBottom: 12, lineHeight: 1.4 }}>
+                <span style={{ color: '#333', marginRight: 8, fontSize: 13 }}>{i + 1}.</span>
+                {q.label}
+                {q.required && <span style={{ color: '#ff453a', marginLeft: 5 }}>*</span>}
               </label>
-              {q.type === 'long' ? (
-                <textarea value={answers[q.id] ?? (q.answer as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+
+              {q.type === 'long' && (
+                <textarea value={(answers[q.id] as string) ?? (q.answer as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
                   placeholder="Sua resposta..." rows={4}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, background: '#111', border: '1px solid #2a2a3e', color: '#fff', fontSize: 13, resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#3a3a5e'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#1e1e32'; }}
                 />
-              ) : (
+              )}
+
+              {(q.type === 'text' || q.type === 'number') && (
                 <input type={q.type === 'number' ? 'number' : 'text'}
-                  value={answers[q.id] ?? (q.answer as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+                  value={(answers[q.id] as string) ?? (q.answer as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
                   placeholder="Sua resposta..."
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, background: '#111', border: '1px solid #2a2a3e', color: '#fff', fontSize: 13, outline: 'none' }}
+                  style={inputStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#3a3a5e'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#1e1e32'; }}
                 />
+              )}
+
+              {q.type === 'select' && (q.options ?? []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(q.options ?? []).map(opt => {
+                    const selected = (answers[q.id] as string) === opt;
+                    return (
+                      <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: selected ? 'rgba(53,107,255,0.1)' : '#0e0e1a', border: `1px solid ${selected ? 'rgba(53,107,255,0.4)' : '#1e1e32'}`, cursor: 'pointer', transition: 'all .15s' }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selected ? '#356BFF' : '#333'}`, background: selected ? '#356BFF' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                          {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                        </div>
+                        <input type="radio" checked={selected} onChange={() => setAnswers(p => ({ ...p, [q.id]: opt }))} style={{ display: 'none' }} />
+                        <span style={{ fontSize: 14, color: selected ? '#c8d4ff' : '#888' }}>{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {q.type === 'multi' && (q.options ?? []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(q.options ?? []).map(opt => {
+                    const cur = (answers[q.id] as string[]) ?? [];
+                    const checked = cur.includes(opt);
+                    return (
+                      <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: checked ? 'rgba(53,107,255,0.1)' : '#0e0e1a', border: `1px solid ${checked ? 'rgba(53,107,255,0.4)' : '#1e1e32'}`, cursor: 'pointer', transition: 'all .15s' }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${checked ? '#356BFF' : '#333'}`, background: checked ? '#356BFF' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                          {checked && <FiCheck size={11} color="#fff" />}
+                        </div>
+                        <input type="checkbox" checked={checked} onChange={() => toggleMulti(q.id, opt)} style={{ display: 'none' }} />
+                        <span style={{ fontSize: 14, color: checked ? '#c8d4ff' : '#888' }}>{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               )}
             </div>
           ))}
         </div>
 
+        {/* Submit */}
         <button onClick={handleSubmit} disabled={!allRequired}
-          style={{ marginTop: 36, width: '100%', padding: '15px', borderRadius: 12, background: allRequired ? 'rgba(48,209,88,0.14)' : 'rgba(255,255,255,0.04)', border: `1px solid ${allRequired ? 'rgba(48,209,88,0.4)' : '#2a2a3e'}`, color: allRequired ? '#30d158' : '#555', fontSize: 15, fontWeight: 700, cursor: allRequired ? 'pointer' : 'not-allowed', transition: 'all .15s' }}
-        >Enviar briefing ✓</button>
+          style={{ marginTop: 52, width: '100%', padding: '16px', borderRadius: 14, background: allRequired ? 'rgba(48,209,88,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${allRequired ? 'rgba(48,209,88,0.35)' : '#1a1a2e'}`, color: allRequired ? '#30d158' : '#333', fontSize: 15, fontWeight: 700, cursor: allRequired ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '0.3px' }}
+        >Enviar briefing</button>
+
+        <div style={{ marginTop: 40, textAlign: 'center', fontSize: 11, color: '#222' }}>Powered by EvoStudio</div>
       </div>
     </div>
   );

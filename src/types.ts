@@ -29,7 +29,9 @@ export type PageType =
   | 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas'
   | 'ideias' | 'propostas' | 'inbox'
   // Onda 5 (agência)
-  | 'aprovacoes' | 'editorial' | 'faturas' | 'briefings' | 'onboarding' | 'snippets' | 'kpis' | 'habitos';
+  | 'aprovacoes' | 'editorial' | 'faturas' | 'briefings' | 'onboarding' | 'snippets' | 'kpis' | 'habitos'
+  // Onda 6
+  | 'timetracking';
 
 // ─── ONDA 5 — Aprovações ────────────────────────────────────────────────
 export type ContentType = 'card' | 'carrossel' | 'reels' | 'story' | 'video' | 'apresentacao' | 'moodboard' | 'site' | 'identidade' | 'outro';
@@ -357,6 +359,29 @@ export interface PomodoroSession {
   duration: number;  // seconds
   isBreak: boolean;
   linkedTaskId?: string; // #29
+}
+
+// ─── ONDA 6 — Time Tracking ────────────────────────────────────────────────
+export interface TimeEntry {
+  id: string;
+  workspaceId?: string;
+  taskId?: string;
+  companyId?: string;
+  description?: string;
+  startedAt: string;   // ISO
+  endedAt?: string;    // ISO
+  duration?: number;   // seconds (set when endedAt filled)
+  source: 'manual' | 'pomodoro';
+  deletedAt?: string;
+  createdAt: string;
+}
+
+export interface ActiveTimer {
+  workspaceId?: string;
+  taskId?: string;
+  companyId?: string;
+  description?: string;
+  startedAt: string;
 }
 
 export interface ArtVersion {

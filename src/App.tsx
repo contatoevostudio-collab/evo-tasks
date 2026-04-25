@@ -44,6 +44,7 @@ const OnboardingPage  = lazy(() => import('./components/OnboardingPage').then(m 
 const SnippetsPage    = lazy(() => import('./components/SnippetsPage').then(m => ({ default: m.SnippetsPage })));
 const KPIsPage        = lazy(() => import('./components/KPIsPage').then(m => ({ default: m.KPIsPage })));
 const HabitosPage     = lazy(() => import('./components/HabitosPage').then(m => ({ default: m.HabitosPage })));
+const TimeTrackingPage = lazy(() => import('./components/TimeTrackingPage').then(m => ({ default: m.TimeTrackingPage })));
 
 // Heavy view components (used inside the "tarefas" page)
 const MonthView  = lazy(() => import('./components/views/MonthView').then(m => ({ default: m.MonthView })));
@@ -644,6 +645,7 @@ export default function App() {
               {page === 'snippets'   && <ErrorBoundary><SnippetsPage /></ErrorBoundary>}
               {page === 'kpis'       && <ErrorBoundary><KPIsPage /></ErrorBoundary>}
               {page === 'habitos'    && <ErrorBoundary><HabitosPage /></ErrorBoundary>}
+              {page === 'timetracking' && <ErrorBoundary><TimeTrackingPage /></ErrorBoundary>}
 
               {page === 'tarefas' && (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px 20px 0', overflow: 'hidden', minHeight: 0 }}>

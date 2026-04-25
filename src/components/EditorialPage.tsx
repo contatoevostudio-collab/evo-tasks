@@ -232,20 +232,31 @@ export function EditorialPage() {
                 {/* Approval chips (via postDate) */}
                 {dayApprovals.map(a => {
                   const company = companies.find(c => c.id === a.clientId);
+                  const chipColor = company?.color ?? '#636366';
                   const statusColor = APPROVAL_STATUS_COLORS[a.status] ?? '#636366';
+                  const STATUS_LABELS: Partial<Record<ApprovalStatus, string>> = {
+                    rascunho: 'Rasc', enviado: 'Env', visualizado: 'Vis',
+                    alteracao: 'Alt', aprovado: 'Apr', postado: 'Post',
+                  };
                   return (
                     <div key={a.id} title={`${company?.name ?? ''} · ${a.title} · ${a.status}`}
                       style={{
                         fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 4,
-                        background: `${statusColor}18`,
-                        border: `1px solid ${statusColor}40`,
-                        color: statusColor,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        background: `${chipColor}20`,
+                        border: `1px solid ${chipColor}40`,
+                        color: chipColor,
+                        overflow: 'hidden', whiteSpace: 'nowrap',
                         display: 'flex', alignItems: 'center', gap: 4,
                       }}
                     >
-                      <div style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: statusColor }} />
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: chipColor }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{a.title}</span>
+                      <span style={{
+                        fontSize: 8, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0,
+                        background: `${statusColor}22`, color: statusColor,
+                      }}>
+                        {STATUS_LABELS[a.status] ?? a.status}
+                      </span>
                     </div>
                   );
                 })}
