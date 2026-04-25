@@ -13,7 +13,7 @@ import { useAuthStore } from '../store/auth';
 import type { PageType, Theme, Company } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { useVisibleWorkspaceIds, isInLens, useWorkspacesStore } from '../store/workspaces';
+import { useVisibleWorkspaceIds, isInLens, useWorkspacesStore, getEnabledPages } from '../store/workspaces';
 
 interface Props {
   currentPage: PageType;
@@ -157,7 +157,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
     s => ({ workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId })
   );
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
-  const enabledPages = activeWorkspace?.settings?.enabledPages ?? null;
+  const enabledPages = activeWorkspace ? getEnabledPages(activeWorkspace) : null;
 
   const { user } = useAuthStore();
 

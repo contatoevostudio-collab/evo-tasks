@@ -44,6 +44,20 @@ export function defaultSettingsFor(type: WorkspaceType): WorkspaceSettings {
   return { enabledPages: [...PAGES_BY_TYPE[type]] };
 }
 
+/**
+ * Retorna as páginas habilitadas para um workspace.
+ * Para tipos fixos (não blank), sempre usa a definição atual do PAGES_BY_TYPE,
+ * ignorando o valor persistido — assim atualizações no PAGES_BY_TYPE se propagam
+ * automaticamente para workspaces existentes sem precisar de migração.
+ * Workspaces blank respeitam o settings.enabledPages customizado pelo usuário.
+ */
+export function getEnabledPages(workspace: { type: WorkspaceType; settings?: WorkspaceSettings }): PageType[] {
+  if (workspace.type === 'blank') {
+    return workspace.settings?.enabledPages ?? [...ALL_PAGES];
+  }
+  return [...PAGES_BY_TYPE[workspace.type]];
+}
+
 // ─── Store ──────────────────────────────────────────────────────────────────
 interface WorkspacesStore {
   workspaces: Workspace[];
