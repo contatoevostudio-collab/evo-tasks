@@ -46,7 +46,9 @@ export function AccountModal({ onClose, onOpenBackup }: Props) {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const showToast = useTaskStore(s => s.showToast);
 
   // PIN
   const [showPinForm, setShowPinForm] = useState(false);
@@ -86,18 +88,49 @@ export function AccountModal({ onClose, onOpenBackup }: Props) {
     setTimeout(() => setSaved(false), 1500);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      // ⚠️ Foto fica APENAS no localStorage. NUNCA salvar em user_metadata
-      // do Supabase auth — isso vai pro JWT toda hora e causa header > 8KB
-      // que o Cloudflare rejeita com 520. (incidente 2026-04-25)
-      setUserPhoto(dataUrl);
-    };
-    reader.readAsDataURL(file);
+
+    // Sem login: só localStorage (modo guest)
+    if (!user) {
+      const reader = new FileReader();
+      reader.onload = () => setUserPhoto(reader.result as string);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Selecione uma imagem válida');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Foto muito grande (máx 2MB)');
+      return;
+    }
+
+    setPhotoUploading(true);
+    try {
+      const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
+      const path = `${user.id}/avatar.${ext}`;
+      const { error } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, cacheControl: '3600' });
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      // Cache-buster pra forçar reload após substituir foto
+      const url = `${publicUrl}?t=${Date.now()}`;
+      setUserPhoto(url);
+      // URL é pequena (~150 chars) — pode ir pro user_metadata sem estourar JWT
+      await supabase.auth.updateUser({ data: { photoUrl: url } });
+      showToast('Foto atualizada');
+    } catch (err) {
+      console.error('photo upload failed:', err);
+      showToast('Erro ao salvar foto');
+    } finally {
+      setPhotoUploading(false);
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -159,19 +192,22 @@ export function AccountModal({ onClose, onOpenBackup }: Props) {
                   }
                 </div>
                 <button
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => !photoUploading && fileRef.current?.click()}
+                  disabled={photoUploading}
                   style={{
                     position: 'absolute', bottom: 0, right: 0,
                     width: 24, height: 24, borderRadius: '50%',
-                    background: 'var(--modal-bg)', border: 'none', cursor: 'pointer',
+                    background: 'var(--modal-bg)', border: 'none', cursor: photoUploading ? 'wait' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.3)', color: 'var(--t2)',
-                    transition: 'color .15s',
+                    transition: 'color .15s', opacity: photoUploading ? 0.6 : 1,
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.color = accentColor)}
+                  onMouseEnter={e => { if (!photoUploading) (e.currentTarget.style.color = accentColor); }}
                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--t2)')}
                 >
-                  <FiCamera size={11} />
+                  {photoUploading
+                    ? <div style={{ width: 9, height: 9, border: '1.5px solid var(--b2)', borderTopColor: 'var(--t2)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                    : <FiCamera size={11} />}
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} style={{ display: 'none' }} />
               </div>
