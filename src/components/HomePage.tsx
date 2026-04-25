@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { format, parseISO, isBefore, startOfToday, addDays, getDay, startOfWeek, subWeeks, subMonths, startOfMonth, endOfMonth, differenceInCalendarDays, eachDayOfInterval, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -158,7 +158,7 @@ function Sparkline({ values, color, height = 28 }: { values: number[]; color: st
   );
 }
 
-// ═══ Area chart (faturamento 6 meses) ═════════════════════════════════════
+// ═══ Area chart (faturamento) ═════════════════════════════════════════════
 function AreaChart({
   series, accentColor, accentRgb, height = 180, formatY = (v: number) => fmtBRL(v),
 }: {
@@ -166,7 +166,9 @@ function AreaChart({
   accentColor: string; accentRgb: string; height?: number;
   formatY?: (v: number) => string;
 }) {
-  const W = 600, H = height, padL = 50, padR = 12, padT = 16, padB = 30;
+  // Use a tall viewBox proportionally — preserveAspectRatio="none" on SVG;
+  // text is rendered as HTML (não distorce em containers largos).
+  const W = 600, H = height, padL = 0, padR = 0, padT = 14, padB = 14;
   const max = Math.max(...series.map(s => s.value), 1);
   const niceMax = Math.ceil(max * 1.1 / 1000) * 1000 || 1000;
   const innerW = W - padL - padR;
@@ -174,38 +176,69 @@ function AreaChart({
   const points = series.map((s, i) => {
     const x = padL + (i / Math.max(1, series.length - 1)) * innerW;
     const y = padT + (1 - s.value / niceMax) * innerH;
-    return { x, y, ...s };
+    return { x, y, xPct: (x / W) * 100, yPct: (y / H) * 100, ...s };
   });
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
   const areaD = `${pathD} L ${points[points.length - 1].x},${padT + innerH} L ${padL},${padT + innerH} Z`;
   const yTicks = [0, 0.5, 1].map(t => Math.round(niceMax * t));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} style={{ display: 'block' }}>
-      <defs>
-        <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={`rgba(${accentRgb},0.45)`} />
-          <stop offset="100%" stopColor={`rgba(${accentRgb},0.02)`} />
-        </linearGradient>
-      </defs>
-      {yTicks.map((t, i) => {
-        const y = padT + (1 - t / niceMax) * innerH;
-        return (
-          <g key={i}>
-            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="3 3" />
-            <text x={padL - 6} y={y + 3} fontSize={9} fill="rgba(255,255,255,0.45)" textAnchor="end" fontWeight={600}>{formatY(t)}</text>
-          </g>
-        );
-      })}
-      <path d={areaD} fill="url(#area-fill)" />
-      <path d={pathD} fill="none" stroke={accentColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      {points.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r={3.5} fill={accentColor} stroke="#0b1028" strokeWidth={2} />
-          <text x={p.x} y={H - 8} fontSize={9} fontWeight={600} fill="rgba(255,255,255,0.55)" textAnchor="middle">{p.label}</text>
-        </g>
-      ))}
-    </svg>
+    <div style={{ position: 'relative', display: 'flex', gap: 8, padding: '4px 8px 0' }}>
+      {/* Y-axis labels (HTML) */}
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height, paddingTop: padT, paddingBottom: padB + 22, flexShrink: 0 }}>
+        {yTicks.slice().reverse().map((t, i) => (
+          <span key={i} style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap', lineHeight: 1 }}>
+            {formatY(t)}
+          </span>
+        ))}
+      </div>
+
+      {/* Chart area */}
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={`rgba(${accentRgb},0.45)`} />
+              <stop offset="100%" stopColor={`rgba(${accentRgb},0.02)`} />
+            </linearGradient>
+          </defs>
+          {/* Grid lines */}
+          {yTicks.map((_, i) => {
+            const y = padT + (i / (yTicks.length - 1)) * innerH;
+            return <line key={i} x1={padL} y1={y} x2={W - padR} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />;
+          })}
+          <path d={areaD} fill="url(#area-fill)" />
+          <path d={pathD} fill="none" stroke={accentColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+
+        {/* Data points (HTML, prevents distortion) */}
+        {points.map((p, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${p.xPct}%`, top: `${p.yPct}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 9, height: 9, borderRadius: '50%',
+              background: accentColor,
+              border: '2px solid #0b1028',
+              boxShadow: `0 0 0 2px rgba(${accentRgb},0.18)`,
+              pointerEvents: 'none',
+            }}
+            title={`${p.label}: ${formatY(p.value)}`}
+          />
+        ))}
+
+        {/* X-axis labels (HTML) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+          {series.map((s, i) => (
+            <span key={i} style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+              {s.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -294,69 +327,221 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
   );
 }
 
-// ═══ Heatmap (calendário GitHub-style 12 semanas) ═════════════════════════
+// ═══ Heatmap multi-view ═══════════════════════════════════════════════════
+type HeatmapView = 'anual' | 'mensal' | 'semanal' | 'diario';
+
 function ProductivityHeatmap({ counts }: { counts: Map<string, number> }) {
+  const [view, setView] = useState<HeatmapView>('anual');
   const today = new Date();
-  // 84 dias = 12 semanas
-  const start = subDays(startOfWeek(today, { weekStartsOn: 1 }), 11 * 7);
-  const days = eachDayOfInterval({ start, end: today });
-  const max = Math.max(...Array.from(counts.values()), 1);
+  const allValues = Array.from(counts.values());
+  const max = Math.max(...allValues, 1);
 
-  // arrange by week column
-  const weeks: Date[][] = [];
-  let currentWeek: Date[] = [];
-  days.forEach(d => {
-    currentWeek.push(d);
-    if (getDay(d) === 0) { weeks.push(currentWeek); currentWeek = []; }
-  });
-  if (currentWeek.length > 0) weeks.push(currentWeek);
-
-  const cell = (d: Date) => {
-    const key = format(d, 'yyyy-MM-dd');
-    const c = counts.get(key) ?? 0;
+  const cellColor = (c: number) => {
     if (c === 0) return 'rgba(255,255,255,0.05)';
     const intensity = c / max;
-    if (intensity < 0.25) return 'rgba(48,209,88,0.25)';
-    if (intensity < 0.5) return 'rgba(48,209,88,0.45)';
-    if (intensity < 0.75) return 'rgba(48,209,88,0.7)';
+    if (intensity < 0.25) return 'rgba(48,209,88,0.28)';
+    if (intensity < 0.5) return 'rgba(48,209,88,0.5)';
+    if (intensity < 0.75) return 'rgba(48,209,88,0.75)';
     return '#30d158';
   };
+  const get = (d: Date) => counts.get(format(d, 'yyyy-MM-dd')) ?? 0;
 
-  return (
-    <div style={{ padding: '14px 16px 16px' }}>
-      <div style={{ display: 'flex', gap: 3 }}>
+  // ─── Anual: 52 semanas (365 dias) ─────
+  const renderAnual = () => {
+    const start = subDays(startOfWeek(today, { weekStartsOn: 1 }), 51 * 7);
+    const days = eachDayOfInterval({ start, end: today });
+    const weeks: Date[][] = [];
+    let currentWeek: Date[] = [];
+    days.forEach(d => {
+      currentWeek.push(d);
+      if (getDay(d) === 0) { weeks.push(currentWeek); currentWeek = []; }
+    });
+    if (currentWeek.length > 0) weeks.push(currentWeek);
+    return (
+      <div style={{ display: 'flex', gap: 2, overflowX: 'auto', paddingBottom: 4 }}>
         {weeks.map((week, wi) => (
-          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {Array.from({ length: 7 }).map((_, di) => {
               const d = week[di];
-              if (!d) return <div key={di} style={{ width: 12, height: 12 }} />;
-              const key = format(d, 'yyyy-MM-dd');
-              const c = counts.get(key) ?? 0;
+              if (!d) return <div key={di} style={{ width: 10, height: 10 }} />;
+              const c = get(d);
               return (
-                <div
-                  key={di}
+                <div key={di}
                   title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
-                  style={{
-                    width: 12, height: 12, borderRadius: 3,
-                    background: cell(d),
-                    border: '1px solid rgba(255,255,255,0.05)',
-                  }}
+                  style={{ width: 10, height: 10, borderRadius: 2, background: cellColor(c) }}
                 />
               );
             })}
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>
-        <span>12 semanas</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span>Menos</span>
-          {['rgba(255,255,255,0.05)', 'rgba(48,209,88,0.25)', 'rgba(48,209,88,0.45)', 'rgba(48,209,88,0.7)', '#30d158'].map((bg, i) => (
-            <div key={i} style={{ width: 9, height: 9, borderRadius: 2, background: bg }} />
+    );
+  };
+
+  // ─── Mensal: calendário do mês corrente ─────
+  const renderMensal = () => {
+    const monthStart = startOfMonth(today);
+    const monthEnd = endOfMonth(today);
+    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const gridDays = eachDayOfInterval({ start: gridStart, end: monthEnd });
+    // Pad to multiple of 7
+    while (gridDays.length % 7 !== 0) gridDays.push(addDays(gridDays[gridDays.length - 1], 1));
+
+    return (
+      <div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
+          {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map(l => (
+            <div key={l} style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textAlign: 'center', letterSpacing: '0.5px' }}>{l}</div>
           ))}
-          <span>Mais</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+          {gridDays.map((d, i) => {
+            const inMonth = d >= monthStart && d <= monthEnd;
+            const c = inMonth ? get(d) : 0;
+            const isToday = format(d, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+            return (
+              <div key={i}
+                title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
+                style={{
+                  aspectRatio: '1', borderRadius: 6,
+                  background: inMonth ? cellColor(c) : 'transparent',
+                  border: isToday ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.06)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700,
+                  color: !inMonth ? 'transparent' : c > 0 ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                }}
+              >
+                {d.getDate()}
+              </div>
+            );
+          })}
         </div>
       </div>
+    );
+  };
+
+  // ─── Semanal: 7 dias da semana atual em barras ─────
+  const renderSemanal = () => {
+    const ws = startOfWeek(today, { weekStartsOn: 1 });
+    const days = Array.from({ length: 7 }).map((_, i) => addDays(ws, i));
+    const weekMax = Math.max(...days.map(d => get(d)), 1);
+    return (
+      <div style={{ display: 'flex', gap: 8, height: 130, alignItems: 'flex-end' }}>
+        {days.map((d, i) => {
+          const c = get(d);
+          const isToday = format(d, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+          const h = c === 0 ? 8 : Math.max(14, (c / weekMax) * 100);
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: c > 0 ? '#30d158' : 'rgba(255,255,255,0.4)' }}>
+                {c}
+              </span>
+              <motion.div
+                initial={{ height: 4 }}
+                animate={{ height: `${h}%` }}
+                transition={{ duration: 0.45, delay: i * 0.04, ease: 'easeOut' }}
+                style={{
+                  width: '100%',
+                  background: c > 0
+                    ? 'linear-gradient(180deg, #30d158 0%, rgba(48,209,88,0.4) 100%)'
+                    : 'rgba(255,255,255,0.06)',
+                  borderTopLeftRadius: 6, borderTopRightRadius: 6,
+                  boxShadow: c > 0 ? '0 0 12px rgba(48,209,88,0.4)' : 'none',
+                  border: isToday ? '1px solid rgba(255,255,255,0.4)' : 'none',
+                }}
+              />
+              <span style={{ fontSize: 9, fontWeight: isToday ? 800 : 600, color: isToday ? '#ffffff' : 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                {format(d, 'EEE', { locale: ptBR }).slice(0, 3)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ─── Diário: hoje + 6 dias anteriores em lista ─────
+  const renderDiario = () => {
+    const days = Array.from({ length: 7 }).map((_, i) => subDays(today, i));
+    const maxD = Math.max(...days.map(d => get(d)), 1);
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {days.map((d, i) => {
+          const c = get(d);
+          const isToday = i === 0;
+          const pct = (c / maxD) * 100;
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 56, fontSize: 10, fontWeight: 700, color: isToday ? '#ffffff' : 'rgba(255,255,255,0.55)', flexShrink: 0 }}>
+                {isToday ? 'Hoje' : format(d, "d MMM", { locale: ptBR })}
+              </div>
+              <div style={{ flex: 1, height: 18, borderRadius: 5, background: 'rgba(255,255,255,0.05)', overflow: 'hidden', position: 'relative' }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.max(c > 0 ? 4 : 0, pct)}%` }}
+                  transition={{ duration: 0.4, delay: i * 0.04 }}
+                  style={{
+                    height: '100%',
+                    background: c > 0 ? 'linear-gradient(90deg, #30d158, rgba(48,209,88,0.5))' : 'transparent',
+                    boxShadow: c > 0 ? '0 0 10px rgba(48,209,88,0.4)' : 'none',
+                  }}
+                />
+              </div>
+              <div style={{ width: 22, fontSize: 11, fontWeight: 800, color: c > 0 ? '#30d158' : 'rgba(255,255,255,0.4)', textAlign: 'right', flexShrink: 0 }}>
+                {c}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const VIEWS: { id: HeatmapView; label: string }[] = [
+    { id: 'anual',   label: 'Anual' },
+    { id: 'mensal',  label: 'Mensal' },
+    { id: 'semanal', label: 'Semanal' },
+    { id: 'diario',  label: 'Por dia' },
+  ];
+
+  return (
+    <div style={{ padding: '12px 16px 16px' }}>
+      {/* View selector */}
+      <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 14 }}>
+        {VIEWS.map(v => (
+          <button key={v.id}
+            onClick={() => setView(v.id)}
+            style={{
+              flex: 1, padding: '6px 10px', borderRadius: 7,
+              background: view === v.id ? 'rgba(48,209,88,0.18)' : 'transparent',
+              border: view === v.id ? '1px solid rgba(48,209,88,0.35)' : '1px solid transparent',
+              color: view === v.id ? '#30d158' : 'rgba(255,255,255,0.6)',
+              fontSize: 10.5, fontWeight: 800, letterSpacing: '0.4px', textTransform: 'uppercase',
+              cursor: 'pointer', transition: 'all .12s',
+            }}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'anual' && renderAnual()}
+      {view === 'mensal' && renderMensal()}
+      {view === 'semanal' && renderSemanal()}
+      {view === 'diario' && renderDiario()}
+
+      {view === 'anual' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>
+          <span>52 semanas · {Array.from(counts.values()).reduce((s, n) => s + n, 0)} concluídas</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span>Menos</span>
+            {['rgba(255,255,255,0.05)', 'rgba(48,209,88,0.28)', 'rgba(48,209,88,0.5)', 'rgba(48,209,88,0.75)', '#30d158'].map((bg, i) => (
+              <div key={i} style={{ width: 9, height: 9, borderRadius: 2, background: bg }} />
+            ))}
+            <span>Mais</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -624,34 +809,45 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
         {/* ═══ HERO — saudação + CTA ════════════════════════════════════ */}
         <div style={{
           background: `linear-gradient(135deg, ${accentColor} 0%, #1d4ed8 60%, #1e3a8a 100%)`,
-          borderRadius: 18, padding: '22px 26px',
+          borderRadius: 18, padding: '24px 28px',
           position: 'relative', overflow: 'hidden',
+          minHeight: 130,
           boxShadow: `0 12px 40px rgba(${accentRgb},0.28), 0 0 0 1px rgba(255,255,255,0.06) inset`,
+          display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
         }}>
-          <div style={{ position: 'absolute', top: -60, right: -40, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 70%)', pointerEvents: 'none' }} />
-          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', marginBottom: 6 }}>Dashboard</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.7px', lineHeight: 1.05 }}>
-                Olá, {firstName}<span style={{ color: 'rgba(255,255,255,0.8)' }}>.</span>
-              </div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)', marginTop: 6, fontWeight: 500 }}>
-                {todayTasks.length === 0 ? 'Nenhuma tarefa pra hoje.' : `${todayTasks.length} ${todayTasks.length === 1 ? 'tarefa' : 'tarefas'} pra hoje · ${overdue.length} atrasada${overdue.length !== 1 ? 's' : ''} · ${ideasThisWeek} ideia${ideasThisWeek !== 1 ? 's' : ''} essa semana`}
-              </div>
+          <div aria-hidden style={{ position: 'absolute', top: -60, right: -40, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.16) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <div aria-hidden style={{ position: 'absolute', bottom: -90, left: -60, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(100,196,255,0.18) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+          <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)', marginBottom: 8 }}>
+              Dashboard
             </div>
-            <button
-              onClick={() => onNavigate('tarefas')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 7,
-                padding: '11px 20px', borderRadius: 11,
-                background: '#ffffff', border: 'none',
-                color: accentColor, fontSize: 13, fontWeight: 800, cursor: 'pointer',
-                boxShadow: '0 8px 22px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.4) inset',
-                letterSpacing: '-0.1px',
-              }}>
-              <FiPlus size={14} /> Nova tarefa
-            </button>
+            <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
+              Olá, {firstName}<span style={{ color: 'rgba(255,255,255,0.78)' }}>.</span>
+            </h1>
+            <div style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.82)', marginTop: 7, fontWeight: 500, lineHeight: 1.45 }}>
+              {todayTasks.length === 0
+                ? 'Nenhuma tarefa pra hoje. Que tal planejar a semana?'
+                : `${todayTasks.length} ${todayTasks.length === 1 ? 'tarefa' : 'tarefas'} pra hoje · ${overdue.length} atrasada${overdue.length !== 1 ? 's' : ''} · ${ideasThisWeek} ideia${ideasThisWeek !== 1 ? 's' : ''} essa semana`}
+            </div>
           </div>
+
+          <button
+            onClick={() => onNavigate('tarefas')}
+            style={{
+              position: 'relative', flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '12px 22px', borderRadius: 11,
+              background: '#ffffff', border: 'none',
+              color: accentColor, fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              boxShadow: '0 8px 22px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.4) inset',
+              letterSpacing: '-0.1px', transition: 'transform .12s, box-shadow .12s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+          >
+            <FiPlus size={14} /> Nova tarefa
+          </button>
         </div>
 
         {/* ═══ #13 Insight da semana ═══════════════════════════════════ */}
