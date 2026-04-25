@@ -62,6 +62,14 @@ export function AprovacoesPage() {
     setShowNew(true);
   };
 
+  const handleNewFolder = () => {
+    if (companies.filter(c => !c.deletedAt).length === 0) {
+      alert('Crie uma empresa primeiro');
+      return;
+    }
+    setShowNewFolder(true);
+  };
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
@@ -110,7 +118,7 @@ export function AprovacoesPage() {
           </div>
 
           {view === 'folders' ? (
-            <button onClick={() => setShowNewFolder(true)}
+            <button onClick={handleNewFolder}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >
               <FiFolderPlus size={12} /> Nova pasta
@@ -454,12 +462,14 @@ function FolderManagerModal({ folderId, onClose }: { folderId: string; onClose: 
               const cfg = APPROVAL_STATUS_CONFIG[a.status];
               return (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b1)', marginBottom: 5 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 6, background: a.assets[0]?.url ? `url(${a.assets[0].url}) center/cover` : 'var(--s2)', flexShrink: 0, border: '1px solid var(--b1)' }} />
+                  <div style={{ width: 32, height: 32, borderRadius: 6, background: a.assets[0]?.url ? `url(${a.assets[0].url}) center/cover` : 'var(--s2)', flexShrink: 0, border: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {!a.assets[0]?.url && <FiImage size={12} style={{ color: 'var(--t4)' }} />}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
                     <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
                   </div>
-                  <button onClick={() => removeApprovalFromFolder(folder.id, a.id)}
+                  <button onClick={() => { if (confirm('Remover desta pasta?')) removeApprovalFromFolder(folder.id, a.id); }}
                     style={{ width: 26, height: 26, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
@@ -479,7 +489,9 @@ function FolderManagerModal({ folderId, onClose }: { folderId: string; onClose: 
                 const cfg = APPROVAL_STATUS_CONFIG[a.status];
                 return (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b1)', marginBottom: 5 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 6, background: a.assets[0]?.url ? `url(${a.assets[0].url}) center/cover` : 'var(--s2)', flexShrink: 0, border: '1px solid var(--b1)' }} />
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: a.assets[0]?.url ? `url(${a.assets[0].url}) center/cover` : 'var(--s2)', flexShrink: 0, border: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {!a.assets[0]?.url && <FiImage size={12} style={{ color: 'var(--t4)' }} />}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
                       <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
@@ -1056,7 +1068,7 @@ export function PublicApprovalView({ token, onBack }: { token: string; onBack: (
 
 // ─── Vista pública da PASTA de aprovação ────────────────────────────────────
 export function PublicApprovalFolderView({ token, onBack: _onBack }: { token: string; onBack: () => void }) {
-  const { approvals, folders, markViewed } = useContentApprovalsStore();
+  const { approvals, folders } = useContentApprovalsStore();
   const { companies } = useTaskStore();
   const folder = folders.find(f => f.shareToken === token && !f.deletedAt);
   const [viewingToken, setViewingToken] = useState<string | null>(null);
@@ -1088,7 +1100,6 @@ export function PublicApprovalFolderView({ token, onBack: _onBack }: { token: st
   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
 
   const handleOpen = (a: ContentApproval) => {
-    if (a.status === 'enviado') markViewed(a.id);
     setViewingToken(a.shareToken);
   };
 
@@ -1136,7 +1147,9 @@ export function PublicApprovalFolderView({ token, onBack: _onBack }: { token: st
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#0e0e1a'; }}
               >
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#333', flexShrink: 0, width: 22, textAlign: 'right' }}>{i + 1}.</div>
-                <div style={{ width: 52, height: 52, borderRadius: 10, background: cover ? `url(${cover}) center/cover` : '#181828', border: '1px solid #1e1e32', flexShrink: 0 }} />
+                <div style={{ width: 52, height: 52, borderRadius: 10, background: cover ? `url(${cover}) center/cover` : '#181828', border: '1px solid #1e1e32', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {!cover && <FiImage size={18} style={{ color: '#2a2a3e' }} />}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: isDone ? '#e0e0f0' : '#c0c0d0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
                   <div style={{ fontSize: 11, color: '#444', marginTop: 2 }}>{CONTENT_TYPE_LABELS[a.type]}</div>

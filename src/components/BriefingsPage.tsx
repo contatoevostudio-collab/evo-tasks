@@ -293,6 +293,11 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
     if (title.trim() && title.trim() !== briefing.title) updateBriefing(briefing.id, { title: title.trim() });
   };
 
+  const handleClose = () => {
+    if (title.trim() && title.trim() !== briefing.title) updateBriefing(briefing.id, { title: title.trim() });
+    onClose();
+  };
+
   const handleAddQ = () => {
     if (!newQ.trim()) return;
     addQuestion(briefing.id, { label: newQ.trim(), type: 'long' });
@@ -321,7 +326,7 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
       <div style={{ background: 'var(--modal-bg)', borderRadius: 18, padding: 24, width: 580, maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--t1)', flex: 1 }}>Editar briefing</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', padding: 4 }}><FiX size={16} /></button>
+          <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', padding: 4 }}><FiX size={16} /></button>
         </div>
 
         {/* Título */}
@@ -342,7 +347,13 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
                 <input value={q.label} onChange={e => updateQuestion(briefing.id, q.id, { label: e.target.value })}
                   style={{ flex: 1, padding: '6px 10px', borderRadius: 7, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 12, outline: 'none', minWidth: 0 }}
                 />
-                <select value={q.type} onChange={e => updateQuestion(briefing.id, q.id, { type: e.target.value as BriefingQuestion['type'], options: [] })}
+                <select value={q.type} onChange={e => {
+                  const newType = e.target.value as BriefingQuestion['type'];
+                  const hasOptions = (q.options ?? []).length > 0;
+                  const willLoseOptions = hasOptions && newType !== 'select' && newType !== 'multi';
+                  if (willLoseOptions && !confirm('Mudar o tipo vai apagar as opções cadastradas. Continuar?')) return;
+                  updateQuestion(briefing.id, q.id, { type: newType, options: newType === 'select' || newType === 'multi' ? (q.options ?? []) : [] });
+                }}
                   style={{ padding: '6px 8px', borderRadius: 7, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 11, flexShrink: 0 }}
                 >
                   <option value="text">Texto</option>
@@ -398,7 +409,7 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
           </div>
         </div>
 
-        <button onClick={onClose}
+        <button onClick={handleClose}
           style={{ padding: '10px', borderRadius: 10, background: 'var(--s1)', border: '1px solid var(--b2)', cursor: 'pointer', color: 'var(--t2)', fontSize: 13, fontWeight: 600 }}
         >Fechar</button>
       </div>
@@ -409,6 +420,7 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
 // ─── Vista pública do briefing para o cliente ──────────────────────────────
 export function PublicBriefingView({ token, onBack: _onBack }: { token: string; onBack: () => void }) {
   const { briefings, markResponded, updateQuestion } = useBriefingsStore();
+  const { accentColor } = useTaskStore();
   const briefing = briefings.find(b => b.shareToken === token && !b.deletedAt);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -426,21 +438,19 @@ export function PublicBriefingView({ token, onBack: _onBack }: { token: string; 
     });
   };
 
-  const dark: React.CSSProperties = { minHeight: '100vh', background: '#07070f', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 };
-
   if (!briefing) return (
-    <div style={dark}>
-      <div style={{ fontSize: 48 }}>🔍</div>
-      <div style={{ fontSize: 20, fontWeight: 700 }}>Briefing não encontrado</div>
-      <div style={{ fontSize: 13, color: '#555', textAlign: 'center', maxWidth: 340 }}>Este link pode ter expirado ou o formulário foi removido.</div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg, #0a0e1a)', color: 'var(--t1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--s1)', border: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🔍</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--t1)' }}>Briefing não encontrado</div>
+      <div style={{ fontSize: 13, color: 'var(--t4)', textAlign: 'center', maxWidth: 340 }}>Este link pode ter expirado ou o formulário foi removido.</div>
     </div>
   );
 
   if (submitted || briefing.status === 'respondido') return (
-    <div style={dark}>
-      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(48,209,88,0.12)', border: '1px solid rgba(48,209,88,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>✓</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>Briefing enviado!</div>
-      <div style={{ fontSize: 14, color: '#555', textAlign: 'center', maxWidth: 360 }}>Obrigado! Suas respostas foram recebidas. Em breve entraremos em contato.</div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg, #0a0e1a)', color: 'var(--t1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
+      <div style={{ width: 64, height: 64, borderRadius: 20, background: 'rgba(48,209,88,0.12)', border: '1px solid rgba(48,209,88,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>✓</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t1)' }}>Briefing enviado!</div>
+      <div style={{ fontSize: 14, color: 'var(--t4)', textAlign: 'center', maxWidth: 400, lineHeight: 1.6 }}>Obrigado! Suas respostas foram recebidas. Em breve entraremos em contato.</div>
     </div>
   );
 
@@ -457,100 +467,168 @@ export function PublicBriefingView({ token, onBack: _onBack }: { token: string; 
   const allRequired = required.every(q => {
     const a = answers[q.id];
     if (Array.isArray(a)) return a.length > 0;
-    return (a ?? (q.answer as string) ?? '').toString().trim() !== '';
+    return (a ?? '').toString().trim() !== '';
   });
 
-  const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: 12, background: '#0e0e1a', border: '1px solid #1e1e32', color: '#fff', fontSize: 14, outline: 'none', fontFamily: 'inherit', transition: 'border-color .15s' };
+  const inputStyle: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box' as const,
+    padding: '11px 14px', borderRadius: 10,
+    background: 'var(--s2, #111827)', border: '1px solid var(--b2)',
+    color: 'var(--t1)', fontSize: 14, outline: 'none',
+    fontFamily: 'inherit', transition: 'border-color .15s',
+  };
+
+  const answeredCount = briefing.questions.filter(q => {
+    const a = answers[q.id];
+    if (Array.isArray(a)) return a.length > 0;
+    return (a ?? '').toString().trim() !== '';
+  }).length;
+  const progressPct = briefing.questions.length > 0 ? Math.round((answeredCount / briefing.questions.length) * 100) : 0;
 
   return (
-    <div style={{ background: '#07070f', color: '#fff', minHeight: '100vh' }}>
-      <div style={{ maxWidth: 660, margin: '0 auto', padding: '52px 24px 100px' }}>
+    <div style={{ background: 'var(--bg, #0a0e1a)', color: 'var(--t1)', minHeight: '100vh' }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '40px 24px 100px' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 48 }}>
-          <div style={{ fontSize: 10, color: '#333', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: 14, fontWeight: 600 }}>Briefing</div>
-          <h1 style={{ fontSize: 32, fontWeight: 700, margin: '0 0 10px', lineHeight: 1.2 }}>{briefing.title}</h1>
-          {required.length > 0 && (
-            <div style={{ fontSize: 12, color: '#444', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: '#ff453a', fontSize: 14 }}>*</span>
-              {required.length} campo{required.length > 1 ? 's' : ''} obrigatório{required.length > 1 ? 's' : ''}
+        <div style={{ marginBottom: 36, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <div style={{ width: 4, height: 52, borderRadius: 2, background: accentColor, flexShrink: 0, marginTop: 4 }} />
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--t4)', marginBottom: 8 }}>Briefing</div>
+            <h1 style={{ fontSize: 28, fontWeight: 700, margin: '0 0 8px', color: 'var(--t1)', lineHeight: 1.2 }}>{briefing.title}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {required.length > 0 && (
+                <span style={{ fontSize: 12, color: 'var(--t4)' }}>
+                  <span style={{ color: '#ff453a' }}>*</span> {required.length} campo{required.length > 1 ? 's' : ''} obrigatório{required.length > 1 ? 's' : ''}
+                </span>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Questions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-          {briefing.questions.map((q, i) => (
-            <div key={q.id}>
-              <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#e0e0f0', marginBottom: 12, lineHeight: 1.4 }}>
-                <span style={{ color: '#333', marginRight: 8, fontSize: 13 }}>{i + 1}.</span>
-                {q.label}
-                {q.required && <span style={{ color: '#ff453a', marginLeft: 5 }}>*</span>}
-              </label>
-
-              {q.type === 'long' && (
-                <textarea value={(answers[q.id] as string) ?? (q.answer as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
-                  placeholder="Sua resposta..." rows={4}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#3a3a5e'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '#1e1e32'; }}
-                />
-              )}
-
-              {(q.type === 'text' || q.type === 'number') && (
-                <input type={q.type === 'number' ? 'number' : 'text'}
-                  value={(answers[q.id] as string) ?? (q.answer as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
-                  placeholder="Sua resposta..."
-                  style={inputStyle}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#3a3a5e'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '#1e1e32'; }}
-                />
-              )}
-
-              {q.type === 'select' && (q.options ?? []).length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(q.options ?? []).map(opt => {
-                    const selected = (answers[q.id] as string) === opt;
-                    return (
-                      <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: selected ? 'rgba(53,107,255,0.1)' : '#0e0e1a', border: `1px solid ${selected ? 'rgba(53,107,255,0.4)' : '#1e1e32'}`, cursor: 'pointer', transition: 'all .15s' }}>
-                        <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selected ? '#356BFF' : '#333'}`, background: selected ? '#356BFF' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
-                          {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
-                        </div>
-                        <input type="radio" checked={selected} onChange={() => setAnswers(p => ({ ...p, [q.id]: opt }))} style={{ display: 'none' }} />
-                        <span style={{ fontSize: 14, color: selected ? '#c8d4ff' : '#888' }}>{opt}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-
-              {q.type === 'multi' && (q.options ?? []).length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(q.options ?? []).map(opt => {
-                    const cur = (answers[q.id] as string[]) ?? [];
-                    const checked = cur.includes(opt);
-                    return (
-                      <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: checked ? 'rgba(53,107,255,0.1)' : '#0e0e1a', border: `1px solid ${checked ? 'rgba(53,107,255,0.4)' : '#1e1e32'}`, cursor: 'pointer', transition: 'all .15s' }}>
-                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${checked ? '#356BFF' : '#333'}`, background: checked ? '#356BFF' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
-                          {checked && <FiCheck size={11} color="#fff" />}
-                        </div>
-                        <input type="checkbox" checked={checked} onChange={() => toggleMulti(q.id, opt)} style={{ display: 'none' }} />
-                        <span style={{ fontSize: 14, color: checked ? '#c8d4ff' : '#888' }}>{opt}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
+        {/* Progress bar */}
+        {briefing.questions.length > 0 && (
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t4)', marginBottom: 6 }}>
+              <span>{answeredCount} de {briefing.questions.length} respondidas</span>
+              <span style={{ color: progressPct === 100 ? '#30d158' : 'var(--t4)' }}>{progressPct}%</span>
             </div>
-          ))}
+            <div style={{ height: 3, background: 'var(--b1)', borderRadius: 2 }}>
+              <div style={{ height: '100%', width: `${progressPct}%`, background: progressPct === 100 ? '#30d158' : accentColor, borderRadius: 2, transition: 'width .3s' }} />
+            </div>
+          </div>
+        )}
+
+        {/* Questions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {briefing.questions.map((q, i) => {
+            const hasAnswer = (() => {
+              const a = answers[q.id];
+              if (Array.isArray(a)) return a.length > 0;
+              return (a ?? '').toString().trim() !== '';
+            })();
+
+            return (
+              <div key={q.id} style={{
+                padding: '18px 20px', borderRadius: 14,
+                background: 'var(--s1)',
+                border: `1px solid ${hasAnswer ? `${accentColor}30` : 'var(--b1)'}`,
+                transition: 'border-color .2s',
+              }}>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--t1)', marginBottom: 12, lineHeight: 1.4 }}>
+                  <span style={{ fontSize: 12, color: 'var(--t4)', marginRight: 8, fontWeight: 400 }}>{i + 1}.</span>
+                  {q.label}
+                  {q.required && <span style={{ color: '#ff453a', marginLeft: 5, fontSize: 13 }}>*</span>}
+                </label>
+
+                {q.type === 'long' && (
+                  <textarea value={(answers[q.id] as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+                    placeholder="Sua resposta..." rows={4}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = `${accentColor}60`; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'var(--b2)'; }}
+                  />
+                )}
+
+                {(q.type === 'text' || q.type === 'number') && (
+                  <input type={q.type === 'number' ? 'number' : 'text'}
+                    value={(answers[q.id] as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+                    placeholder="Sua resposta..."
+                    style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = `${accentColor}60`; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'var(--b2)'; }}
+                  />
+                )}
+
+                {q.type === 'select' && (q.options ?? []).length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {(q.options ?? []).map(opt => {
+                      const selected = (answers[q.id] as string) === opt;
+                      return (
+                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: selected ? `${accentColor}0e` : 'var(--s2)', border: `1px solid ${selected ? `${accentColor}40` : 'var(--b2)'}`, cursor: 'pointer', transition: 'all .15s' }}>
+                          <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selected ? accentColor : 'var(--b2)'}`, background: selected ? accentColor : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                            {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                          </div>
+                          <input type="radio" checked={selected} onChange={() => setAnswers(p => ({ ...p, [q.id]: opt }))} style={{ display: 'none' }} />
+                          <span style={{ fontSize: 13, color: selected ? 'var(--t1)' : 'var(--t3)' }}>{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {q.type === 'select' && (q.options ?? []).length === 0 && (
+                  <input type="text" value={(answers[q.id] as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+                    placeholder="Sua resposta..." style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = `${accentColor}60`; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'var(--b2)'; }}
+                  />
+                )}
+
+                {q.type === 'multi' && (q.options ?? []).length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {(q.options ?? []).map(opt => {
+                      const cur = (answers[q.id] as string[]) ?? [];
+                      const checked = cur.includes(opt);
+                      return (
+                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: checked ? `${accentColor}0e` : 'var(--s2)', border: `1px solid ${checked ? `${accentColor}40` : 'var(--b2)'}`, cursor: 'pointer', transition: 'all .15s' }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${checked ? accentColor : 'var(--b2)'}`, background: checked ? accentColor : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                            {checked && <FiCheck size={11} color="#fff" />}
+                          </div>
+                          <input type="checkbox" checked={checked} onChange={() => toggleMulti(q.id, opt)} style={{ display: 'none' }} />
+                          <span style={{ fontSize: 13, color: checked ? 'var(--t1)' : 'var(--t3)' }}>{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {q.type === 'multi' && (q.options ?? []).length === 0 && (
+                  <input type="text" value={(answers[q.id] as string) ?? ''} onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+                    placeholder="Sua resposta..." style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = `${accentColor}60`; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'var(--b2)'; }}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Submit */}
         <button onClick={handleSubmit} disabled={!allRequired}
-          style={{ marginTop: 52, width: '100%', padding: '16px', borderRadius: 14, background: allRequired ? 'rgba(48,209,88,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${allRequired ? 'rgba(48,209,88,0.35)' : '#1a1a2e'}`, color: allRequired ? '#30d158' : '#333', fontSize: 15, fontWeight: 700, cursor: allRequired ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '0.3px' }}
+          style={{
+            marginTop: 28, width: '100%', padding: '15px', borderRadius: 14,
+            background: allRequired ? accentColor : 'var(--s1)',
+            border: `1px solid ${allRequired ? accentColor : 'var(--b1)'}`,
+            color: allRequired ? '#fff' : 'var(--t4)',
+            fontSize: 15, fontWeight: 700,
+            cursor: allRequired ? 'pointer' : 'not-allowed',
+            transition: 'all .2s', letterSpacing: '0.3px',
+            opacity: allRequired ? 1 : 0.5,
+          }}
         >Enviar briefing</button>
 
-        <div style={{ marginTop: 40, textAlign: 'center', fontSize: 11, color: '#222' }}>Powered by EvoStudio</div>
+        <div style={{ marginTop: 32, textAlign: 'center', fontSize: 10, color: 'var(--t4)', opacity: 0.4 }}>Powered by EvoStudio</div>
       </div>
     </div>
   );

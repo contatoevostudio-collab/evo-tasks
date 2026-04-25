@@ -46,6 +46,7 @@ const NAV_ITEMS: { id: PageType; label: string; Icon: React.ElementType; beta?: 
   { id: 'financas',   label: 'Finanças',      Icon: FiDollarSign },
   { id: 'faturas',    label: 'Faturas',       Icon: FiClipboard },
   { id: 'kpis',       label: 'KPIs',          Icon: FiBarChart2 },
+  { id: 'arquivo',   label: 'Arquivo',       Icon: FiArchive },
 ];
 
 const NAV_GROUPS: { label: string; items: PageType[] }[] = [
@@ -53,7 +54,7 @@ const NAV_GROUPS: { label: string; items: PageType[] }[] = [
   { label: 'Negócio',    items: ['empresas', 'crm', 'propostas'] },
   { label: 'Agência',    items: ['aprovacoes', 'editorial', 'briefings', 'onboarding'] },
   { label: 'Ferramentas',items: ['todo', 'ideias', 'snippets', 'habitos', 'timetracking'] },
-  { label: 'Gestão',     items: ['financas', 'faturas', 'kpis'] },
+  { label: 'Gestão',     items: ['financas', 'faturas', 'kpis', 'arquivo'] },
 ];
 
 const THEMES: Theme[] = ['dark-blue', 'light-soft'];

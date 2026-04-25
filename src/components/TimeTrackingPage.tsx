@@ -159,7 +159,11 @@ export function TimeTrackingPage() {
   const activeWorkspaceId = useWorkspacesStore(s => s.activeWorkspaceId);
   const visibleIds = useVisibleWorkspaceIds();
 
-  const [elapsed, setElapsed] = useState(0);
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'all'>('week');
+  const [elapsed, setElapsed] = useState(() => {
+    const timer = useTimeTrackingStore.getState().activeTimer;
+    return timer ? Math.round((Date.now() - new Date(timer.startedAt).getTime()) / 1000) : 0;
+  });
   const [timerTaskId, setTimerTaskId] = useState('');
   const [timerDesc, setTimerDesc] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -181,7 +185,7 @@ export function TimeTrackingPage() {
   const getTaskLabel = (taskId?: string) => {
     if (!taskId) return null;
     const t = tasks.find(x => x.id === taskId);
-    if (!t) return null;
+    if (!t) return 'Tarefa removida';
     return t.taskType ?? t.customType ?? 'Tarefa';
   };
 
@@ -218,6 +222,19 @@ export function TimeTrackingPage() {
 
     return [...manual, ...pomo].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [entries, pomodoroSessions, visibleIds]);
+
+  const filteredEntries = useMemo(() => {
+    const now = new Date();
+    return allEntries.filter(e => {
+      try {
+        const d = parseISO(e.startedAt);
+        if (periodFilter === 'today') return isToday(d);
+        if (periodFilter === 'week') return d >= startOfWeek(now, { weekStartsOn: 1 });
+        if (periodFilter === 'month') return d >= startOfMonth(now);
+        return true;
+      } catch { return true; }
+    });
+  }, [allEntries, periodFilter]);
 
   // Stats
   const now = new Date();
@@ -257,13 +274,13 @@ export function TimeTrackingPage() {
   // Group entries by date
   const grouped = useMemo(() => {
     const map: Record<string, DisplayEntry[]> = {};
-    allEntries.forEach(e => {
+    filteredEntries.forEach(e => {
       const key = e.startedAt.slice(0, 10);
       if (!map[key]) map[key] = [];
       map[key].push(e);
     });
     return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, [allEntries]);
+  }, [filteredEntries]);
 
   const handleStart = () => {
     startTimer({
@@ -276,9 +293,8 @@ export function TimeTrackingPage() {
   };
 
   const timerTask = activeTimer?.taskId ? getTaskLabel(activeTimer.taskId) : null;
-  const timerCompany = activeTimer?.taskId
-    ? companies.find(c => tasks.find(t => t.id === activeTimer?.taskId)?.companyId === c.id)
-    : null;
+  const timerLinkedTask = activeTimer?.taskId ? tasks.find(t => t.id === activeTimer.taskId) ?? null : null;
+  const timerCompany = timerLinkedTask?.companyId ? companies.find(c => c.id === timerLinkedTask.companyId) ?? null : null;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, gap: 20, overflowY: 'auto' }}>
@@ -411,6 +427,21 @@ export function TimeTrackingPage() {
             );
           })}
         </div>
+      </div>
+
+      {/* Period filter */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--t4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Mostrar:</span>
+        {([
+          { key: 'today', label: 'Hoje' },
+          { key: 'week',  label: 'Esta semana' },
+          { key: 'month', label: 'Este mês' },
+          { key: 'all',   label: 'Tudo' },
+        ] as const).map(({ key, label }) => (
+          <button key={key} onClick={() => setPeriodFilter(key)}
+            style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${periodFilter === key ? accentColor : 'var(--b2)'}`, background: periodFilter === key ? `${accentColor}14` : 'transparent', color: periodFilter === key ? accentColor : 'var(--t3)', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all .12s' }}
+          >{label}</button>
+        ))}
       </div>
 
       {/* Entries grouped by day */}

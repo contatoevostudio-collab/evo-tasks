@@ -64,11 +64,17 @@ export const useContentApprovalsStore = create<ContentApprovalsStore>()(
         syncOne(id, get);
       },
       deleteApproval: (id) => {
-        set(s => ({ approvals: s.approvals.map(a => a.id === id ? { ...a, deletedAt: new Date().toISOString() } : a) }));
+        set(s => ({
+          approvals: s.approvals.map(a => a.id === id ? { ...a, deletedAt: new Date().toISOString() } : a),
+          folders: s.folders.map(f => ({ ...f, approvalIds: f.approvalIds.filter(aid => aid !== id) })),
+        }));
         syncOne(id, get);
       },
       permanentDelete: (id) => {
-        set(s => ({ approvals: s.approvals.filter(a => a.id !== id) }));
+        set(s => ({
+          approvals: s.approvals.filter(a => a.id !== id),
+          folders: s.folders.map(f => ({ ...f, approvalIds: f.approvalIds.filter(aid => aid !== id) })),
+        }));
         const userId = useAuthStore.getState().user?.id;
         if (userId) removeContentApproval(id, userId).catch(console.error);
       },
