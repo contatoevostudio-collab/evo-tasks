@@ -26,6 +26,37 @@ export type TaskType =
 export type ViewMode = 'kanban' | 'month' | 'week' | 'day';
 export type PageType = 'home' | 'tarefas' | 'empresas' | 'arquivo' | 'crm' | 'todo' | 'financas' | 'ideias' | 'propostas' | 'inbox';
 
+// ─── Workspaces (Onda 4) ─────────────────────────────────────────────────────
+export type WorkspaceType = 'freelance' | 'agencia' | 'pessoal' | 'blank';
+
+export interface WorkspacePalette {
+  id: string;        // 'ocean', 'sunset', etc
+  name: string;      // rótulo PT-BR
+  primary: string;   // hex
+  secondary: string; // hex (par de gradiente)
+}
+
+export interface WorkspaceSettings {
+  enabledPages: PageType[];     // controla nav
+}
+
+export interface Workspace {
+  id: string;
+  name: string;                 // ex: "Freelance Design", "Minha Agência"
+  type: WorkspaceType;
+  paletteId: string;            // fk pra WORKSPACE_PALETTES
+  photoUrl?: string;            // upload opcional (data URL ou supabase storage)
+  settings: WorkspaceSettings;
+  createdAt: string;
+}
+
+export type LensMode = 'active' | 'all' | 'multi' | 'other';
+
+export interface ViewLens {
+  mode: LensMode;
+  selectedWorkspaceIds?: string[]; // usado em mode='multi' ou 'other'
+}
+
 export type ProposalService = 'social-media' | 'estrategia' | 'site' | 'identidade-visual' | 'logo';
 export type ProposalStatus = 'rascunho' | 'enviada' | 'aceita' | 'recusada';
 
