@@ -48,6 +48,7 @@ const AccountModal    = lazy(() => import('./components/AccountModal').then(m =>
 const BackupModal     = lazy(() => import('./components/BackupModal').then(m => ({ default: m.BackupModal })));
 const ICSImportModal  = lazy(() => import('./components/ICSImportModal').then(m => ({ default: m.ICSImportModal })));
 const AuthModal       = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const WorkspaceModal  = lazy(() => import('./components/WorkspaceModal').then(m => ({ default: m.WorkspaceModal })));
 
 const PageFallback = () => (
   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t4)', fontSize: 12 }}>
@@ -123,6 +124,7 @@ export default function App() {
   const [showICSImport,   setShowICSImport]   = useState(false);
   const [isFullscreen,    setIsFullscreen]    = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [workspaceManager, setWorkspaceManager] = useState<{ open: boolean; editingId?: string }>({ open: false });
   const notificationsCount = useNotificationsCount();
 
   // Sync indicator state (visual only — wired in src/lib/supabaseSync.ts)
@@ -339,6 +341,7 @@ export default function App() {
           onLock={() => setManualLocked(true)}
           onNavigateToCompany={(id) => { setEmpresasTarget(id); setPage('empresas'); }}
           onOpenAccount={() => setShowAccount(true)}
+          onOpenWorkspaceManager={(editingId) => setWorkspaceManager({ open: true, editingId })}
         />
       </div>
 
@@ -738,6 +741,19 @@ export default function App() {
               : 'evento'}
             onClose={() => setShowEventModal(false)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Workspace manager modal */}
+      <AnimatePresence>
+        {workspaceManager.open && (
+          <Suspense fallback={null}>
+            <WorkspaceModal
+              key={`ws-modal-${workspaceManager.editingId ?? 'new'}`}
+              workspaceId={workspaceManager.editingId}
+              onClose={() => setWorkspaceManager({ open: false })}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 

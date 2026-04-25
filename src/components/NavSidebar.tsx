@@ -11,6 +11,7 @@ import { useTaskStore } from '../store/tasks';
 import { useAuthStore } from '../store/auth';
 import type { PageType, Theme, Company } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 interface Props {
   currentPage: PageType;
@@ -21,6 +22,7 @@ interface Props {
   onLock: () => void;
   onNavigateToCompany: (companyId: string) => void;
   onOpenAccount: () => void;
+  onOpenWorkspaceManager: (editingId?: string) => void;
 }
 
 const NAV_ITEMS: { id: PageType; label: string; Icon: React.ElementType; beta?: boolean }[] = [
@@ -126,7 +128,7 @@ function NavItem({ item, active, accentColor, onClick, onChevronClick, showChevr
   );
 }
 
-export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, onOpenSettings, onLogin: _onLogin, onLock, onNavigateToCompany, onOpenAccount }: Props) {
+export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, onOpenSettings, onLogin: _onLogin, onLock, onNavigateToCompany, onOpenAccount, onOpenWorkspaceManager }: Props) {
   const {
     companies, subClients, tasks,
     selectedCompanies, toggleCompany, selectAllCompanies, deselectAllCompanies,
@@ -406,6 +408,9 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
               <button onClick={toggleSidebar} title="Recolher" style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 4, borderRadius: 6, transition: 'color .15s' }} onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t1)')} onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--t4)')}><FiChevronLeft size={13} /></button>
             </div>
           </div>
+
+          {/* Workspace switcher (Onda 4) */}
+          <WorkspaceSwitcher onOpenManager={onOpenWorkspaceManager} />
 
           {/* Navigation — grouped sections */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 0' }}>
