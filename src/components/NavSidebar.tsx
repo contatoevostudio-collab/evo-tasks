@@ -153,9 +153,8 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
   } = useTaskStore();
   const accentRgb = navHexToRgb(accentColor);
 
-  const { workspaces, activeWorkspaceId } = useWorkspacesStore(
-    s => ({ workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId })
-  );
+  const workspaces = useWorkspacesStore(s => s.workspaces);
+  const activeWorkspaceId = useWorkspacesStore(s => s.activeWorkspaceId);
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
   const enabledPages = activeWorkspace ? getEnabledPages(activeWorkspace) : null;
 
