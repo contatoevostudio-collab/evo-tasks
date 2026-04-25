@@ -10,16 +10,31 @@ import { useInvoicesStore, INVOICE_STATUS_CONFIG } from '../store/invoices';
 import { useTaskStore } from '../store/tasks';
 import type { Invoice, InvoiceStatus, InvoiceItem } from '../types';
 
+// Normaliza chave PIX para o formato aceito pelo DICT/BCB:
+// - CNPJ/CPF: remove pontuação (só dígitos)
+// - Email: lowercase
+// - Telefone E.164: mantém o +, remove espaços
+// - Aleatória (UUID): mantém como está
+function sanitizePixKey(raw: string): string {
+  const key = raw.trim();
+  if (key.includes('@')) return key.toLowerCase();
+  if (key.startsWith('+')) return key.replace(/\s/g, '');
+  const digits = key.replace(/\D/g, '');
+  if (digits.length === 11 || digits.length === 14) return digits; // CPF ou CNPJ
+  return key; // chave aleatória (UUID)
+}
+
 // ── QR Code PIX (usa qrcode-pix homologado pelo BCB) ─────────────────────────
 function PixQRCode({ pixKey, pixName, total }: { pixKey: string; pixName?: string; total: number }) {
   const [src, setSrc] = useState('');
 
   useEffect(() => {
     if (!pixKey) return;
+    const key = sanitizePixKey(pixKey);
     const name = (pixName || 'Prestador').normalize('NFD')
       .replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '').trim().slice(0, 25) || 'Prestador';
     const qr = QrCodePix({
-      version: '01', key: pixKey, name, city: 'SAO PAULO',
+      version: '01', key, name, city: 'SAO PAULO',
       transactionId: '***', message: '', currency: 986, countryCode: 'BR',
       value: total > 0 ? total : undefined,
     });
@@ -39,39 +54,52 @@ const mkToken = () => Math.random().toString(36).slice(2, 10) + Math.random().to
 function StatusDropdown({ invoiceId, currentStatus }: { invoiceId: string; currentStatus: InvoiceStatus }) {
   const { setStatus } = useInvoicesStore();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
   const cfg = INVOICE_STATUS_CONFIG[currentStatus];
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 4, left: r.right - 144 });
+    }
+    setOpen(p => !p);
+  };
 
   useEffect(() => {
     if (!open) return;
-    const onOut = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onOut = (e: MouseEvent) => {
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener('mousedown', onOut);
     return () => document.removeEventListener('mousedown', onOut);
   }, [open]);
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }}>
       <button
-        onClick={e => { e.stopPropagation(); setOpen(p => !p); }}
+        ref={btnRef}
+        onClick={handleToggle}
         title="Alterar status"
         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: `${cfg.color}18`, color: cfg.color, border: `1px solid ${cfg.color}30`, cursor: 'pointer', transition: 'all .12s', whiteSpace: 'nowrap' }}
       >
         {cfg.label} <FiChevronDown size={9} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 400, marginTop: 4, background: 'var(--modal-bg)', border: '1px solid var(--b2)', borderRadius: 10, padding: 5, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 140 }}>
+        <div style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 1000, background: 'var(--modal-bg)', border: '1px solid var(--b2)', borderRadius: 10, padding: 5, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 144 }}>
           {(['rascunho', 'enviada', 'paga', 'cancelada'] as InvoiceStatus[]).map(s => {
             const c = INVOICE_STATUS_CONFIG[s];
-            const active = s === currentStatus;
+            const isActive = s === currentStatus;
             return (
               <button key={s} onClick={e => { e.stopPropagation(); setStatus(invoiceId, s); setOpen(false); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 7, background: active ? `${c.color}12` : 'transparent', border: 'none', cursor: 'pointer', transition: 'background .1s' }}
-                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 7, background: isActive ? `${c.color}12` : 'transparent', border: 'none', cursor: 'pointer', transition: 'background .1s' }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: active ? c.color : 'var(--t2)', fontWeight: active ? 700 : 400, flex: 1, textAlign: 'left' }}>{c.label}</span>
-                {active && <FiCheck size={10} style={{ color: c.color }} />}
+                <span style={{ fontSize: 12, color: isActive ? c.color : 'var(--t2)', fontWeight: isActive ? 700 : 400, flex: 1, textAlign: 'left' }}>{c.label}</span>
+                {isActive && <FiCheck size={10} style={{ color: c.color }} />}
               </button>
             );
           })}
@@ -443,7 +471,7 @@ function InvoiceModal({
             </div>
           </div>
           <p style={{ fontSize: 11, color: 'var(--t4)', margin: 0 }}>
-            O QR Code gerado é lido por qualquer app bancário (Nubank, BB, Caixa…).
+            CPF/CNPJ: pode digitar com ou sem pontuação. E-mail, telefone (+55…) ou chave aleatória: cole como está.
           </p>
         </div>
 
