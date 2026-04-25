@@ -329,33 +329,23 @@ async function _loadFromSupabaseImpl(userId: string): Promise<void> {
   useTaskStore.getState().setSyncStatus('syncing');
   beginSync();
 
-  // Carrega em chunks sequenciais (3 paralelas por vez) com pequeno delay entre chunks.
-  // Evita disparar 11 requests simultâneas que o Cloudflare bot management interpreta
-  // como burst de bot e desafia (challenge sem CORS headers → browser bloqueia).
+  // Carga 100% sequencial com delay entre cada query.
+  // Free tier do Supabase tem postgres lento (~400-500ms por query com RLS),
+  // e múltiplas queries simultâneas timeout no upstream → Cloudflare retorna
+  // 520 sem CORS headers → browser bloqueia tudo.
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-  const [{ data: companies, error: e1 }, { data: subClients, error: e2 }, { data: tasks, error: e3 }] = await Promise.all([
-    supabase.from('companies').select('*').eq('user_id', userId),
-    supabase.from('sub_clients').select('*').eq('user_id', userId),
-    supabase.from('tasks').select('*').eq('user_id', userId),
-  ]);
-  await sleep(80);
-  const [{ data: leads, error: e4 }, { data: quickNotes, error: e5 }, { data: todoItems, error: e6 }] = await Promise.all([
-    supabase.from('leads').select('*').eq('user_id', userId),
-    supabase.from('quick_notes').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
-    supabase.from('todo_items').select('*').eq('user_id', userId),
-  ]);
-  await sleep(80);
-  const [{ data: calendarEvents, error: e7 }, { data: ideas, error: e8 }, { data: transactions, error: e9 }] = await Promise.all([
-    supabase.from('calendar_events').select('*').eq('user_id', userId),
-    supabase.from('ideas').select('*').eq('user_id', userId),
-    supabase.from('transactions').select('*').eq('user_id', userId),
-  ]);
-  await sleep(80);
-  const [{ data: financialGoals, error: e10 }, { data: recurringBills, error: e11 }] = await Promise.all([
-    supabase.from('financial_goals').select('*').eq('user_id', userId),
-    supabase.from('recurring_bills').select('*').eq('user_id', userId),
-  ]);
+  const { data: companies,       error: e1 }  = await supabase.from('companies').select('*').eq('user_id', userId);                                       await sleep(40);
+  const { data: subClients,      error: e2 }  = await supabase.from('sub_clients').select('*').eq('user_id', userId);                                     await sleep(40);
+  const { data: tasks,           error: e3 }  = await supabase.from('tasks').select('*').eq('user_id', userId);                                           await sleep(40);
+  const { data: leads,           error: e4 }  = await supabase.from('leads').select('*').eq('user_id', userId);                                           await sleep(40);
+  const { data: quickNotes,      error: e5 }  = await supabase.from('quick_notes').select('*').eq('user_id', userId).order('created_at', { ascending: true }); await sleep(40);
+  const { data: todoItems,       error: e6 }  = await supabase.from('todo_items').select('*').eq('user_id', userId);                                      await sleep(40);
+  const { data: calendarEvents,  error: e7 }  = await supabase.from('calendar_events').select('*').eq('user_id', userId);                                 await sleep(40);
+  const { data: ideas,           error: e8 }  = await supabase.from('ideas').select('*').eq('user_id', userId);                                           await sleep(40);
+  const { data: transactions,    error: e9 }  = await supabase.from('transactions').select('*').eq('user_id', userId);                                    await sleep(40);
+  const { data: financialGoals,  error: e10 } = await supabase.from('financial_goals').select('*').eq('user_id', userId);                                 await sleep(40);
+  const { data: recurringBills,  error: e11 } = await supabase.from('recurring_bills').select('*').eq('user_id', userId);
 
   if (e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11) {
     const firstErr = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10 ?? e11;
