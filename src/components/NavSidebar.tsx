@@ -12,6 +12,7 @@ import { useAuthStore } from '../store/auth';
 import type { PageType, Theme, Company } from '../types';
 import EvoIcon from '../assets/images/Logos/Icons/Icone/4.svg';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 
 interface Props {
   currentPage: PageType;
@@ -186,8 +187,9 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
   const countFor = (companyId: string) =>
     tasks.filter(t => !t.deletedAt && t.companyId === companyId && t.status !== 'done' && !t.archived).length;
 
-  // Group companies by status (excluindo deletadas / na lixeira)
-  const activeCompanies = companies.filter(c => !c.deletedAt);
+  // Group companies by status (excluindo deletadas / na lixeira) + filtrando pela lente
+  const visibleIds = useVisibleWorkspaceIds();
+  const activeCompanies = companies.filter(c => !c.deletedAt && isInLens(c, visibleIds));
 
   const allSelected = selectedCompanies.length === activeCompanies.length;
 
