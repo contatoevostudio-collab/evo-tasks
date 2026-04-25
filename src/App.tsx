@@ -34,7 +34,9 @@ const IdeiasPage      = lazy(() => import('./components/IdeiasPage').then(m => (
 const PropostasPage   = lazy(() => import('./components/PropostasPage').then(m => ({ default: m.PropostasPage })));
 const InboxPage       = lazy(() => import('./components/InboxPage').then(m => ({ default: m.InboxPage })));
 // Onda 5 — Agência
-const AprovacoesPage  = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.AprovacoesPage })));
+const AprovacoesPage      = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.AprovacoesPage })));
+const PublicApprovalView  = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.PublicApprovalView })));
+const PublicBriefingView  = lazy(() => import('./components/BriefingsPage').then(m => ({ default: m.PublicBriefingView })));
 const EditorialPage   = lazy(() => import('./components/EditorialPage').then(m => ({ default: m.EditorialPage })));
 const FaturasPage     = lazy(() => import('./components/FaturasPage').then(m => ({ default: m.FaturasPage })));
 const BriefingsPage   = lazy(() => import('./components/BriefingsPage').then(m => ({ default: m.BriefingsPage })));
@@ -306,6 +308,28 @@ export default function App() {
 
   const isModalOpen = modalTask !== undefined;
 
+
+  // ── Links públicos compartilháveis ──────────────────────────────────────────
+  const [publicHash, setPublicHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const handler = () => setPublicHash(window.location.hash);
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+  const aprovarToken  = publicHash.startsWith('#aprovar=')  ? publicHash.slice('#aprovar='.length)  : null;
+  const briefingToken = publicHash.startsWith('#briefing=') ? publicHash.slice('#briefing='.length) : null;
+  const clearHash = () => { history.replaceState(null, '', window.location.pathname); setPublicHash(''); };
+
+  if (aprovarToken) return (
+    <Suspense fallback={<PageFallback />}>
+      <PublicApprovalView token={aprovarToken} onBack={clearHash} />
+    </Suspense>
+  );
+  if (briefingToken) return (
+    <Suspense fallback={<PageFallback />}>
+      <PublicBriefingView token={briefingToken} onBack={clearHash} />
+    </Suspense>
+  );
 
   const cssVars = {
     '--t1': themeVars.t1, '--t2': themeVars.t2, '--t3': themeVars.t3, '--t4': themeVars.t4,

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -317,8 +317,8 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
 // ─── Editor ────────────────────────────────────────────────────────────────
 function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onClose: () => void }) {
   const { user } = useAuthStore();
-  const { updateApproval, addAsset, removeAsset, addComment, resolveComment, markSent, deleteApproval } = useContentApprovalsStore();
-  const { companies } = useTaskStore();
+  const { updateApproval, addAsset, removeAsset, addComment, resolveComment, markSent, markViewed, requestChanges, approve, markPosted, deleteApproval } = useContentApprovalsStore();
+  const { companies, tasks } = useTaskStore();
   const company = companies.find(c => c.id === approval.clientId);
   const [activeAssetIdx, setActiveAssetIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -326,6 +326,27 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
 
   const cfg = APPROVAL_STATUS_CONFIG[approval.status];
   const shareUrl = `${window.location.origin}${window.location.pathname}#aprovar=${approval.shareToken}`;
+
+  const taskLabel = (t: typeof tasks[number]) => t.taskType === 'outro' ? (t.customType || 'Outro') : t.taskType;
+  const creationTasks = useMemo(() =>
+    tasks.filter(t => !t.deletedAt && !t.archived && (t.taskCategory === 'criacao' || !t.taskCategory))
+         .sort((a, b) => taskLabel(a).localeCompare(taskLabel(b))),
+  [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleStatusChange = (s: ApprovalStatus) => {
+    switch (s) {
+      case 'enviado': markSent(approval.id); handleCopyLink(); break;
+      case 'visualizado': markViewed(approval.id); break;
+      case 'alteracao': {
+        const fb = prompt('Feedback / motivo da alteração (opcional):') ?? '';
+        requestChanges(approval.id, fb);
+        break;
+      }
+      case 'aprovado': approve(approval.id); break;
+      case 'postado': markPosted(approval.id); break;
+      default: updateApproval(approval.id, { status: s }); break;
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -482,6 +503,40 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
               )}
             </div>
 
+            {/* Status */}
+            <div style={{ flexShrink: 0, padding: '12px 16px', borderBottom: '1px solid var(--b1)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8 }}>Mudar status</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {(Object.keys(APPROVAL_STATUS_CONFIG) as ApprovalStatus[]).map(s => {
+                  const c = APPROVAL_STATUS_CONFIG[s];
+                  const isActive = approval.status === s;
+                  return (
+                    <button key={s} onClick={() => handleStatusChange(s)}
+                      style={{
+                        padding: '4px 9px', borderRadius: 999, fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all .12s',
+                        background: isActive ? `${c.color}22` : 'transparent',
+                        border: `1px solid ${isActive ? c.color : 'var(--b2)'}`,
+                        color: isActive ? c.color : 'var(--t4)',
+                      }}
+                    >{c.label}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tarefa editorial */}
+            <div style={{ flexShrink: 0, padding: '12px 16px', borderBottom: '1px solid var(--b1)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6 }}>Tarefa editorial</div>
+              <select
+                value={approval.taskId ?? ''}
+                onChange={e => updateApproval(approval.id, { taskId: e.target.value || undefined })}
+                style={{ width: '100%', padding: '6px 8px', borderRadius: 7, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, outline: 'none' }}
+              >
+                <option value="">— Sem vínculo —</option>
+                {creationTasks.map(t => <option key={t.id} value={t.id}>{taskLabel(t)} — {t.date}</option>)}
+              </select>
+            </div>
+
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8 }}>Comentários do asset atual</div>
               {(approval.assets[activeAssetIdx]?.comments?.length ?? 0) === 0
@@ -556,6 +611,124 @@ function AssetView({ asset, onAddComment, onResolve }: {
           </div>
         )
       }
+    </div>
+  );
+}
+
+// ─── Vista pública para o cliente ──────────────────────────────────────────
+export function PublicApprovalView({ token, onBack }: { token: string; onBack: () => void }) {
+  const { approvals, markViewed, requestChanges, approve, addComment } = useContentApprovalsStore();
+  const approval = approvals.find(a => a.shareToken === token && !a.deletedAt);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (approval?.status === 'enviado') markViewed(approval.id);
+  }, [approval?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAddComment = (area: { x: number; y: number }) => {
+    if (!approval) return;
+    const text = prompt('Comentário (será ancorado neste ponto):');
+    if (text?.trim()) addComment(approval.id, approval.assets[activeIdx].id, { area, text: text.trim(), fromClient: true });
+  };
+
+  const handleRequestChanges = () => {
+    if (!approval) return;
+    const fb = feedback.trim() || (prompt('Descreva o que precisa ser alterado:') ?? '');
+    if (!fb) return;
+    requestChanges(approval.id, fb);
+    setSubmitted(true);
+  };
+
+  const handleApprove = () => {
+    if (!approval) return;
+    approve(approval.id);
+    setSubmitted(true);
+  };
+
+  const dark: React.CSSProperties = { minHeight: '100vh', background: '#080810', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 };
+
+  if (!approval) return (
+    <div style={dark}>
+      <div style={{ fontSize: 48 }}>🔍</div>
+      <div style={{ fontSize: 20, fontWeight: 700 }}>Aprovação não encontrada</div>
+      <div style={{ fontSize: 13, color: '#888', textAlign: 'center', maxWidth: 340 }}>Este link pode ter expirado ou o conteúdo foi removido.</div>
+      <button onClick={onBack} style={{ marginTop: 8, padding: '10px 22px', borderRadius: 10, background: '#356BFF', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>← Voltar</button>
+    </div>
+  );
+
+  const decided = approval.status === 'aprovado' || approval.status === 'postado';
+  const altRequested = approval.status === 'alteracao';
+
+  if (submitted || decided) return (
+    <div style={dark}>
+      <div style={{ fontSize: 60 }}>{decided ? '✅' : '📝'}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>{decided ? 'Conteúdo aprovado!' : 'Alterações solicitadas'}</div>
+      <div style={{ fontSize: 14, color: '#aaa', textAlign: 'center', maxWidth: 420, lineHeight: 1.6 }}>
+        {decided ? 'Obrigado! A equipe foi notificada.' : 'Obrigado! A equipe vai revisar e retornar em breve.'}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#080810', color: '#fff', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 24px', borderBottom: '1px solid #1a1a2e', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'linear-gradient(135deg,#356BFF,#64C4FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>✓</div>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{approval.title}</div>
+          <div style={{ fontSize: 11, color: '#777', marginTop: 1 }}>{CONTENT_TYPE_LABELS[approval.type]} · Aguardando sua aprovação</div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px 60px', gap: 20, overflowY: 'auto' }}>
+        {approval.assets.length > 0 ? (
+          <>
+            <div style={{ width: '100%', maxWidth: 700 }}>
+              <AssetView asset={approval.assets[activeIdx]} onAddComment={handleAddComment} onResolve={() => {}} />
+            </div>
+            {approval.assets.length > 1 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {approval.assets.map((a, i) => (
+                  <button key={a.id} onClick={() => setActiveIdx(i)}
+                    style={{ width: 52, height: 52, borderRadius: 8, background: `url(${a.url}) center/cover`, border: i === activeIdx ? '2px solid #356BFF' : '2px solid #2a2a3e', cursor: 'pointer', flexShrink: 0 }}
+                  />
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: '#555', textAlign: 'center' }}>Clique na imagem para adicionar um comentário ancorado naquele ponto</div>
+          </>
+        ) : (
+          <div style={{ padding: 40, color: '#555', fontSize: 14 }}>Nenhum asset disponível ainda.</div>
+        )}
+
+        {/* Feedback */}
+        <div style={{ width: '100%', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#666' }}>Feedback geral (opcional)</label>
+          <textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Escreva seu feedback..." rows={3}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, background: '#111', border: '1px solid #2a2a3e', color: '#fff', fontSize: 13, resize: 'vertical', outline: 'none' }}
+          />
+        </div>
+
+        {!altRequested && (
+          <div style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 700 }}>
+            <button onClick={handleRequestChanges}
+              style={{ flex: 1, padding: '13px', borderRadius: 12, background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.4)', color: '#ff9f0a', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+            >Pedir alteração</button>
+            <button onClick={handleApprove}
+              style={{ flex: 1, padding: '13px', borderRadius: 12, background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(48,209,88,0.4)', color: '#30d158', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+            >✓ Aprovar</button>
+          </div>
+        )}
+        {altRequested && (
+          <div style={{ width: '100%', maxWidth: 700, padding: 16, borderRadius: 12, background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.25)', fontSize: 13, color: '#ff9f0a', textAlign: 'center' }}>
+            Alterações já solicitadas. Aguardando revisão.
+            {approval.feedback && <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>"{approval.feedback}"</div>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
