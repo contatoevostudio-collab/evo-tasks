@@ -497,24 +497,48 @@ async function _loadFromSupabaseImpl(userId: string): Promise<void> {
   useTaskStore.getState().setSyncStatus('syncing');
   beginSync();
 
-  // Carga 100% sequencial com delay entre cada query.
-  // Free tier do Supabase tem postgres lento (~400-500ms por query com RLS),
-  // e múltiplas queries simultâneas timeout no upstream → Cloudflare retorna
-  // 520 sem CORS headers → browser bloqueia tudo.
-  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+  // Carga em pares paralelos (2 queries simultâneas por batch).
+  // Histórico: queries todas-paralelas (Promise.all com 21 simultâneas) davam
+  // timeout upstream → Cloudflare 520. Pares são bem dentro do limite seguro
+  // do free tier do Supabase e reduzem o tempo de load em ~50%.
 
-  // ── Fase 1: dados críticos ────────────────────────────────────────────────
-  const { data: companies,       error: e1 }  = await supabase.from('companies').select('*').eq('user_id', userId);                                            await sleep(40);
-  const { data: subClients,      error: e2 }  = await supabase.from('sub_clients').select('*').eq('user_id', userId);                                          await sleep(40);
-  const { data: tasks,           error: e3 }  = await supabase.from('tasks').select('*').eq('user_id', userId);                                                await sleep(40);
-  const { data: leads,           error: e4 }  = await supabase.from('leads').select('*').eq('user_id', userId);                                                await sleep(40);
-  const { data: quickNotes,      error: e5 }  = await supabase.from('quick_notes').select('*').eq('user_id', userId).order('created_at', { ascending: true }); await sleep(40);
-  const { data: todoItems,       error: e6 }  = await supabase.from('todo_items').select('*').eq('user_id', userId);                                           await sleep(40);
-  const { data: calendarEvents,  error: e7 }  = await supabase.from('calendar_events').select('*').eq('user_id', userId);                                      await sleep(40);
-  const { data: ideas,           error: e8 }  = await supabase.from('ideas').select('*').eq('user_id', userId);                                                await sleep(40);
-  const { data: transactions,    error: e9 }  = await supabase.from('transactions').select('*').eq('user_id', userId);                                         await sleep(40);
-  const { data: financialGoals,  error: e10 } = await supabase.from('financial_goals').select('*').eq('user_id', userId);                                      await sleep(40);
-  const { data: recurringBills,  error: e11 } = await supabase.from('recurring_bills').select('*').eq('user_id', userId);                                      await sleep(40);
+  // ── Fase 1: dados críticos (em pares paralelos) ──────────────────────────
+  const [
+    { data: companies,       error: e1 },
+    { data: subClients,      error: e2 },
+  ] = await Promise.all([
+    supabase.from('companies').select('*').eq('user_id', userId),
+    supabase.from('sub_clients').select('*').eq('user_id', userId),
+  ]);
+  const [
+    { data: tasks,           error: e3 },
+    { data: leads,           error: e4 },
+  ] = await Promise.all([
+    supabase.from('tasks').select('*').eq('user_id', userId),
+    supabase.from('leads').select('*').eq('user_id', userId),
+  ]);
+  const [
+    { data: quickNotes,      error: e5 },
+    { data: todoItems,       error: e6 },
+  ] = await Promise.all([
+    supabase.from('quick_notes').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+    supabase.from('todo_items').select('*').eq('user_id', userId),
+  ]);
+  const [
+    { data: calendarEvents,  error: e7 },
+    { data: ideas,           error: e8 },
+  ] = await Promise.all([
+    supabase.from('calendar_events').select('*').eq('user_id', userId),
+    supabase.from('ideas').select('*').eq('user_id', userId),
+  ]);
+  const [
+    { data: transactions,    error: e9 },
+    { data: financialGoals,  error: e10 },
+  ] = await Promise.all([
+    supabase.from('transactions').select('*').eq('user_id', userId),
+    supabase.from('financial_goals').select('*').eq('user_id', userId),
+  ]);
+  const { data: recurringBills,  error: e11 } = await supabase.from('recurring_bills').select('*').eq('user_id', userId);
 
   if (e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11) {
     const firstErr = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10 ?? e11;
@@ -544,14 +568,29 @@ async function _loadFromSupabaseImpl(userId: string): Promise<void> {
     (ideas ?? []).map(r => ideaFromDb(r as Record<string, unknown>))
   );
 
-  // ── Fase 2: dados de agência (Onda 5) — tolerante a erros ────────────────
-  const { data: contentApprovals, error: ea1 } = await supabase.from('content_approvals').select('*').eq('user_id', userId); await sleep(40);
-  const { data: approvalFolders,  error: ea2 } = await supabase.from('approval_folders').select('*').eq('user_id', userId);  await sleep(40);
-  const { data: invoices,         error: ea3 } = await supabase.from('invoices').select('*').eq('user_id', userId);          await sleep(40);
-  const { data: briefings,        error: ea4 } = await supabase.from('briefings').select('*').eq('user_id', userId);         await sleep(40);
-  const { data: onboarding,       error: ea5 } = await supabase.from('onboarding_templates').select('*').eq('user_id', userId); await sleep(40);
-  const { data: snippets,         error: ea6 } = await supabase.from('snippets').select('*').eq('user_id', userId);          await sleep(40);
-  const { data: habits,           error: ea7 } = await supabase.from('habits').select('*').eq('user_id', userId);            await sleep(40);
+  // ── Fase 2: dados de agência (Onda 5) — em pares, tolerante a erros ──────
+  const [
+    { data: contentApprovals, error: ea1 },
+    { data: approvalFolders,  error: ea2 },
+  ] = await Promise.all([
+    supabase.from('content_approvals').select('*').eq('user_id', userId),
+    supabase.from('approval_folders').select('*').eq('user_id', userId),
+  ]);
+  const [
+    { data: invoices,         error: ea3 },
+    { data: briefings,        error: ea4 },
+  ] = await Promise.all([
+    supabase.from('invoices').select('*').eq('user_id', userId),
+    supabase.from('briefings').select('*').eq('user_id', userId),
+  ]);
+  const [
+    { data: onboarding,       error: ea5 },
+    { data: snippets,         error: ea6 },
+  ] = await Promise.all([
+    supabase.from('onboarding_templates').select('*').eq('user_id', userId),
+    supabase.from('snippets').select('*').eq('user_id', userId),
+  ]);
+  const { data: habits,           error: ea7 } = await supabase.from('habits').select('*').eq('user_id', userId);
 
   if (ea1) console.error('load content_approvals:', ea1);
   else {
@@ -695,9 +734,14 @@ async function _loadFromSupabaseImpl(userId: string): Promise<void> {
     );
   }
 
-  // ── Fase 3: workspaces, propostas, time tracking ──────────────────────────
-  const { data: workspaces,   error: eb1 } = await supabase.from('workspaces').select('*').eq('user_id', userId);    await sleep(40);
-  const { data: proposals,    error: eb2 } = await supabase.from('proposals').select('*').eq('user_id', userId);     await sleep(40);
+  // ── Fase 3: workspaces, propostas, time tracking — em pares ───────────────
+  const [
+    { data: workspaces,   error: eb1 },
+    { data: proposals,    error: eb2 },
+  ] = await Promise.all([
+    supabase.from('workspaces').select('*').eq('user_id', userId),
+    supabase.from('proposals').select('*').eq('user_id', userId),
+  ]);
   const { data: timeEntries,  error: eb3 } = await supabase.from('time_entries').select('*').eq('user_id', userId);
 
   if (eb1) console.error('load workspaces:', eb1);

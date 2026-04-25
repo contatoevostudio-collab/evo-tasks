@@ -346,7 +346,7 @@ function ProductivityHeatmap({ counts }: { counts: Map<string, number> }) {
   };
   const get = (d: Date) => counts.get(format(d, 'yyyy-MM-dd')) ?? 0;
 
-  // ─── Anual: 52 semanas (365 dias) ─────
+  // ─── Anual: 52 semanas com separadores por mês ─────
   const renderAnual = () => {
     const start = subDays(startOfWeek(today, { weekStartsOn: 1 }), 51 * 7);
     const days = eachDayOfInterval({ start, end: today });
@@ -357,44 +357,103 @@ function ProductivityHeatmap({ counts }: { counts: Map<string, number> }) {
       if (getDay(d) === 0) { weeks.push(currentWeek); currentWeek = []; }
     });
     if (currentWeek.length > 0) weeks.push(currentWeek);
+
+    // Para cada semana, identifica o mês predominante (1ª segunda)
+    const weekMonth = (week: Date[]) => week[0]?.getMonth() ?? 0;
+    // Detecta mudanças de mês — adiciona separador antes
+    const monthLabels: { wi: number; label: string }[] = [];
+    let lastMonth = -1;
+    weeks.forEach((w, wi) => {
+      const m = weekMonth(w);
+      if (m !== lastMonth) {
+        monthLabels.push({ wi, label: format(w[0], 'MMM', { locale: ptBR }).toUpperCase() });
+        lastMonth = m;
+      }
+    });
+
+    const CELL = 11, GAP = 2, MONTH_GAP = 5;
+
     return (
-      <div style={{ display: 'flex', gap: 2, overflowX: 'auto', paddingBottom: 4 }}>
-        {weeks.map((week, wi) => (
-          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {Array.from({ length: 7 }).map((_, di) => {
-              const d = week[di];
-              if (!d) return <div key={di} style={{ width: 10, height: 10 }} />;
-              const c = get(d);
-              return (
-                <div key={di}
-                  title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
-                  style={{ width: 10, height: 10, borderRadius: 2, background: cellColor(c) }}
-                />
-              );
-            })}
-          </div>
-        ))}
+      <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+        {/* Month labels row */}
+        <div style={{ position: 'relative', height: 14, marginBottom: 4 }}>
+          {monthLabels.map(({ wi, label }) => {
+            // Calcula offset acumulado considerando gaps extras nas mudanças
+            let offset = 0;
+            for (let i = 0; i < wi; i++) {
+              offset += CELL + GAP;
+              if (monthLabels.some(ml => ml.wi === i + 1)) offset += (MONTH_GAP - GAP);
+            }
+            return (
+              <span key={wi} style={{
+                position: 'absolute', left: offset,
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.6px',
+                color: 'rgba(255,255,255,0.5)',
+              }}>
+                {label}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* Weeks grid with month gaps */}
+        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+          {weeks.map((week, wi) => {
+            const isNewMonth = monthLabels.some(ml => ml.wi === wi);
+            return (
+              <div
+                key={wi}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: GAP,
+                  marginLeft: wi === 0 ? 0 : (isNewMonth ? MONTH_GAP : GAP),
+                }}
+              >
+                {Array.from({ length: 7 }).map((_, di) => {
+                  const d = week[di];
+                  if (!d) return <div key={di} style={{ width: CELL, height: CELL }} />;
+                  const c = get(d);
+                  return (
+                    <div key={di}
+                      title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
+                      style={{ width: CELL, height: CELL, borderRadius: 2, background: cellColor(c) }}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   };
 
-  // ─── Mensal: calendário do mês corrente ─────
+  // ─── Mensal: calendário discreto (visual check) ─────
   const renderMensal = () => {
     const monthStart = startOfMonth(today);
     const monthEnd = endOfMonth(today);
     const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
     const gridDays = eachDayOfInterval({ start: gridStart, end: monthEnd });
-    // Pad to multiple of 7
     while (gridDays.length % 7 !== 0) gridDays.push(addDays(gridDays[gridDays.length - 1], 1));
+
+    const CELL = 22, GAP = 3;
+    const totalCount = gridDays.filter(d => d >= monthStart && d <= monthEnd).reduce((s, d) => s + get(d), 0);
 
     return (
       <div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
-          {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map(l => (
-            <div key={l} style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textAlign: 'center', letterSpacing: '0.5px' }}>{l}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.1px' }}>
+            {format(today, 'MMMM yyyy', { locale: ptBR })}
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>
+            {totalCount} concluída{totalCount !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gap: GAP, marginBottom: 4 }}>
+          {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((l, i) => (
+            <div key={i} style={{ width: CELL, fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textAlign: 'center', letterSpacing: '0.5px' }}>{l}</div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+        <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gap: GAP }}>
           {gridDays.map((d, i) => {
             const inMonth = d >= monthStart && d <= monthEnd;
             const c = inMonth ? get(d) : 0;
@@ -403,16 +462,11 @@ function ProductivityHeatmap({ counts }: { counts: Map<string, number> }) {
               <div key={i}
                 title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
                 style={{
-                  aspectRatio: '1', borderRadius: 6,
+                  width: CELL, height: CELL, borderRadius: 4,
                   background: inMonth ? cellColor(c) : 'transparent',
-                  border: isToday ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.06)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700,
-                  color: !inMonth ? 'transparent' : c > 0 ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                  border: isToday ? '1.5px solid #ffffff' : 'none',
                 }}
-              >
-                {d.getDate()}
-              </div>
+              />
             );
           })}
         </div>
