@@ -4,14 +4,14 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   FiPlus, FiSearch, FiX, FiTrash2, FiCopy, FiCheck, FiSend, FiUpload, FiImage,
-  FiMessageCircle, FiArrowLeft, FiExternalLink, FiArchive,
+  FiMessageCircle, FiArrowLeft, FiExternalLink, FiArchive, FiFolder, FiFolderPlus, FiLink,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
 import { useContentApprovalsStore, APPROVAL_STATUS_CONFIG, CONTENT_TYPE_LABELS } from '../store/contentApprovals';
 import { useVisibleWorkspaceIds, isInLens, useWorkspacesStore } from '../store/workspaces';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
-import type { ContentApproval, ContentType, ApprovalStatus, ContentAsset } from '../types';
+import type { ContentApproval, ContentType, ApprovalStatus, ContentAsset, ApprovalFolder, FolderPeriod } from '../types';
 
 const TYPE_OPTIONS: ContentType[] = ['card', 'carrossel', 'reels', 'story', 'video', 'apresentacao', 'moodboard', 'site', 'identidade', 'outro'];
 
@@ -19,12 +19,15 @@ export function AprovacoesPage() {
   const { companies } = useTaskStore();
   const visibleIds = useVisibleWorkspaceIds();
   const activeWorkspaceId = useWorkspacesStore(s => s.activeWorkspaceId);
-  const { approvals, addApproval, deleteApproval } = useContentApprovalsStore();
+  const { approvals, folders, addApproval, deleteApproval } = useContentApprovalsStore();
+  const [view, setView] = useState<'approvals' | 'folders'>('approvals');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ApprovalStatus | 'todos'>('todos');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [managingFolderId, setManagingFolderId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return approvals
@@ -95,12 +98,30 @@ export function AprovacoesPage() {
             )}
           </div>
 
-          <button
-            onClick={handleNew}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-          >
-            <FiPlus size={12} /> Nova aprovação
-          </button>
+          {/* View toggle */}
+          <div style={{ display: 'flex', background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 9, padding: 2, gap: 2 }}>
+            {(['approvals', 'folders'] as const).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, background: view === v ? 'var(--s2)' : 'transparent', color: view === v ? 'var(--t1)' : 'var(--t4)', transition: 'all .12s' }}
+              >
+                {v === 'approvals' ? <><FiImage size={11} /> Aprovações</> : <><FiFolder size={11} /> Pastas</>}
+              </button>
+            ))}
+          </div>
+
+          {view === 'folders' ? (
+            <button onClick={() => setShowNewFolder(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              <FiFolderPlus size={12} /> Nova pasta
+            </button>
+          ) : (
+            <button onClick={handleNew}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              <FiPlus size={12} /> Nova aprovação
+            </button>
+          )}
         </div>
       </div>
 
@@ -132,7 +153,14 @@ export function AprovacoesPage() {
 
       {/* List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 20px' }}>
-        {filtered.length === 0 ? (
+        {view === 'folders' ? (
+          <FolderGridView
+            folders={folders.filter(f => !f.deletedAt && isInLens(f, visibleIds))}
+            approvals={approvals}
+            companies={companies}
+            onManage={(id) => setManagingFolderId(id)}
+          />
+        ) : filtered.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'var(--t4)', padding: 40, minHeight: 280 }}>
             <div style={{ fontSize: 56, opacity: 0.4 }}>📋</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t2)' }}>Nenhuma aprovação</div>
@@ -156,7 +184,7 @@ export function AprovacoesPage() {
         )}
       </div>
 
-      {/* New modal */}
+      {/* Modals */}
       <AnimatePresence>
         {showNew && (
           <NewApprovalModal
@@ -168,13 +196,304 @@ export function AprovacoesPage() {
           />
         )}
       </AnimatePresence>
-
-      {/* Editor modal */}
       <AnimatePresence>
         {editing && (
           <ApprovalEditor key={editing.id} approval={editing} onClose={() => setEditingId(null)} />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {showNewFolder && (
+          <NewFolderModal
+            onClose={() => setShowNewFolder(false)}
+            workspaceId={activeWorkspaceId ?? undefined}
+            companies={companies.filter(c => !c.deletedAt)}
+          />
+        )}
+      </AnimatePresence>
+      {managingFolderId && (
+        <FolderManagerModal
+          folderId={managingFolderId}
+          onClose={() => setManagingFolderId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Folder helpers ────────────────────────────────────────────────────────
+const PERIOD_LABELS: Record<FolderPeriod, string> = {
+  semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal', livre: 'Livre',
+};
+const PERIOD_COLORS: Record<FolderPeriod, string> = {
+  semanal: '#356BFF', quinzenal: '#bf5af2', mensal: '#30d158', livre: '#636366',
+};
+
+// ─── Folder grid ───────────────────────────────────────────────────────────
+function FolderGridView({ folders, approvals, companies, onManage }: {
+  folders: ApprovalFolder[];
+  approvals: ContentApproval[];
+  companies: { id: string; name: string; color: string }[];
+  onManage: (id: string) => void;
+}) {
+  const { deleteFolder } = useContentApprovalsStore();
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyFolderLink = (f: ApprovalFolder) => {
+    const url = `${window.location.origin}${window.location.pathname}#pasta=${f.shareToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(f.id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  if (folders.length === 0) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'var(--t4)', padding: 40, minHeight: 280 }}>
+      <div style={{ fontSize: 52, opacity: 0.3 }}>📁</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t2)' }}>Nenhuma pasta</div>
+      <div style={{ fontSize: 12, color: 'var(--t4)', textAlign: 'center', maxWidth: 320 }}>
+        Crie uma pasta para agrupar aprovações por cliente e período, e envie um link único pro cliente revisar tudo de uma vez.
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+      {folders.map(folder => {
+        const company = companies.find(c => c.id === folder.clientId);
+        const folderApprovals = approvals.filter(a => folder.approvalIds.includes(a.id) && !a.deletedAt);
+        const total = folderApprovals.length;
+        const approved = folderApprovals.filter(a => a.status === 'aprovado' || a.status === 'postado').length;
+        const pending = folderApprovals.filter(a => a.status === 'alteracao').length;
+        const sent = folderApprovals.filter(a => a.status === 'enviado' || a.status === 'visualizado').length;
+        const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
+        const periodColor = PERIOD_COLORS[folder.period];
+        const initial = company?.name?.[0]?.toUpperCase() ?? '?';
+        const clientColor = company?.color ?? '#636366';
+
+        return (
+          <motion.div key={folder.id}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            style={{ background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+            whileHover={{ y: -2 }}
+          >
+            {/* Top: client + period */}
+            <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: `${clientColor}20`, border: `2px solid ${clientColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: clientColor, flexShrink: 0 }}>
+                {initial}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--t4)', marginTop: 1 }}>{company?.name ?? '—'}</div>
+              </div>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '3px 7px', borderRadius: 999, background: `${periodColor}18`, color: periodColor, border: `1px solid ${periodColor}30`, flexShrink: 0 }}>
+                {PERIOD_LABELS[folder.period]}
+              </span>
+            </div>
+
+            {/* Progress */}
+            <div style={{ padding: '0 16px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--t4)', marginBottom: 6 }}>
+                <span>{total} {total === 1 ? 'peça' : 'peças'}</span>
+                <span style={{ color: pct === 100 ? '#30d158' : 'var(--t4)' }}>{approved}/{total} aprovadas</span>
+              </div>
+              <div style={{ height: 4, background: 'var(--b1)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#30d158' : '#356BFF', borderRadius: 2, transition: 'width .3s' }} />
+              </div>
+              {(pending > 0 || sent > 0) && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  {sent > 0 && <span style={{ fontSize: 9, color: '#356BFF' }}>{sent} aguardando</span>}
+                  {pending > 0 && <span style={{ fontSize: 9, color: '#ff9f0a' }}>{pending} com alteração</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div style={{ borderTop: '1px solid var(--b1)', padding: '10px 12px', display: 'flex', gap: 6 }}>
+              <button onClick={() => onManage(folder.id)}
+                style={{ flex: 1, padding: '7px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Gerenciar
+              </button>
+              <button onClick={() => copyFolderLink(folder)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, background: copied === folder.id ? 'rgba(48,209,88,0.12)' : 'var(--s2)', border: `1px solid ${copied === folder.id ? 'rgba(48,209,88,0.3)' : 'var(--b2)'}`, color: copied === folder.id ? '#30d158' : 'var(--t2)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              >
+                {copied === folder.id ? <FiCheck size={11} /> : <FiLink size={11} />}
+                {copied === folder.id ? 'Copiado!' : 'Enviar link'}
+              </button>
+              <button onClick={() => { if (confirm('Excluir pasta?')) deleteFolder(folder.id); }}
+                style={{ width: 32, height: 32, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+              ><FiTrash2 size={12} /></button>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── New Folder Modal ───────────────────────────────────────────────────────
+function NewFolderModal({ onClose, workspaceId, companies }: {
+  onClose: () => void;
+  workspaceId?: string;
+  companies: { id: string; name: string; color: string }[];
+}) {
+  const { addFolder } = useContentApprovalsStore();
+  const [name, setName] = useState('');
+  const [clientId, setClientId] = useState(companies[0]?.id ?? '');
+  const [period, setPeriod] = useState<FolderPeriod>('semanal');
+
+  const create = () => {
+    if (!name.trim() || !clientId) return;
+    addFolder({ workspaceId, clientId, name: name.trim(), period });
+    onClose();
+  };
+
+  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 13, outline: 'none' };
+
+  return (
+    <motion.div className="fixed inset-0 z-50 flex items-center justify-center"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div className="absolute inset-0 bg-black/60 glass-backdrop" onClick={onClose} />
+      <motion.div className="relative z-10 w-full max-w-md mx-4 rounded-[20px]"
+        style={{ background: 'var(--modal-bg)' }}
+        initial={{ scale: 0.92, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0, y: 20 }}
+      >
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--t1)' }}>Nova pasta de aprovação</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--t4)' }}>Nome da pasta</label>
+            <input autoFocus value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Ex: Semana 18 — Maio" style={inp} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--t4)' }}>Cliente</label>
+            <select value={clientId} onChange={e => setClientId(e.target.value)} style={inp}>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--t4)' }}>Período</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['semanal', 'quinzenal', 'mensal', 'livre'] as FolderPeriod[]).map(p => (
+                <button key={p} onClick={() => setPeriod(p)}
+                  style={{ flex: 1, padding: '7px 4px', borderRadius: 8, border: `1px solid ${period === p ? PERIOD_COLORS[p] : 'var(--b2)'}`, background: period === p ? `${PERIOD_COLORS[p]}18` : 'transparent', color: period === p ? PERIOD_COLORS[p] : 'var(--t3)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                >{PERIOD_LABELS[p]}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b2)', color: 'var(--t3)', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={create} disabled={!name.trim() || !clientId}
+              style={{ padding: '8px 18px', borderRadius: 9, background: name.trim() ? '#356BFF' : 'var(--s2)', border: 'none', color: name.trim() ? '#fff' : 'var(--t4)', fontSize: 12, fontWeight: 600, cursor: name.trim() ? 'pointer' : 'not-allowed' }}
+            >Criar pasta</button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Folder Manager Modal ───────────────────────────────────────────────────
+function FolderManagerModal({ folderId, onClose }: { folderId: string; onClose: () => void }) {
+  const { folders, approvals, addApprovalToFolder, removeApprovalFromFolder, updateFolder } = useContentApprovalsStore();
+  const { companies } = useTaskStore();
+  const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal, setNameVal] = useState(folder?.name ?? '');
+
+  if (!folder) return null;
+
+  const company = companies.find(c => c.id === folder.clientId);
+  const clientColor = company?.color ?? '#636366';
+  const inFolder = approvals.filter(a => folder.approvalIds.includes(a.id) && !a.deletedAt);
+  const available = approvals.filter(a => !folder.approvalIds.includes(a.id) && !a.deletedAt && a.clientId === folder.clientId);
+
+  const saveName = () => {
+    if (nameVal.trim() && nameVal.trim() !== folder.name) updateFolder(folder.id, { name: nameVal.trim() });
+    setEditingName(false);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: 'var(--modal-bg)', borderRadius: 20, width: 540, maxHeight: '84vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--b2)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: `${clientColor}20`, border: `2px solid ${clientColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: clientColor, flexShrink: 0 }}>
+            {company?.name?.[0]?.toUpperCase() ?? '?'}
+          </div>
+          <div style={{ flex: 1 }}>
+            {editingName ? (
+              <input autoFocus value={nameVal} onChange={e => setNameVal(e.target.value)}
+                onBlur={saveName} onKeyDown={e => e.key === 'Enter' && saveName()}
+                style={{ fontSize: 15, fontWeight: 700, background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 6, padding: '3px 8px', color: 'var(--t1)', outline: 'none', width: '100%' }}
+              />
+            ) : (
+              <div onClick={() => setEditingName(true)} style={{ fontSize: 15, fontWeight: 700, color: 'var(--t1)', cursor: 'text' }}>{folder.name}</div>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--t4)', marginTop: 1 }}>{company?.name} · <span style={{ color: PERIOD_COLORS[folder.period] }}>{PERIOD_LABELS[folder.period]}</span></div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', fontSize: 18 }}>×</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* In folder */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--t4)', marginBottom: 8 }}>
+              Na pasta ({inFolder.length})
+            </div>
+            {inFolder.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--t4)', padding: '10px 0' }}>Nenhuma aprovação adicionada ainda.</div>
+            ) : inFolder.map(a => {
+              const cfg = APPROVAL_STATUS_CONFIG[a.status];
+              return (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b1)', marginBottom: 5 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 6, background: a.assets[0]?.url ? `url(${a.assets[0].url}) center/cover` : 'var(--s2)', flexShrink: 0, border: '1px solid var(--b1)' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
+                  </div>
+                  <button onClick={() => removeApprovalFromFolder(folder.id, a.id)}
+                    style={{ width: 26, height: 26, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ff453a'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t4)'; }}
+                  ><FiX size={12} /></button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Available to add */}
+          {available.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--t4)', marginBottom: 8 }}>
+                Adicionar ({available.length} disponíveis)
+              </div>
+              {available.map(a => {
+                const cfg = APPROVAL_STATUS_CONFIG[a.status];
+                return (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b1)', marginBottom: 5 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: a.assets[0]?.url ? `url(${a.assets[0].url}) center/cover` : 'var(--s2)', flexShrink: 0, border: '1px solid var(--b1)' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
+                    </div>
+                    <button onClick={() => addApprovalToFolder(folder.id, a.id)}
+                      style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(53,107,255,0.12)', border: '1px solid rgba(53,107,255,0.3)', color: '#356BFF', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                    >+ Adicionar</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -730,6 +1049,116 @@ export function PublicApprovalView({ token, onBack }: { token: string; onBack: (
             {approval.feedback && <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>"{approval.feedback}"</div>}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Vista pública da PASTA de aprovação ────────────────────────────────────
+export function PublicApprovalFolderView({ token, onBack }: { token: string; onBack: () => void }) {
+  const { approvals, folders, markViewed } = useContentApprovalsStore();
+  const { companies } = useTaskStore();
+  const folder = folders.find(f => f.shareToken === token && !f.deletedAt);
+  const [viewingToken, setViewingToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'auto';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  if (!folder) return (
+    <div style={{ minHeight: '100vh', background: '#07070f', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 }}>
+      <div style={{ fontSize: 48, opacity: 0.4 }}>📁</div>
+      <div style={{ fontSize: 20, fontWeight: 700 }}>Pasta não encontrada</div>
+      <div style={{ fontSize: 13, color: '#444', textAlign: 'center', maxWidth: 340 }}>Este link pode ter expirado ou a pasta foi removida.</div>
+    </div>
+  );
+
+  if (viewingToken) {
+    return <PublicApprovalView token={viewingToken} onBack={() => setViewingToken(null)} />;
+  }
+
+  const company = companies.find(c => c.id === folder.clientId);
+  const clientColor = company?.color ?? '#356BFF';
+  const initial = company?.name?.[0]?.toUpperCase() ?? '?';
+  const folderApprovals = approvals.filter(a => folder.approvalIds.includes(a.id) && !a.deletedAt);
+  const total = folderApprovals.length;
+  const approved = folderApprovals.filter(a => a.status === 'aprovado' || a.status === 'postado').length;
+  const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
+
+  const handleOpen = (a: ContentApproval) => {
+    if (a.status === 'enviado') markViewed(a.id);
+    setViewingToken(a.shareToken);
+  };
+
+  return (
+    <div style={{ background: '#07070f', color: '#fff', minHeight: '100vh' }}>
+      <div style={{ maxWidth: 660, margin: '0 auto', padding: '48px 24px 80px' }}>
+
+        {/* Client header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 36 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 18, background: `${clientColor}20`, border: `2px solid ${clientColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 700, color: clientColor, flexShrink: 0 }}>
+            {initial}
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#333', textTransform: 'uppercase', letterSpacing: '2.5px', marginBottom: 4, fontWeight: 600 }}>
+              {PERIOD_LABELS[folder.period]}
+            </div>
+            <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>{folder.name}</h1>
+            <div style={{ fontSize: 13, color: '#555', marginTop: 3 }}>{company?.name}</div>
+          </div>
+        </div>
+
+        {/* Progress */}
+        {total > 0 && (
+          <div style={{ marginBottom: 32, padding: '16px 20px', borderRadius: 14, background: '#0e0e1a', border: '1px solid #1e1e32' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#555', marginBottom: 10 }}>
+              <span>{total} {total === 1 ? 'peça' : 'peças'} para revisar</span>
+              <span style={{ color: pct === 100 ? '#30d158' : '#444' }}>{approved} de {total} aprovadas</span>
+            </div>
+            <div style={{ height: 6, background: '#1a1a2e', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#30d158' : '#356BFF', borderRadius: 3, transition: 'width .4s' }} />
+            </div>
+          </div>
+        )}
+
+        {/* Approval items */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {folderApprovals.map((a, i) => {
+            const cfg = APPROVAL_STATUS_CONFIG[a.status];
+            const cover = a.assets[0]?.url;
+            const isDone = a.status === 'aprovado' || a.status === 'postado';
+            return (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 14, background: '#0e0e1a', border: `1px solid ${isDone ? 'rgba(48,209,88,0.2)' : '#1e1e32'}`, cursor: 'pointer', transition: 'border-color .15s, background .15s' }}
+                onClick={() => handleOpen(a)}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#13131f'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#0e0e1a'; }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#333', flexShrink: 0, width: 22, textAlign: 'right' }}>{i + 1}.</div>
+                <div style={{ width: 52, height: 52, borderRadius: 10, background: cover ? `url(${cover}) center/cover` : '#181828', border: '1px solid #1e1e32', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: isDone ? '#e0e0f0' : '#c0c0d0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
+                  <div style={{ fontSize: 11, color: '#444', marginTop: 2 }}>{CONTENT_TYPE_LABELS[a.type]}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: `${cfg.color}18`, color: cfg.color, border: `1px solid ${cfg.color}30` }}>
+                    {cfg.label}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#333' }}>›</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {total === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: '#333', fontSize: 13 }}>
+            Nenhuma peça adicionada a esta pasta ainda.
+          </div>
+        )}
+
+        <div style={{ marginTop: 48, textAlign: 'center', fontSize: 11, color: '#1a1a2a' }}>Powered by EvoStudio</div>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ContentApproval, ContentAsset, ContentComment, ApprovalStatus } from '../types';
+import type { ContentApproval, ContentAsset, ContentComment, ApprovalStatus, ApprovalFolder, FolderPeriod } from '../types';
 import { useAuthStore } from './auth';
 import { syncContentApproval, removeContentApproval } from '../lib/supabaseSync';
 
 interface ContentApprovalsStore {
   approvals: ContentApproval[];
+  folders: ApprovalFolder[];
   addApproval(p: Omit<ContentApproval, 'id' | 'createdAt' | 'shareToken'>): string;
   updateApproval(id: string, updates: Partial<ContentApproval>): void;
   deleteApproval(id: string): void;       // soft
@@ -21,6 +22,12 @@ interface ContentApprovalsStore {
   approve(id: string): void;
   markPosted(id: string): void;
   replaceAll(items: ContentApproval[]): void;
+  // Folders
+  addFolder(p: { workspaceId?: string; clientId: string; name: string; period: FolderPeriod }): string;
+  updateFolder(id: string, updates: Partial<ApprovalFolder>): void;
+  deleteFolder(id: string): void;
+  addApprovalToFolder(folderId: string, approvalId: string): void;
+  removeApprovalFromFolder(folderId: string, approvalId: string): void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -37,6 +44,7 @@ export const useContentApprovalsStore = create<ContentApprovalsStore>()(
   persist(
     (set, get) => ({
       approvals: [],
+      folders: [],
 
       addApproval: (p) => {
         const id = uid();
@@ -143,6 +151,31 @@ export const useContentApprovalsStore = create<ContentApprovalsStore>()(
         syncOne(id, get);
       },
       replaceAll: (items) => set({ approvals: items }),
+
+      addFolder: (p) => {
+        const id = uid();
+        const full: ApprovalFolder = { ...p, id, shareToken: token(), approvalIds: [], createdAt: new Date().toISOString() };
+        set(s => ({ folders: [full, ...s.folders] }));
+        return id;
+      },
+      updateFolder: (id, updates) => {
+        set(s => ({ folders: s.folders.map(f => f.id === id ? { ...f, ...updates } : f) }));
+      },
+      deleteFolder: (id) => {
+        set(s => ({ folders: s.folders.map(f => f.id === id ? { ...f, deletedAt: new Date().toISOString() } : f) }));
+      },
+      addApprovalToFolder: (folderId, approvalId) => {
+        set(s => ({
+          folders: s.folders.map(f => f.id === folderId && !f.approvalIds.includes(approvalId)
+            ? { ...f, approvalIds: [...f.approvalIds, approvalId] } : f),
+        }));
+      },
+      removeApprovalFromFolder: (folderId, approvalId) => {
+        set(s => ({
+          folders: s.folders.map(f => f.id === folderId
+            ? { ...f, approvalIds: f.approvalIds.filter(id => id !== approvalId) } : f),
+        }));
+      },
     }),
     { name: 'evo-content-approvals' },
   ),

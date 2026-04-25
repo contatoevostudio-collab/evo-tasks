@@ -361,6 +361,21 @@ export interface PomodoroSession {
   linkedTaskId?: string; // #29
 }
 
+// ─── ONDA 5B — Pastas de Aprovação ─────────────────────────────────────────
+export type FolderPeriod = 'semanal' | 'quinzenal' | 'mensal' | 'livre';
+
+export interface ApprovalFolder {
+  id: string;
+  workspaceId?: string;
+  clientId: string;
+  name: string;
+  period: FolderPeriod;
+  shareToken: string;
+  approvalIds: string[];
+  deletedAt?: string;
+  createdAt: string;
+}
+
 // ─── ONDA 6 — Time Tracking ────────────────────────────────────────────────
 export interface TimeEntry {
   id: string;

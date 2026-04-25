@@ -35,7 +35,8 @@ const PropostasPage   = lazy(() => import('./components/PropostasPage').then(m =
 const InboxPage       = lazy(() => import('./components/InboxPage').then(m => ({ default: m.InboxPage })));
 // Onda 5 — Agência
 const AprovacoesPage      = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.AprovacoesPage })));
-const PublicApprovalView  = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.PublicApprovalView })));
+const PublicApprovalView       = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.PublicApprovalView })));
+const PublicApprovalFolderView = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.PublicApprovalFolderView })));
 const PublicBriefingView  = lazy(() => import('./components/BriefingsPage').then(m => ({ default: m.PublicBriefingView })));
 const EditorialPage   = lazy(() => import('./components/EditorialPage').then(m => ({ default: m.EditorialPage })));
 const FaturasPage     = lazy(() => import('./components/FaturasPage').then(m => ({ default: m.FaturasPage })));
@@ -319,6 +320,7 @@ export default function App() {
   }, []);
   const aprovarToken  = publicHash.startsWith('#aprovar=')  ? publicHash.slice('#aprovar='.length)  : null;
   const briefingToken = publicHash.startsWith('#briefing=') ? publicHash.slice('#briefing='.length) : null;
+  const pastaToken    = publicHash.startsWith('#pasta=')    ? publicHash.slice('#pasta='.length)    : null;
   const clearHash = () => { history.replaceState(null, '', window.location.pathname); setPublicHash(''); };
 
   if (aprovarToken) return (
@@ -329,6 +331,11 @@ export default function App() {
   if (briefingToken) return (
     <Suspense fallback={<PageFallback />}>
       <PublicBriefingView token={briefingToken} onBack={clearHash} />
+    </Suspense>
+  );
+  if (pastaToken) return (
+    <Suspense fallback={<PageFallback />}>
+      <PublicApprovalFolderView token={pastaToken} onBack={clearHash} />
     </Suspense>
   );
 
