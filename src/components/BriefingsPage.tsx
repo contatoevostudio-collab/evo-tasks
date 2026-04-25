@@ -407,7 +407,7 @@ function BriefingEditorModal({ briefing: initialBriefing, accentColor, onClose }
 }
 
 // ─── Vista pública do briefing para o cliente ──────────────────────────────
-export function PublicBriefingView({ token, onBack }: { token: string; onBack: () => void }) {
+export function PublicBriefingView({ token, onBack: _onBack }: { token: string; onBack: () => void }) {
   const { briefings, markResponded, updateQuestion } = useBriefingsStore();
   const briefing = briefings.find(b => b.shareToken === token && !b.deletedAt);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});

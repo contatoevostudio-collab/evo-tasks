@@ -5,7 +5,6 @@ import { ptBR } from 'date-fns/locale';
 import { useTimeTrackingStore } from '../store/timeTracking';
 import { useTaskStore } from '../store/tasks';
 import { useWorkspacesStore, useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
-import type { TimeEntry } from '../types';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 function fmtDuration(secs: number): string {
