@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import QRCode from 'qrcode';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { QrCodePix } from 'qrcode-pix';
 import {
   FiPlus, FiTrash2, FiEdit2, FiX, FiCheck, FiDollarSign,
   FiLink, FiPrinter, FiChevronDown, FiArrowLeft, FiCopy,
@@ -10,78 +10,30 @@ import { useInvoicesStore, INVOICE_STATUS_CONFIG } from '../store/invoices';
 import { useTaskStore } from '../store/tasks';
 import type { Invoice, InvoiceStatus, InvoiceItem } from '../types';
 
-// ── QR Code component (client-side, no external service) ─────────────────────
+// ── QR Code PIX (usa qrcode-pix homologado pelo BCB) ─────────────────────────
 function PixQRCode({ pixKey, pixName, total }: { pixKey: string; pixName?: string; total: number }) {
   const [src, setSrc] = useState('');
-  const generate = useCallback(async () => {
+
+  useEffect(() => {
     if (!pixKey) return;
-    try {
-      const payload = generatePixPayload(pixKey, pixName ?? '', total);
-      const url = await QRCode.toDataURL(payload, {
-        width: 140,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: { dark: '#000000', light: '#ffffff' },
-      });
-      setSrc(url);
-    } catch (e) {
-      console.error('PIX QR error', e);
-    }
+    const name = (pixName || 'Prestador').normalize('NFD')
+      .replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '').trim().slice(0, 25) || 'Prestador';
+    const qr = QrCodePix({
+      version: '01', key: pixKey, name, city: 'SAO PAULO',
+      transactionId: '***', message: '', currency: 986, countryCode: 'BR',
+      value: total > 0 ? total : undefined,
+    });
+    qr.base64().then(setSrc).catch(console.error);
   }, [pixKey, pixName, total]);
 
-  useEffect(() => { generate(); }, [generate]);
-
   if (!src) return <div style={{ width: 140, height: 140, borderRadius: 10, background: '#f0f0f0' }} />;
-  return (
-    <img src={src} alt="QR Code PIX" width={140} height={140}
-      style={{ borderRadius: 10, display: 'block', background: '#fff' }} />
-  );
+  return <img src={src} alt="QR Code PIX" width={140} height={140} style={{ borderRadius: 10, display: 'block', background: '#fff' }} />;
 }
 
 type EditState = Invoice | 'new' | null;
 
 const fmt = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const mkToken = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
-
-// ── PIX BR Code (EMV QRCPS-MPM-001) ──────────────────────────────────────────
-function crc16ccitt(str: string): string {
-  let crc = 0xFFFF;
-  for (let i = 0; i < str.length; i++) {
-    crc ^= str.charCodeAt(i) << 8;
-    for (let j = 0; j < 8; j++) {
-      crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
-      crc &= 0xFFFF;
-    }
-  }
-  return crc.toString(16).toUpperCase().padStart(4, '0');
-}
-
-function tlv(id: string, value: string): string {
-  return `${id}${String(value.length).padStart(2, '0')}${value}`;
-}
-
-// Sanitize to ASCII, strip accents, max length
-function asciiTrunc(s: string, max: number): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '').trim().slice(0, max).toUpperCase();
-}
-
-function generatePixPayload(key: string, name: string, amount: number): string {
-  const mai = tlv('00', 'br.gov.bcb.pix') + tlv('01', key);
-  const parts = [
-    tlv('00', '01'),
-    tlv('01', '11'),                               // static QR (reusável)
-    tlv('26', mai),
-    tlv('52', '0000'),
-    tlv('53', '986'),                              // BRL
-    tlv('54', amount.toFixed(2)),
-    tlv('58', 'BR'),
-    tlv('59', asciiTrunc(name || 'Prestador', 25)),
-    tlv('60', 'SAO PAULO'),
-    tlv('62', tlv('05', '***')),
-  ];
-  const base = parts.join('') + '6304';
-  return base + crc16ccitt(base);
-}
 
 // ── StatusDropdown ────────────────────────────────────────────────────────────
 function StatusDropdown({ invoiceId, currentStatus }: { invoiceId: string; currentStatus: InvoiceStatus }) {
