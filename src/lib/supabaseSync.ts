@@ -296,7 +296,36 @@ function recurringBillFromDb(r: Record<string, unknown>): RecurringBill {
 
 // ─── Load all data from Supabase ─────────────────────────────────────────────
 
+// Lock global pra evitar múltiplas chamadas simultâneas (auth events frequentes
+// podem disparar várias) — Cloudflare bot management flagra requests rápidas e
+// retorna challenge sem CORS headers, fazendo browser bloquear tudo.
+let _loadInProgress: Promise<void> | null = null;
+let _lastLoadedUserId: string | null = null;
+
 export async function loadFromSupabase(userId: string): Promise<void> {
+  // Reentrancy guard: se já rodando pra esse user, retorna a mesma promessa
+  if (_loadInProgress) return _loadInProgress;
+  // Idempotency guard: se já carregou esse userId, pula
+  if (_lastLoadedUserId === userId) return;
+
+  _loadInProgress = (async () => {
+    try {
+      await _loadFromSupabaseImpl(userId);
+      _lastLoadedUserId = userId;
+    } finally {
+      _loadInProgress = null;
+    }
+  })();
+  return _loadInProgress;
+}
+
+/** Permite invalidar o cache do load (ex: logout/login com outro user). */
+export function resetLoadFromSupabaseCache() {
+  _lastLoadedUserId = null;
+  _loadInProgress = null;
+}
+
+async function _loadFromSupabaseImpl(userId: string): Promise<void> {
   useTaskStore.getState().setSyncStatus('syncing');
   beginSync();
   const [

@@ -16,7 +16,7 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { NotificationsBell, NotificationsPanel, useNotificationsCount } from './components/NotificationsPanel';
 import { useTaskStore } from './store/tasks';
 import { useAuthStore } from './store/auth';
-import { loadFromSupabase } from './lib/supabaseSync';
+import { loadFromSupabase, resetLoadFromSupabaseCache } from './lib/supabaseSync';
 import { bootstrapWorkspaces } from './lib/workspaceMigration';
 import { playChime } from './lib/sounds';
 import { THEME_VARS } from './types';
@@ -104,6 +104,7 @@ export default function App() {
       setUserId(null);
       useTaskStore.getState().setUserName('');
       useTaskStore.getState().setUserPhoto('');
+      resetLoadFromSupabaseCache();
     }
   }, [user]);
 
