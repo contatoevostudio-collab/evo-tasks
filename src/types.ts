@@ -62,6 +62,7 @@ export interface ContentApproval {
   assets: ContentAsset[];
   status: ApprovalStatus;
   shareToken: string;
+  postDate?: string;     // data prevista de postagem — aparece no editorial
   feedback?: string;
   sentAt?: string;
   viewedAt?: string;

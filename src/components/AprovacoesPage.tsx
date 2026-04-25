@@ -243,6 +243,7 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(companies[0]?.id ?? '');
   const [type, setType] = useState<ContentType>('carrossel');
+  const [postDate, setPostDate] = useState('');
 
   const submit = () => {
     if (!title.trim() || !clientId) return;
@@ -253,6 +254,7 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
       type,
       assets: [],
       status: 'rascunho',
+      postDate: postDate || undefined,
     });
     onCreated(id);
   };
@@ -302,6 +304,14 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
             </div>
           </div>
 
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6, display: 'block' }}>Data de postagem</label>
+            <input type="date" value={postDate} onChange={e => setPostDate(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 13 }}
+            />
+            <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 4 }}>Aparece no Calendário Editorial a partir desta data</div>
+          </div>
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 9, background: 'var(--s1)', border: '1px solid var(--b2)', color: 'var(--t3)', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
             <button onClick={submit} disabled={!title.trim() || !clientId}
@@ -318,7 +328,7 @@ function NewApprovalModal({ onClose, onCreated, workspaceId, companies, addAppro
 function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onClose: () => void }) {
   const { user } = useAuthStore();
   const { updateApproval, addAsset, removeAsset, addComment, resolveComment, markSent, markViewed, requestChanges, approve, markPosted, deleteApproval } = useContentApprovalsStore();
-  const { companies, tasks } = useTaskStore();
+  const { companies } = useTaskStore();
   const company = companies.find(c => c.id === approval.clientId);
   const [activeAssetIdx, setActiveAssetIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -327,11 +337,6 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
   const cfg = APPROVAL_STATUS_CONFIG[approval.status];
   const shareUrl = `${window.location.origin}${window.location.pathname}#aprovar=${approval.shareToken}`;
 
-  const taskLabel = (t: typeof tasks[number]) => t.taskType === 'outro' ? (t.customType || 'Outro') : t.taskType;
-  const creationTasks = useMemo(() =>
-    tasks.filter(t => !t.deletedAt && !t.archived && (t.taskCategory === 'criacao' || !t.taskCategory))
-         .sort((a, b) => taskLabel(a).localeCompare(taskLabel(b))),
-  [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStatusChange = (s: ApprovalStatus) => {
     switch (s) {
@@ -524,17 +529,14 @@ function ApprovalEditor({ approval, onClose }: { approval: ContentApproval; onCl
               </div>
             </div>
 
-            {/* Tarefa editorial */}
+            {/* Data de postagem */}
             <div style={{ flexShrink: 0, padding: '12px 16px', borderBottom: '1px solid var(--b1)' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6 }}>Tarefa editorial</div>
-              <select
-                value={approval.taskId ?? ''}
-                onChange={e => updateApproval(approval.id, { taskId: e.target.value || undefined })}
-                style={{ width: '100%', padding: '6px 8px', borderRadius: 7, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, outline: 'none' }}
-              >
-                <option value="">— Sem vínculo —</option>
-                {creationTasks.map(t => <option key={t.id} value={t.id}>{taskLabel(t)} — {t.date}</option>)}
-              </select>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6 }}>Data de postagem</div>
+              <input type="date" value={approval.postDate ?? ''}
+                onChange={e => updateApproval(approval.id, { postDate: e.target.value || undefined })}
+                style={{ width: '100%', padding: '6px 8px', borderRadius: 7, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}
+              />
+              {approval.postDate && <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 4 }}>Aparece no Calendário Editorial</div>}
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>

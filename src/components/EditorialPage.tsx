@@ -52,12 +52,22 @@ export function EditorialPage() {
     return editorialTasks.filter(t => t.companyId === filterCompany);
   }, [editorialTasks, filterCompany]);
 
-  // Build approval lookup by taskId
+  // Approvals by taskId (status dot on task chips)
   const approvalByTask = useMemo(() => {
     const map: Record<string, ContentApproval> = {};
     approvals.forEach(a => { if (a.taskId && !a.deletedAt) map[a.taskId] = a; });
     return map;
   }, [approvals]);
+
+  // Approvals by postDate (appear as first-class chips in the calendar)
+  const approvalsByDate = useMemo(() => {
+    const map: Record<string, ContentApproval[]> = {};
+    approvals.filter(a => a.postDate && !a.deletedAt && (!filterCompany || a.clientId === filterCompany)).forEach(a => {
+      if (!map[a.postDate!]) map[a.postDate!] = [];
+      map[a.postDate!].push(a);
+    });
+    return map;
+  }, [approvals, filterCompany]);
 
   // Calendar grid
   const monthStart = startOfMonth(current);
@@ -166,6 +176,7 @@ export function EditorialPage() {
           {days.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const dayTasks = tasksByDate[dateStr] ?? [];
+            const dayApprovals = approvalsByDate[dateStr] ?? [];
             const today = isToday(day);
 
             return (
@@ -187,7 +198,7 @@ export function EditorialPage() {
                   {format(day, 'd')}
                 </span>
 
-                {dayTasks.slice(0, 4).map(task => {
+                {dayTasks.slice(0, Math.max(0, 5 - dayApprovals.length)).map(task => {
                   const company = companies.find(c => c.id === task.companyId);
                   const approval = approvalByTask[task.id];
                   const typeLabel = task.taskType ? (TASK_TYPE_LABELS[task.taskType] ?? task.taskType) : '';
@@ -218,9 +229,30 @@ export function EditorialPage() {
                   );
                 })}
 
-                {dayTasks.length > 4 && (
+                {/* Approval chips (via postDate) */}
+                {dayApprovals.map(a => {
+                  const company = companies.find(c => c.id === a.clientId);
+                  const statusColor = APPROVAL_STATUS_COLORS[a.status] ?? '#636366';
+                  return (
+                    <div key={a.id} title={`${company?.name ?? ''} · ${a.title} · ${a.status}`}
+                      style={{
+                        fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 4,
+                        background: `${statusColor}18`,
+                        border: `1px solid ${statusColor}40`,
+                        color: statusColor,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                    >
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: statusColor }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{a.title}</span>
+                    </div>
+                  );
+                })}
+
+                {dayTasks.length + dayApprovals.length > 5 && (
                   <span style={{ fontSize: 9, color: 'var(--t4)', textAlign: 'center' }}>
-                    +{dayTasks.length - 4} mais
+                    +{dayTasks.length + dayApprovals.length - 5} mais
                   </span>
                 )}
               </div>
