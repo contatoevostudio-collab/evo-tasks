@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiPlus, FiEdit2, FiEye, FiLink, FiTrash2, FiX,
@@ -2027,7 +2027,7 @@ export function PropostasPage() {
   const { proposals: allProposals, updateProposal, deleteProposal } = useProposalsStore();
   const accentColor = useTaskStore(s => s.accentColor);
   const visibleIds = useVisibleWorkspaceIds();
-  const proposals = allProposals.filter(p => isInLens(p, visibleIds));
+  const proposals = useMemo(() => allProposals.filter(p => isInLens(p, visibleIds)), [allProposals, visibleIds]);
   const [showNew, setShowNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);

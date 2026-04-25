@@ -575,10 +575,10 @@ export function FinancePage() {
   const { accentColor } = useTaskStore();
   const { cards: allCards, deleteCard } = useCardsStore();
   const visibleIds = useVisibleWorkspaceIds();
-  const transactions   = allTransactions.filter(t => isInLens(t, visibleIds));
-  const goals          = allGoals.filter(g => isInLens(g, visibleIds));
-  const recurringBills = allRecurringBills.filter(b => isInLens(b, visibleIds));
-  const cards          = allCards.filter(c => isInLens(c, visibleIds));
+  const transactions   = useMemo(() => allTransactions.filter(t => isInLens(t, visibleIds)), [allTransactions, visibleIds]);
+  const goals          = useMemo(() => allGoals.filter(g => isInLens(g, visibleIds)), [allGoals, visibleIds]);
+  const recurringBills = useMemo(() => allRecurringBills.filter(b => isInLens(b, visibleIds)), [allRecurringBills, visibleIds]);
+  const cards          = useMemo(() => allCards.filter(c => isInLens(c, visibleIds)), [allCards, visibleIds]);
 
   const accentRgb = hexToRgb(accentColor);
 

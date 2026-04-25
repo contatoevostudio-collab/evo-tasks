@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import type { Workspace, WorkspaceType, WorkspaceSettings, WorkspacePalette, ViewLens, PageType } from '../types';
 
 // ─── Paletas pré-definidas ──────────────────────────────────────────────────
@@ -55,18 +56,21 @@ interface WorkspacesStore {
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 /**
- * Hook reativo: retorna ids visíveis pela lente atual. Usa selector pra
- * recomputar apenas quando workspaces/activeWorkspaceId/lens mudam.
+ * Hook reativo: retorna ids visíveis pela lente atual. Usa shallow equality
+ * pra evitar re-renders infinitos quando o selector retorna novo array
+ * com mesmo conteúdo (Zustand compara por referência por default).
  */
 export function useVisibleWorkspaceIds(): string[] {
-  return useWorkspacesStore(s => {
-    if (s.workspaces.length === 0) return [];
-    if (s.lens.mode === 'all') return s.workspaces.map(w => w.id);
-    if ((s.lens.mode === 'multi' || s.lens.mode === 'other') && s.lens.selectedWorkspaceIds && s.lens.selectedWorkspaceIds.length > 0) {
-      return s.lens.selectedWorkspaceIds;
-    }
-    return s.activeWorkspaceId ? [s.activeWorkspaceId] : [];
-  });
+  return useWorkspacesStore(
+    useShallow(s => {
+      if (s.workspaces.length === 0) return [];
+      if (s.lens.mode === 'all') return s.workspaces.map(w => w.id);
+      if ((s.lens.mode === 'multi' || s.lens.mode === 'other') && s.lens.selectedWorkspaceIds && s.lens.selectedWorkspaceIds.length > 0) {
+        return s.lens.selectedWorkspaceIds;
+      }
+      return s.activeWorkspaceId ? [s.activeWorkspaceId] : [];
+    })
+  );
 }
 
 /**
