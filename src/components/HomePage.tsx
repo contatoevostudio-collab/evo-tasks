@@ -8,7 +8,7 @@ import {
   FiCheckCircle, FiTrendingUp,
 } from 'react-icons/fi';
 import { useTaskStore } from '../store/tasks';
-import { useIdeasStore } from '../store/ideas';
+import { useIdeasStore, TAG_CONFIG as IDEA_TAG_CONFIG } from '../store/ideas';
 import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
 import { useAuthStore } from '../store/auth';
 import { getTaskTitle } from '../types';
@@ -41,22 +41,45 @@ const LEAD_STAGE_COLOR: Record<LeadStage, string> = {
 };
 
 // ─── Card primitive ─────────────────────────────────────────────────────────
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Card({ children, style, accentLeft }: { children: React.ReactNode; style?: React.CSSProperties; accentLeft?: string }) {
   return (
-    <div style={{ background: 'var(--s1)', borderRadius: 14, border: '1px solid var(--b2)', overflow: 'hidden', ...style }}>
+    <div style={{
+      background: 'var(--s1)', borderRadius: 14, border: '1px solid var(--b2)',
+      overflow: 'hidden', position: 'relative',
+      ...(accentLeft ? { borderLeft: `3px solid ${accentLeft}` } : {}),
+      ...style,
+    }}>
       {children}
     </div>
   );
 }
 
+// ─── Card header with icon in colored bubble ─────────────────────────────────
 function CardHeader({
   icon, title, accent, right,
 }: { icon: React.ReactNode; title: string; accent: string; right?: React.ReactNode }) {
+  const rgb = homeHexToRgb(accent);
   return (
-    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ color: accent, display: 'flex', alignItems: 'center' }}>{icon}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t3)', flex: 1 }}>{title}</span>
+    <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', gap: 9 }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+        background: `rgba(${rgb},0.14)`, border: `1px solid rgba(${rgb},0.22)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent,
+      }}>
+        {icon}
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--t2)', flex: 1 }}>{title}</span>
       {right}
+    </div>
+  );
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+function EmptyState({ emoji, text }: { emoji: string; text: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '28px 16px' }}>
+      <div style={{ fontSize: 32, opacity: 0.55 }}>{emoji}</div>
+      <div style={{ fontSize: 12, color: 'var(--t3)', fontWeight: 500, textAlign: 'center' }}>{text}</div>
     </div>
   );
 }
@@ -80,23 +103,29 @@ function TaskRow({
         background: hovered ? 'var(--s2)' : 'transparent',
         border: '1px solid transparent',
         borderRadius: 8,
-        cursor: 'pointer',
-        transition: 'background .12s',
+        cursor: 'pointer', transition: 'background .12s',
         minWidth: 0,
       }}
     >
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
       <span style={{
-        flex: '1 1 0', minWidth: 0,
-        fontSize: 12, fontWeight: 500,
-        color: task.status === 'done' ? 'var(--t4)' : 'var(--t1)',
-        textDecoration: task.status === 'done' ? 'line-through' : 'none',
+        width: 7, height: 7, borderRadius: '50%',
+        background: color, flexShrink: 0,
+        boxShadow: `0 0 6px ${color}88`,
+      }} />
+      <span style={{
+        flex: 1, minWidth: 0,
+        fontSize: 12, fontWeight: 500, color: 'var(--t1)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
         {title}
       </span>
       {companyName && (
-        <span style={{ fontSize: 10, color: 'var(--t3)', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          color, flexShrink: 0, opacity: 0.75,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          maxWidth: 80,
+        }}>
           {companyName}
         </span>
       )}
@@ -148,15 +177,15 @@ function WeeklyBars({ tasks, accentColor, accentRgb }: { tasks: Task[]; accentCo
           let barBg: string;
           let barShadow: string = 'none';
           if (isToday) {
-            barBg = `linear-gradient(180deg, ${accentColor} 0%, ${accentColor}66 100%)`;
-            barShadow = `0 0 14px -2px rgba(${accentRgb}, 0.6)`;
+            barBg = `linear-gradient(180deg, ${accentColor} 0%, rgba(${accentRgb},0.45) 100%)`;
+            barShadow = `0 0 14px -2px rgba(${accentRgb}, 0.7)`;
           } else if (hasData) {
-            barBg = 'linear-gradient(180deg, #30d158 0%, rgba(48,209,88,0.55) 100%)';
-            barShadow = '0 0 10px -4px rgba(48,209,88,0.4)';
+            barBg = 'linear-gradient(180deg, #30d158 0%, rgba(48,209,88,0.45) 100%)';
+            barShadow = '0 0 10px -4px rgba(48,209,88,0.5)';
           } else {
-            barBg = 'var(--b2)';
+            barBg = `linear-gradient(180deg, rgba(${accentRgb},0.15) 0%, rgba(${accentRgb},0.04) 100%)`;
           }
-          const barHeight = hasData ? Math.max(8, pct * (CHART_H - 22)) : 4;
+          const barHeight = hasData ? Math.max(8, pct * (CHART_H - 22)) : 6;
 
           return (
             <div key={dateStr} style={{
@@ -233,6 +262,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
   const activeTasks = tasks.filter(t => !t.archived && !t.inbox && isInLens(t, visibleIds));
   const todayTasks = activeTasks.filter(t => t.date === todayStr);
   const todayCount = todayTasks.length;
+  const todayDone = todayTasks.filter(t => t.status === 'done').length;
   const openTasks = activeTasks.filter(t => t.status !== 'done');
   const overdue = activeTasks
     .filter(t => {
@@ -241,7 +271,6 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5);
 
-  // Upcoming next 7 days, grouped by date
   const upcomingByDay = useMemo(() => {
     const upcoming = activeTasks
       .filter(t => {
@@ -275,7 +304,6 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
     });
   }, [ideas, visibleIds]);
 
-  // Idea of the week — deterministic by week-of-year
   const ideaOfWeek = useMemo(() => {
     const candidates = ideas.filter(i => !i.deletedAt && isInLens(i, visibleIds));
     return deterministicPick(candidates, getISOWeek(new Date()));
@@ -283,36 +311,32 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
 
   // ─── Pomodoro ───
   const pomodoroToday = useMemo(() => {
-    const minutes = pomodoroSessions
+    return pomodoroSessions
       .filter(s => !s.isBreak && s.startedAt.startsWith(todayStr))
       .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
-    return minutes;
   }, [pomodoroSessions, todayStr]);
 
   const pomodoroWeek = useMemo(() => {
     const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const minutes = pomodoroSessions
+    return pomodoroSessions
       .filter(s => {
         if (s.isBreak) return false;
         try { return parseISO(s.startedAt) >= start; } catch { return false; }
       })
       .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
-    return minutes;
   }, [pomodoroSessions]);
 
   // ─── Helpers ───
   const companyColor = (id: string) => companies.find(c => c.id === id)?.color ?? accentColor;
   const companyNameFn = (id: string) => companies.find(c => c.id === id)?.name ?? '';
 
-  // Header stat chips
   const headerChips = [
-    { label: 'Hoje',     value: todayCount,        color: '#356BFF', rgb: accentRgb },
-    { label: 'Em aberto', value: openTasks.length,  color: '#ff9f0a', rgb: '255,159,10' },
-    { label: 'Leads',    value: openLeads.length,   color: '#bf5af2', rgb: '191,90,242' },
-    { label: 'Ideias semana', value: ideasThisWeek.length, color: '#ffd60a', rgb: '255,214,10' },
+    { label: 'Hoje',         value: todayCount,         color: accentColor,  rgb: accentRgb,      icon: <FiCheckCircle size={10} /> },
+    { label: 'Em aberto',    value: openTasks.length,   color: '#ff9f0a',    rgb: '255,159,10',   icon: <FiClock size={10} /> },
+    { label: 'Leads',        value: openLeads.length,   color: '#bf5af2',    rgb: '191,90,242',   icon: <FiUsers size={10} /> },
+    { label: 'Ideias semana', value: ideasThisWeek.length, color: '#ffd60a', rgb: '255,214,10',   icon: <FiZap size={10} /> },
   ];
 
-  // Day labels for upcoming groups
   const dayLabel = (dateStr: string) => {
     try {
       const d = parseISO(dateStr);
@@ -322,52 +346,90 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
     } catch { return dateStr; }
   };
 
+  // Progress bar width for today
+  const todayProgress = todayCount > 0 ? (todayDone / todayCount) * 100 : 0;
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* ═══ Compact sticky header ═══════════════════════════════════════════ */}
-      <div style={{ padding: '14px 20px', flexShrink: 0, borderBottom: '1px solid var(--b2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+
+      {/* ═══ Header ══════════════════════════════════════════════════════════ */}
+      <div style={{
+        padding: '16px 20px',
+        flexShrink: 0,
+        borderBottom: '1px solid var(--b2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+        background: `linear-gradient(135deg, rgba(${accentRgb},0.07) 0%, transparent 55%)`,
+        boxShadow: '0 1px 0 var(--b2)',
+      }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', marginBottom: 2 }}>Dashboard</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', marginBottom: 3 }}>Dashboard</div>
+          {/* #14 — Saudação maior e mais expressiva */}
+          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.6px', lineHeight: 1.1 }}>
             Olá, <span style={{ color: accentColor }}>{firstName}</span>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* #10 — Chips com ícone */}
           {headerChips.map(k => (
-            <div key={k.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: `rgba(${k.rgb},0.08)`, border: `1px solid rgba(${k.rgb},0.2)` }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: `rgba(${k.rgb},0.6)` }}>{k.label}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: k.color }}>{k.value}</span>
+            <div key={k.label} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '5px 11px', borderRadius: 8,
+              background: `rgba(${k.rgb},0.09)`, border: `1px solid rgba(${k.rgb},0.22)`,
+            }}>
+              <span style={{ color: k.color, display: 'flex', opacity: 0.8 }}>{k.icon}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase', color: `rgba(${k.rgb},0.6)` }}>{k.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: k.color }}>{k.value}</span>
             </div>
           ))}
-
           <button
             onClick={() => onNavigate('tarefas')}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, background: '#356BFF', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 14px rgba(53,107,255,0.35)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, background: accentColor, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: `0 4px 16px rgba(${accentRgb},0.4)` }}>
             <FiPlus size={12} /> Nova
           </button>
         </div>
       </div>
 
-      {/* ═══ Body ═══════════════════════════════════════════════════════════ */}
+      {/* ═══ Body ════════════════════════════════════════════════════════════ */}
       <div className="bento-grid bento-sidebar" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 20px', gridAutoRows: 'min-content' }}>
+
         {/* ─── MAIN COLUMN ─────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          {/* Hoje */}
-          <Card>
+
+          {/* #1 + #4 + #7 + #8 — Card Hoje com borda azul, fundo diferenciado, pill e progress bar */}
+          <Card accentLeft={accentColor} style={{ background: `linear-gradient(160deg, rgba(${accentRgb},0.045) 0%, var(--s1) 40%)` }}>
             <CardHeader
-              icon={<FiCheckCircle size={13} />}
+              icon={<FiCheckCircle size={14} />}
               title="Hoje"
-              accent="#356BFF"
+              accent={accentColor}
               right={
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)' }}>
-                  {todayTasks.filter(t => t.status === 'done').length}/{todayCount}
-                </span>
+                todayCount > 0 ? (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    background: todayDone === todayCount ? '#30d15820' : `rgba(${accentRgb},0.15)`,
+                    color: todayDone === todayCount ? '#30d158' : accentColor,
+                    border: `1px solid ${todayDone === todayCount ? 'rgba(48,209,88,0.3)' : `rgba(${accentRgb},0.3)`}`,
+                    borderRadius: 99, padding: '2px 9px',
+                  }}>
+                    {todayDone}/{todayCount}
+                  </span>
+                ) : undefined
               }
             />
+            {/* #8 — Progress bar */}
+            {todayCount > 0 && (
+              <div style={{ height: 2, background: 'var(--b1)', flexShrink: 0, position: 'relative' }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${todayProgress}%` }}
+                  transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}
+                  style={{ height: '100%', background: `linear-gradient(90deg, ${accentColor}, #30d158)`, borderRadius: '0 2px 2px 0' }}
+                />
+              </div>
+            )}
             <div style={{ padding: '10px 10px 12px' }}>
               {todayTasks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '22px 0', color: 'var(--t4)', fontSize: 12 }}>Dia livre. Aproveite!</div>
+                <EmptyState emoji="☀️" text="Dia livre. Aproveite!" />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {todayTasks.slice(0, 8).map((task, i) => (
@@ -389,7 +451,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
           {/* Esta semana */}
           <Card>
             <CardHeader
-              icon={<FiTrendingUp size={13} />}
+              icon={<FiTrendingUp size={14} />}
               title="Esta semana"
               accent={accentColor}
             />
@@ -401,7 +463,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
           {/* CRM em aberto */}
           <Card>
             <CardHeader
-              icon={<FiUsers size={13} />}
+              icon={<FiUsers size={14} />}
               title="CRM em aberto"
               accent="#bf5af2"
               right={
@@ -413,7 +475,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
             />
             <div style={{ padding: '10px 10px 12px' }}>
               {sortedOpenLeads.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '22px 0', color: 'var(--t4)', fontSize: 12 }}>Nenhum lead em aberto.</div>
+                <EmptyState emoji="🎯" text="Nenhum lead em aberto." />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {sortedOpenLeads.map((lead, i) => {
@@ -433,16 +495,14 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
                         onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--s2)')}
                         onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
                       >
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor, flexShrink: 0 }} />
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor, flexShrink: 0, boxShadow: `0 0 6px ${stageColor}88` }} />
                         <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {lead.name}
                         </span>
                         <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: stageColor, flexShrink: 0 }}>
                           {LEAD_STAGE_LABEL[lead.stage]}
                         </span>
-                        {lead.temperature === 'quente' && (
-                          <span style={{ fontSize: 11 }}>🔥</span>
-                        )}
+                        {lead.temperature === 'quente' && <span style={{ fontSize: 11 }}>🔥</span>}
                       </motion.button>
                     );
                   })}
@@ -451,34 +511,44 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
             </div>
           </Card>
 
-          {/* Próximos 7 dias */}
+          {/* #15 — Próximos 7 dias com timeline vertical */}
           <Card>
             <CardHeader
-              icon={<FiClock size={13} />}
+              icon={<FiClock size={14} />}
               title="Próximos 7 dias"
               accent="#64d2ff"
             />
             <div style={{ padding: '10px 10px 12px' }}>
               {upcomingByDay.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '22px 0', color: 'var(--t4)', fontSize: 12 }}>Agenda livre.</div>
+                <EmptyState emoji="📅" text="Agenda livre nos próximos dias." />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {upcomingByDay.map(group => (
-                    <div key={group.date}>
-                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--t4)', padding: '0 10px 6px' }}>
-                        {dayLabel(group.date)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {upcomingByDay.map((group, gi) => (
+                    <div key={group.date} style={{ display: 'flex', gap: 0 }}>
+                      {/* Timeline: dot + line */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0, paddingTop: 6 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#64d2ff', boxShadow: '0 0 8px rgba(100,210,255,0.6)', flexShrink: 0 }} />
+                        {gi < upcomingByDay.length - 1 && (
+                          <div style={{ width: 1, flex: 1, background: 'linear-gradient(180deg, rgba(100,210,255,0.3) 0%, transparent 100%)', minHeight: 24, marginTop: 2 }} />
+                        )}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {group.tasks.map(task => (
-                          <TaskRow
-                            key={task.id}
-                            task={task}
-                            color={companyColor(task.companyId)}
-                            title={getTaskTitle(task, companies, subClients)}
-                            companyName={companyNameFn(task.companyId)}
-                            onClick={() => onTaskClick(task)}
-                          />
-                        ))}
+                      {/* Content */}
+                      <div style={{ flex: 1, minWidth: 0, paddingBottom: gi < upcomingByDay.length - 1 ? 10 : 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#64d2ff', padding: '4px 10px 5px', opacity: 0.8 }}>
+                          {dayLabel(group.date)}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {group.tasks.map(task => (
+                            <TaskRow
+                              key={task.id}
+                              task={task}
+                              color={companyColor(task.companyId)}
+                              title={getTaskTitle(task, companies, subClients)}
+                              companyName={companyNameFn(task.companyId)}
+                              onClick={() => onTaskClick(task)}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -490,24 +560,25 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
 
         {/* ─── RIGHT COLUMN ───────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          {/* Pomodoro mini-stat */}
-          <Card>
+
+          {/* #11 — Pomodoro com fundo quente */}
+          <Card style={{ background: 'linear-gradient(160deg, rgba(255,69,58,0.06) 0%, var(--s1) 50%)' }}>
             <CardHeader
-              icon={<FiClock size={13} />}
+              icon={<FiClock size={14} />}
               title="Pomodoro"
               accent="#ff453a"
             />
             <div style={{ padding: '14px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t4)' }}>Hoje</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px', lineHeight: 1.1 }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                   {pomodoroToday}<span style={{ fontSize: 11, color: 'var(--t3)', fontWeight: 600, marginLeft: 3 }}>min</span>
                 </div>
               </div>
               <div style={{ width: 1, height: 32, background: 'var(--b1)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--t4)' }}>Semana</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px', lineHeight: 1.1 }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                   {pomodoroWeek}<span style={{ fontSize: 11, color: 'var(--t3)', fontWeight: 600, marginLeft: 3 }}>min</span>
                 </div>
               </div>
@@ -515,18 +586,20 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
           </Card>
 
           {/* Atrasadas */}
-          <Card style={{ border: '1px solid rgba(255,69,58,0.22)' }}>
+          <Card style={{ border: '1px solid rgba(255,69,58,0.25)', background: 'linear-gradient(160deg, rgba(255,69,58,0.04) 0%, var(--s1) 45%)' }}>
             <CardHeader
-              icon={<FiAlertTriangle size={13} />}
+              icon={<FiAlertTriangle size={14} />}
               title="Atrasadas"
               accent="#ff453a"
               right={overdue.length > 0 ? (
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#ff453a' }}>{overdue.length}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#ff453a', background: 'rgba(255,69,58,0.12)', borderRadius: 99, padding: '2px 8px', border: '1px solid rgba(255,69,58,0.25)' }}>
+                  {overdue.length}
+                </span>
               ) : undefined}
             />
             <div style={{ padding: '10px 10px 12px' }}>
               {overdue.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--t4)', fontSize: 12 }}>Nada em atraso.</div>
+                <EmptyState emoji="✅" text="Nada em atraso." />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {overdue.map((task, i) => (
@@ -538,8 +611,7 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
                           display: 'flex', alignItems: 'center', gap: 10,
                           padding: '8px 10px', borderRadius: 8,
                           background: 'transparent', border: '1px solid transparent',
-                          cursor: 'pointer', transition: 'background .12s',
-                          minWidth: 0,
+                          cursor: 'pointer', transition: 'background .12s', minWidth: 0,
                         }}
                         onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,69,58,0.08)')}
                         onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
@@ -559,10 +631,10 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
             </div>
           </Card>
 
-          {/* Ideia da semana */}
+          {/* #13 — Ideia da semana com tag colorida do tipo */}
           <Card>
             <CardHeader
-              icon={<FiZap size={13} />}
+              icon={<FiZap size={14} />}
               title="Ideia da semana"
               accent="#ffd60a"
               right={
@@ -574,65 +646,86 @@ export function HomePage({ onTaskClick, onNavigate }: Props) {
             />
             <div style={{ padding: '14px 16px 16px' }}>
               {!ideaOfWeek ? (
-                <div style={{ textAlign: 'center', padding: '14px 0 6px', color: 'var(--t4)', fontSize: 12 }}>
-                  Nenhuma ideia ainda.
-                </div>
-              ) : (
-                <button
-                  onClick={() => onNavigate('ideias')}
-                  style={{
-                    width: '100%', textAlign: 'left',
-                    background: 'rgba(255,214,10,0.06)',
-                    border: '1px solid rgba(255,214,10,0.22)',
-                    borderRadius: 10, padding: '12px 14px',
-                    cursor: 'pointer', transition: 'all .15s',
-                    display: 'flex', flexDirection: 'column', gap: 6,
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.1)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.35)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.06)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.22)'; }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {ideaOfWeek.title || '(sem título)'}
-                  </div>
-                  {ideaOfWeek.description && (
-                    <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {ideaOfWeek.description}
+                <EmptyState emoji="💡" text="Nenhuma ideia ainda. Crie a primeira!" />
+              ) : (() => {
+                const tagCfg = IDEA_TAG_CONFIG[ideaOfWeek.tag];
+                return (
+                  <button
+                    onClick={() => onNavigate('ideias')}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      background: 'rgba(255,214,10,0.06)',
+                      border: '1px solid rgba(255,214,10,0.22)',
+                      borderRadius: 10, padding: '12px 14px',
+                      cursor: 'pointer', transition: 'all .15s',
+                      display: 'flex', flexDirection: 'column', gap: 8,
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.1)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.35)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,214,10,0.06)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,214,10,0.22)'; }}
+                  >
+                    {/* Tag colorida do tipo de ideia */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+                        color: tagCfg.color, background: `${tagCfg.color}18`,
+                        border: `1px solid ${tagCfg.color}30`,
+                        borderRadius: 99, padding: '2px 8px',
+                      }}>
+                        {tagCfg.label}
+                      </span>
                     </div>
-                  )}
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: '#ffd60a', marginTop: 2 }}>
-                    Revisitar
-                  </div>
-                </button>
-              )}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {ideaOfWeek.title || '(sem título)'}
+                    </div>
+                    {ideaOfWeek.description && (
+                      <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {ideaOfWeek.description}
+                      </div>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           </Card>
 
-          {/* Atalhos */}
+          {/* #12 — Atalhos com hover de gradiente */}
           <Card>
             <CardHeader
-              icon={<FiArrowRight size={13} />}
+              icon={<FiArrowRight size={14} />}
               title="Atalhos"
               accent={accentColor}
             />
             <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {([
-                { label: 'Empresas', icon: <FiBriefcase size={14} />, page: 'empresas' as PageType, color: '#64C4FF', rgb: '100,196,255' },
-                { label: 'CRM',      icon: <FiUsers size={14} />,     page: 'crm' as PageType,      color: '#bf5af2', rgb: '191,90,242' },
-                { label: 'To Do',    icon: <FiCheckSquare size={14} />, page: 'todo' as PageType,    color: '#30d158', rgb: '48,209,88' },
-                { label: 'Ideias',   icon: <FiZap size={14} />,       page: 'ideias' as PageType,   color: '#ffd60a', rgb: '255,214,10' },
+                { label: 'Empresas', icon: <FiBriefcase size={16} />, page: 'empresas' as PageType, color: '#64C4FF', rgb: '100,196,255' },
+                { label: 'CRM',      icon: <FiUsers size={16} />,     page: 'crm' as PageType,      color: '#bf5af2', rgb: '191,90,242' },
+                { label: 'To Do',    icon: <FiCheckSquare size={16} />, page: 'todo' as PageType,   color: '#30d158', rgb: '48,209,88' },
+                { label: 'Ideias',   icon: <FiZap size={16} />,       page: 'ideias' as PageType,   color: '#ffd60a', rgb: '255,214,10' },
               ]).map(s => (
                 <button
                   key={s.label}
                   onClick={() => onNavigate(s.page)}
                   style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '14px 8px', borderRadius: 10,
-                    background: `rgba(${s.rgb},0.06)`, border: `1px solid rgba(${s.rgb},0.18)`,
-                    color: s.color, cursor: 'pointer',
-                    transition: 'all .15s',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    padding: '16px 8px', borderRadius: 10,
+                    background: `rgba(${s.rgb},0.07)`, border: `1px solid rgba(${s.rgb},0.2)`,
+                    color: s.color, cursor: 'pointer', transition: 'all .15s',
+                    position: 'relative', overflow: 'hidden',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `rgba(${s.rgb},0.12)`; (e.currentTarget as HTMLElement).style.borderColor = `rgba(${s.rgb},0.35)`; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `rgba(${s.rgb},0.06)`; (e.currentTarget as HTMLElement).style.borderColor = `rgba(${s.rgb},0.18)`; }}
+                  onMouseEnter={e => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = `linear-gradient(160deg, rgba(${s.rgb},0.18) 0%, rgba(${s.rgb},0.07) 100%)`;
+                    el.style.borderColor = `rgba(${s.rgb},0.4)`;
+                    el.style.transform = 'translateY(-1px)';
+                    el.style.boxShadow = `0 6px 20px rgba(${s.rgb},0.2)`;
+                  }}
+                  onMouseLeave={e => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = `rgba(${s.rgb},0.07)`;
+                    el.style.borderColor = `rgba(${s.rgb},0.2)`;
+                    el.style.transform = 'translateY(0)';
+                    el.style.boxShadow = 'none';
+                  }}
                 >
                   {s.icon}
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase' }}>{s.label}</span>
