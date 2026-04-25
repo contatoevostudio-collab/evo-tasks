@@ -92,6 +92,8 @@ export interface Invoice {
   paidAt?: string;
   deletedAt?: string;
   createdAt: string;
+  shareToken?: string;
+  pixKey?: string;
 }
 
 // ─── ONDA 5 — Briefing ──────────────────────────────────────────────────

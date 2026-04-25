@@ -38,6 +38,7 @@ const AprovacoesPage      = lazy(() => import('./components/AprovacoesPage').the
 const PublicApprovalView       = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.PublicApprovalView })));
 const PublicApprovalFolderView = lazy(() => import('./components/AprovacoesPage').then(m => ({ default: m.PublicApprovalFolderView })));
 const PublicBriefingView  = lazy(() => import('./components/BriefingsPage').then(m => ({ default: m.PublicBriefingView })));
+const PublicInvoiceView   = lazy(() => import('./components/FaturasPage').then(m => ({ default: m.PublicInvoiceView })));
 const EditorialPage   = lazy(() => import('./components/EditorialPage').then(m => ({ default: m.EditorialPage })));
 const FaturasPage     = lazy(() => import('./components/FaturasPage').then(m => ({ default: m.FaturasPage })));
 const BriefingsPage   = lazy(() => import('./components/BriefingsPage').then(m => ({ default: m.BriefingsPage })));
@@ -321,6 +322,7 @@ export default function App() {
   const aprovarToken  = publicHash.startsWith('#aprovar=')  ? publicHash.slice('#aprovar='.length)  : null;
   const briefingToken = publicHash.startsWith('#briefing=') ? publicHash.slice('#briefing='.length) : null;
   const pastaToken    = publicHash.startsWith('#pasta=')    ? publicHash.slice('#pasta='.length)    : null;
+  const faturaToken   = publicHash.startsWith('#fatura=')   ? publicHash.slice('#fatura='.length)   : null;
   const clearHash = () => { history.replaceState(null, '', window.location.pathname); setPublicHash(''); };
 
   if (aprovarToken) return (
@@ -336,6 +338,11 @@ export default function App() {
   if (pastaToken) return (
     <Suspense fallback={<PageFallback />}>
       <PublicApprovalFolderView token={pastaToken} onBack={clearHash} />
+    </Suspense>
+  );
+  if (faturaToken) return (
+    <Suspense fallback={<PageFallback />}>
+      <PublicInvoiceView token={faturaToken} onBack={clearHash} />
     </Suspense>
   );
 
