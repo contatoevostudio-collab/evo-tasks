@@ -17,6 +17,7 @@ import { NotificationsBell, NotificationsPanel, useNotificationsCount } from './
 import { useTaskStore } from './store/tasks';
 import { useAuthStore } from './store/auth';
 import { loadFromSupabase } from './lib/supabaseSync';
+import { bootstrapWorkspaces } from './lib/workspaceMigration';
 import { playChime } from './lib/sounds';
 import { THEME_VARS } from './types';
 import type { Task, TaskStatus, PageType, CalendarEventCategory } from './types';
@@ -78,6 +79,9 @@ export default function App() {
 
   // Lixeira: remove permanentemente itens com mais de 30 dias na startup
   useEffect(() => { purgeOldTrash(); }, []);
+
+  // Workspaces (Onda 4): garante default + migra dados legacy no mount
+  useEffect(() => { bootstrapWorkspaces(); }, []);
 
   // Only reload from Supabase when the user ID actually changes (sign in / sign out),
   // NOT on every auth event (e.g. token refresh creates a new user object reference
