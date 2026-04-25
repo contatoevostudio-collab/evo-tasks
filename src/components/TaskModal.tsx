@@ -5,10 +5,11 @@ import {
   FiLayers, FiFilm, FiMonitor, FiEdit3, FiCopy,
   FiPlus, FiCheck, FiArchive, FiClock, FiGlobe, FiPenTool, FiRepeat, FiBookmark,
 } from 'react-icons/fi';
-import { format, parseISO, addWeeks, addMonths } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { playAdd, playDelete, playCheck } from '../lib/sounds';
-import type { Task, TaskStatus, TaskType, Priority, SubTask, ArtVersion, TaskTemplate } from '../types';
+import { generateOccurrences, describeRule } from '../lib/recurrence';
+import type { Task, TaskStatus, TaskType, Priority, SubTask, ArtVersion, TaskTemplate, RecurrenceRule, RecurrenceFreq } from '../types';
 import { getTaskTitle } from '../types';
 import { useTaskStore } from '../store/tasks';
 import { useProposalsStore } from '../store/proposals';
@@ -140,7 +141,34 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
   const [showNotes,    setShowNotes]    = useState<boolean>(!!(task?.notes));
   const [tags,         setTags]         = useState<string[]>(task?.tags ?? []);
   const [tagInput,     setTagInput]     = useState('');
-  const [recurrence,   setRecurrence]   = useState<'none' | 'weekly' | 'monthly'>(task?.recurrence ?? 'none');
+  // Recurrence (Onda 3C — inteligente)
+  const initialFreq: 'none' | RecurrenceFreq = task?.recurrenceRule?.freq ?? task?.recurrence ?? 'none';
+  const [recFreq,         setRecFreq]         = useState<'none' | RecurrenceFreq>(initialFreq);
+  const [recInterval,     setRecInterval]     = useState<number>(task?.recurrenceRule?.interval ?? 1);
+  const [recWeekdays,     setRecWeekdays]     = useState<number[]>(task?.recurrenceRule?.byWeekday ?? []);
+  const [recMonthMode,    setRecMonthMode]    = useState<'day' | 'nth'>(task?.recurrenceRule?.byMonthWeekday ? 'nth' : 'day');
+  const [recMonthDay,     setRecMonthDay]     = useState<number>(task?.recurrenceRule?.byMonthDay ?? 1);
+  const [recNthWeekday,   setRecNthWeekday]   = useState<number>(task?.recurrenceRule?.byMonthWeekday?.weekday ?? 1);
+  const [recNth,          setRecNth]          = useState<number>(task?.recurrenceRule?.byMonthWeekday?.nth ?? 1);
+  const [recCount,        setRecCount]        = useState<number | ''>(task?.recurrenceRule?.count ?? '');
+
+  // Legacy compatibility for other code reading `recurrence` state — derived
+  const recurrence: 'none' | 'weekly' | 'monthly' =
+    recFreq === 'weekly' || recFreq === 'monthly' ? recFreq : 'none';
+
+  const buildRecurrenceRule = (): RecurrenceRule | undefined => {
+    if (recFreq === 'none') return undefined;
+    return {
+      freq: recFreq,
+      interval: Math.max(1, recInterval || 1),
+      byWeekday: recFreq === 'weekly' && recWeekdays.length > 0 ? recWeekdays : undefined,
+      byMonthDay: recFreq === 'monthly' && recMonthMode === 'day' ? recMonthDay : undefined,
+      byMonthWeekday: recFreq === 'monthly' && recMonthMode === 'nth'
+        ? { weekday: recNthWeekday, nth: recNth }
+        : undefined,
+      count: recCount !== '' ? Number(recCount) : undefined,
+    };
+  };
   const [estimate,     setEstimate]     = useState<number | ''>(task?.estimate ?? '');
   const [colorOverride, setColorOverride] = useState<string | undefined>(task?.colorOverride);
   const [linkedProposalId, setLinkedProposalId] = useState<string>(task?.linkedProposalId ?? '');
@@ -177,7 +205,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
     if (tpl.hookIdea)     { setHookIdea(tpl.hookIdea); setShowLegenda(true); }
     if (tpl.references && tpl.references.length > 0) { setReferences(tpl.references); setShowLegenda(true); }
     if (tpl.tags && tpl.tags.length > 0) setTags(tpl.tags);
-    if (tpl.recurrence)   setRecurrence(tpl.recurrence);
+    if (tpl.recurrence)   setRecFreq(tpl.recurrence);
     showToast(`Template "${tpl.name}" aplicado`);
     setTimeout(hideToast, 2400);
   };
@@ -268,23 +296,20 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
     colorOverride: colorOverride || undefined,
     subtasks: task ? liveTask?.subtasks : undefined,
     recurrence: recurrence !== 'none' ? recurrence : undefined,
+    recurrenceRule: buildRecurrenceRule(),
     linkedProposalId: linkedProposalId || undefined,
   });
 
-  /** Generate N future occurrences for a recurring task. */
-  const generateRecurrenceOccurrences = (parentId: string, baseDate: string, rec: 'weekly' | 'monthly') => {
+  /** Generate future occurrences from the active rule. */
+  const generateRecurrenceOccurrences = (parentId: string, baseDate: string, rule: RecurrenceRule) => {
     const payload = buildPayload() as Omit<Task, 'id'>;
-    const MONTHS_AHEAD = 3;
-    const maxOccurrences = rec === 'weekly' ? MONTHS_AHEAD * 4 : MONTHS_AHEAD;
-    const startDate = parseISO(baseDate);
-    for (let i = 1; i <= maxOccurrences; i++) {
-      const nextDate = rec === 'weekly'
-        ? addWeeks(startDate, i)
-        : addMonths(startDate, i);
+    const dates = generateOccurrences(baseDate, rule);
+    for (const dStr of dates) {
       addTask({
         ...payload,
-        date: format(nextDate, 'yyyy-MM-dd'),
-        recurrence: rec,
+        date: dStr,
+        recurrence: rule.freq === 'weekly' || rule.freq === 'monthly' ? rule.freq : undefined,
+        recurrenceRule: rule,
         recurrenceParentId: parentId,
         status: 'todo',
         subtasks: undefined,
@@ -302,8 +327,9 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
       const newId = addTask(payload);
       playAdd();
       // #3 — generate recurrence occurrences for new tasks
-      if (recurrence !== 'none') {
-        generateRecurrenceOccurrences(newId, date, recurrence as 'weekly' | 'monthly');
+      const rule = buildRecurrenceRule();
+      if (rule) {
+        generateRecurrenceOccurrences(newId, date, rule);
       }
     }
     onClose();
@@ -888,7 +914,7 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
                   </div>
                 </div>
 
-                {/* #3 Recurrence — only for non-avulso tasks */}
+                {/* #3 Recurrence — inteligente (Onda 3C) */}
                 {!isAvulso && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -896,11 +922,11 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
                       <span style={{ ...labelStyle, marginBottom: 0 }}>Repetir</span>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {(['none', 'weekly', 'monthly'] as const).map(opt => {
-                        const labels = { none: 'Não repete', weekly: 'Semanalmente', monthly: 'Mensalmente' };
-                        const active = recurrence === opt;
+                      {(['none', 'daily', 'weekly', 'monthly'] as const).map(opt => {
+                        const labels = { none: 'Não', daily: 'Diário', weekly: 'Semanal', monthly: 'Mensal' };
+                        const active = recFreq === opt;
                         return (
-                          <button key={opt} onClick={() => setRecurrence(opt)} style={{
+                          <button key={opt} onClick={() => setRecFreq(opt)} style={{
                             flex: 1, padding: '6px 0', borderRadius: 8, fontSize: 11, fontWeight: 500,
                             background: active ? `${companyColor}22` : 'var(--s1)',
                             border: 'none',
@@ -912,12 +938,145 @@ export function TaskModal({ task, defaultDate, onClose, onOpenTask }: Props) {
                         );
                       })}
                     </div>
-                    {recurrence !== 'none' && !task && (
-                      <p style={{ fontSize: 10, color: 'var(--t4)', marginTop: 6 }}>
-                        Serão criadas {recurrence === 'weekly' ? '12 cópias (3 meses)' : '3 cópias'} automaticamente.
-                      </p>
+
+                    {recFreq !== 'none' && (
+                      <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--s1)', border: '1px solid var(--b2)', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {/* Interval */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--t2)' }}>
+                          <span>A cada</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={99}
+                            value={recInterval}
+                            onChange={e => setRecInterval(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                            style={{ width: 48, padding: '4px 6px', borderRadius: 6, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', outline: 'none', fontSize: 11, textAlign: 'center' }}
+                          />
+                          <span>{recFreq === 'daily' ? (recInterval === 1 ? 'dia' : 'dias') : recFreq === 'weekly' ? (recInterval === 1 ? 'semana' : 'semanas') : (recInterval === 1 ? 'mês' : 'meses')}</span>
+                        </div>
+
+                        {/* Weekly: weekday picker */}
+                        {recFreq === 'weekly' && (
+                          <div>
+                            <div style={{ fontSize: 10, color: 'var(--t4)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '1px' }}>Dias da semana</div>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              {['D','S','T','Q','Q','S','S'].map((label, idx) => {
+                                const active = recWeekdays.includes(idx);
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => setRecWeekdays(prev => prev.includes(idx) ? prev.filter(x => x !== idx) : [...prev, idx])}
+                                    style={{
+                                      width: 28, height: 28, borderRadius: 8,
+                                      background: active ? companyColor : 'var(--ib)',
+                                      border: active ? 'none' : '1px solid var(--b2)',
+                                      color: active ? '#fff' : 'var(--t3)',
+                                      fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                      transition: 'all .12s',
+                                    }}
+                                  >{label}</button>
+                                );
+                              })}
+                            </div>
+                            {recWeekdays.length === 0 && (
+                              <div style={{ fontSize: 10, color: 'var(--t4)', marginTop: 4 }}>
+                                Nenhum dia selecionado — usa o dia da data inicial.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Monthly: day-of-month vs Nth weekday */}
+                        {recFreq === 'monthly' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              {(['day', 'nth'] as const).map(m => {
+                                const labels = { day: 'No dia X', nth: 'Em uma posição' };
+                                const active = recMonthMode === m;
+                                return (
+                                  <button key={m} onClick={() => setRecMonthMode(m)} style={{
+                                    flex: 1, padding: '5px 0', borderRadius: 7, fontSize: 11, fontWeight: 500,
+                                    background: active ? `${companyColor}22` : 'var(--ib)',
+                                    border: '1px solid ' + (active ? `${companyColor}40` : 'var(--b2)'),
+                                    color: active ? companyColor : 'var(--t3)',
+                                    cursor: 'pointer',
+                                  }}>{labels[m]}</button>
+                                );
+                              })}
+                            </div>
+                            {recMonthMode === 'day' ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--t2)' }}>
+                                <span>Dia</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={31}
+                                  value={recMonthDay}
+                                  onChange={e => setRecMonthDay(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))}
+                                  style={{ width: 48, padding: '4px 6px', borderRadius: 6, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', outline: 'none', fontSize: 11, textAlign: 'center' }}
+                                />
+                                <span>do mês</span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--t2)', flexWrap: 'wrap' }}>
+                                <select
+                                  value={recNth}
+                                  onChange={e => setRecNth(parseInt(e.target.value))}
+                                  style={{ padding: '4px 6px', borderRadius: 6, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 11 }}
+                                >
+                                  <option value={1}>primeira</option>
+                                  <option value={2}>segunda</option>
+                                  <option value={3}>terceira</option>
+                                  <option value={4}>quarta</option>
+                                  <option value={-1}>última</option>
+                                </select>
+                                <select
+                                  value={recNthWeekday}
+                                  onChange={e => setRecNthWeekday(parseInt(e.target.value))}
+                                  style={{ padding: '4px 6px', borderRadius: 6, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', fontSize: 11 }}
+                                >
+                                  <option value={1}>segunda</option>
+                                  <option value={2}>terça</option>
+                                  <option value={3}>quarta</option>
+                                  <option value={4}>quinta</option>
+                                  <option value={5}>sexta</option>
+                                  <option value={6}>sábado</option>
+                                  <option value={0}>domingo</option>
+                                </select>
+                                <span>do mês</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Count limit */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--t2)' }}>
+                          <span>Por</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={500}
+                            value={recCount}
+                            onChange={e => setRecCount(e.target.value === '' ? '' : Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
+                            placeholder="auto"
+                            style={{ width: 56, padding: '4px 6px', borderRadius: 6, background: 'var(--ib)', border: '1px solid var(--b2)', color: 'var(--t1)', outline: 'none', fontSize: 11, textAlign: 'center' }}
+                          />
+                          <span>ocorrências (vazio = ~3 meses)</span>
+                        </div>
+
+                        {/* Live summary */}
+                        {!task && (() => {
+                          const r = buildRecurrenceRule();
+                          return r ? (
+                            <div style={{ fontSize: 10, color: companyColor, fontStyle: 'italic', borderTop: '1px solid var(--b1)', paddingTop: 8 }}>
+                              {describeRule(r)}
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
                     )}
-                    {recurrence !== 'none' && task && (
+
+                    {recFreq !== 'none' && task && (
                       <p style={{ fontSize: 10, color: 'var(--t4)', marginTop: 6 }}>
                         Esta tarefa pertence a uma série recorrente.
                       </p>

@@ -307,6 +307,16 @@ export interface SubClient {
 }
 
 export type RecurrenceType = 'weekly' | 'monthly';
+export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly';
+
+export interface RecurrenceRule {
+  freq: RecurrenceFreq;
+  interval: number;                      // ≥ 1 (ex: 2 = a cada 2 semanas)
+  byWeekday?: number[];                  // 0=dom...6=sáb (weekly): ex [1,3] = seg+qua
+  byMonthDay?: number;                   // 1-31 — dia fixo do mês
+  byMonthWeekday?: { weekday: number; nth: number };  // {weekday:1, nth:1}=primeira seg, nth=-1=última
+  count?: number;                        // máximo de ocorrências; padrão ~3 meses
+}
 
 export interface Task {
   id: string;
@@ -335,7 +345,8 @@ export interface Task {
   linkedProposalId?: string; // tarefa faz parte da entrega de qual proposta
   createdAt?: string;      // #17 — ISO string
   inbox?: boolean;         // sem data — caixa de entrada
-  recurrence?: RecurrenceType; // #3 — repetição
+  recurrence?: RecurrenceType; // #3 — repetição (legado: weekly/monthly simples)
+  recurrenceRule?: RecurrenceRule; // Onda 3C — recurrence inteligente (sobrescreve recurrence quando presente)
   recurrenceParentId?: string; // links gerados ao pai
   deletedAt?: string;      // ISO — soft-delete (lixeira de 30 dias)
 }
