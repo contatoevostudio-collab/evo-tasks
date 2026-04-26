@@ -6,6 +6,8 @@ import type { Workspace, LensMode } from '../types';
 
 interface Props {
   onOpenManager: (editingId?: string) => void;
+  /** Layout compacto pra top bar (horizontal, sem padding externo) */
+  compact?: boolean;
 }
 
 const TYPE_LABEL: Record<Workspace['type'], string> = {
@@ -54,7 +56,7 @@ function WorkspaceAvatar({ ws, size = 22 }: { ws: Workspace; size?: number }) {
 }
 
 // ─── Switcher ──────────────────────────────────────────────────────────────
-export function WorkspaceSwitcher({ onOpenManager }: Props) {
+export function WorkspaceSwitcher({ onOpenManager, compact = false }: Props) {
   const workspaces      = useWorkspacesStore(s => s.workspaces);
   const activeId        = useWorkspacesStore(s => s.activeWorkspaceId);
   const lens            = useWorkspacesStore(s => s.lens);
@@ -100,12 +102,22 @@ export function WorkspaceSwitcher({ onOpenManager }: Props) {
   const lensActive = lens.mode !== 'active';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 14px 12px' }}>
+    <div style={compact
+      ? { display: 'flex', alignItems: 'center', gap: 6 }
+      : { display: 'flex', flexDirection: 'column', gap: 6, padding: '0 14px 12px' }
+    }>
       {/* Workspace ativo */}
-      <div ref={wsRef} style={{ position: 'relative' }}>
+      <div ref={wsRef} style={{ position: 'relative', ...(compact ? {} : {}) }}>
         <button
           onClick={() => { setOpenWs(o => !o); setOpenLens(false); }}
-          style={{
+          style={compact ? {
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '5px 10px', borderRadius: 9,
+            background: `${activePalette.primary}18`,
+            border: `1px solid ${activePalette.primary}38`,
+            cursor: 'pointer', color: '#ffffff', height: 32,
+            transition: 'background .12s, border-color .12s',
+          } : {
             width: '100%', display: 'flex', alignItems: 'center', gap: 9,
             padding: '7px 10px', borderRadius: 10,
             background: `${activePalette.primary}14`,
@@ -113,19 +125,21 @@ export function WorkspaceSwitcher({ onOpenManager }: Props) {
             cursor: 'pointer', color: 'var(--t1)',
             transition: 'background .12s, border-color .12s',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${activePalette.primary}22`; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${activePalette.primary}14`; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${activePalette.primary}28`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = compact ? `${activePalette.primary}18` : `${activePalette.primary}14`; }}
         >
-          <WorkspaceAvatar ws={active} size={22} />
-          <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <WorkspaceAvatar ws={active} size={compact ? 18 : 22} />
+          <div style={{ textAlign: 'left', overflow: 'hidden', ...(compact ? { maxWidth: 140 } : { flex: 1 }) }}>
+            <div style={{ fontSize: compact ? 12 : 12, fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
               {active.name}
             </div>
-            <div style={{ fontSize: 9, color: 'var(--t4)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: 1 }}>
-              {TYPE_LABEL[active.type]}
-            </div>
+            {!compact && (
+              <div style={{ fontSize: 9, color: 'var(--t4)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: 1 }}>
+                {TYPE_LABEL[active.type]}
+              </div>
+            )}
           </div>
-          <FiChevronDown size={12} style={{ color: 'var(--t3)', flexShrink: 0, transform: openWs ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+          <FiChevronDown size={11} style={{ color: 'rgba(255,255,255,0.6)', flexShrink: 0, transform: openWs ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
         </button>
 
         <AnimatePresence>
@@ -196,7 +210,14 @@ export function WorkspaceSwitcher({ onOpenManager }: Props) {
       <div ref={lensRef} style={{ position: 'relative' }}>
         <button
           onClick={() => { setOpenLens(o => !o); setOpenWs(false); }}
-          style={{
+          style={compact ? {
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 10px', borderRadius: 9, height: 32,
+            background: lensActive ? 'rgba(255,159,10,0.16)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${lensActive ? 'rgba(255,159,10,0.4)' : 'rgba(255,255,255,0.10)'}`,
+            cursor: 'pointer', color: lensActive ? '#ff9f0a' : 'rgba(255,255,255,0.7)',
+            transition: 'all .12s', fontSize: 11, fontWeight: 700,
+          } : {
             width: '100%', display: 'flex', alignItems: 'center', gap: 6,
             padding: '5px 10px', borderRadius: 8,
             background: lensActive ? 'rgba(255,159,10,0.10)' : 'var(--s1)',
@@ -206,9 +227,16 @@ export function WorkspaceSwitcher({ onOpenManager }: Props) {
           }}
         >
           {LENS_ICONS[lens.mode]}
-          <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {lensLabel}
-          </span>
+          {!compact && (
+            <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {lensLabel}
+            </span>
+          )}
+          {compact && (
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>
+              {lensLabel}
+            </span>
+          )}
           <FiChevronDown size={11} style={{ flexShrink: 0, transform: openLens ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
         </button>
 

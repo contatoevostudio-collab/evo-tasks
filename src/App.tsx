@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSyncStore, type SyncState } from './store/sync';
 import { PageSkeleton } from './components/PageSkeleton';
 import { NavSidebar } from './components/NavSidebar';
+import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 import { BottomBar } from './components/BottomBar';
 import { HomePage } from './components/HomePage';
 import { CalendarEventModal } from './components/CalendarEventModal';
@@ -420,6 +421,7 @@ export default function App() {
           onNavigateToCompany={(id) => { setEmpresasTarget(id); setPage('empresas'); }}
           onOpenAccount={() => setShowAccount(true)}
           onOpenWorkspaceManager={(editingId) => setWorkspaceManager({ open: true, editingId })}
+          onOpenSearch={() => setShowSearch(true)}
         />
       </div>
 
@@ -436,7 +438,7 @@ export default function App() {
         <div className="glass-panel app-top-bar" style={{
           flexShrink: 0, height: 52, borderRadius: 16,
           display: 'flex', alignItems: 'center',
-          padding: '0 12px 0 16px', gap: 4,
+          padding: '0 12px 0 16px', gap: 6,
           background: 'var(--sidebar-bg)',
           boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.10)' : 'inset 0 0 0 1px rgba(255,255,255,0.09), 0 4px 16px rgba(0,0,0,0.28)',
         }}>
@@ -445,9 +447,9 @@ export default function App() {
             onClick={() => openNewTask()}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              padding: '7px 16px', borderRadius: 10,
+              padding: '7px 16px', borderRadius: 10, height: 32,
               background: accentColor, border: 'none', cursor: 'pointer',
-              color: '#fff', fontSize: 12, fontWeight: 600,
+              color: '#fff', fontSize: 12, fontWeight: 700,
               boxShadow: `0 2px 10px ${accentColor}50`,
               transition: 'opacity .15s, transform .15s', flexShrink: 0,
             }}
@@ -457,6 +459,14 @@ export default function App() {
             <FiPlus size={13} strokeWidth={2.5} />
             Nova Tarefa
           </button>
+
+          {/* Workspace switcher (compact) */}
+          <div style={{ marginLeft: 4, flexShrink: 0 }}>
+            <WorkspaceSwitcher
+              compact
+              onOpenManager={(editingId) => setWorkspaceManager({ open: true, editingId })}
+            />
+          </div>
 
           <div style={{ flex: 1 }} />
 
