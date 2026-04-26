@@ -225,9 +225,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
     return () => clearInterval(timer);
   }, [getSyncLabel]);
 
-  // ─── User display ─────────────────────────────────────────────────────
-  const displayName = userName?.trim() || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitante';
-  const userInitial = (displayName[0] || 'V').toUpperCase();
+  void userName;
 
   const w = sidebarCollapsed ? 56 : sidebarWidth;
   const shadow = isLightTheme
@@ -247,7 +245,7 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
         transition: 'width 0.18s ease, min-width 0.18s ease',
       }}
     >
-      <div style={{ width: '100%', height: 38, flexShrink: 0, ...dragRegion }} />
+      <div style={{ width: '100%', height: 22, flexShrink: 0, ...dragRegion }} />
 
       {sidebarCollapsed ? (
         /* ─── Collapsed (icon-only) ─── */
@@ -417,8 +415,8 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
             })}
           </div>
 
-          {/* Bottom: account + actions + sync */}
-          <div style={{ flexShrink: 0, padding: '8px 10px 12px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          {/* Bottom: actions + sync + version */}
+          <div style={{ flexShrink: 0, padding: '8px 10px 10px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
             {updateStatus !== 'idle' && (
               <button
                 onClick={() => { if (updateStatus === 'downloaded') window.electronAPI?.installUpdate(); else if (updateStatus === 'error') window.electronAPI?.openReleasesPage?.(); else window.electronAPI?.checkForUpdates(); }}
@@ -437,50 +435,22 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
               </button>
             )}
 
-            {/* Account row */}
-            <button
-              onClick={onOpenAccount}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-                padding: '6px 8px', borderRadius: 9, marginBottom: 6,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                cursor: 'pointer',
-                transition: 'all .12s',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
-            >
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-                background: `linear-gradient(135deg, ${accentColor}, ${accentColor}aa)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 12, fontWeight: 800,
-                boxShadow: `0 0 10px rgba(${accentRgb}, 0.4)`,
-              }}>
-                {userInitial}
-              </div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                  {displayName}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                  <div className={syncStatus === 'syncing' ? 'sync-pulse' : ''} style={{ width: 5, height: 5, borderRadius: '50%', background: syncDotColor, flexShrink: 0 }} />
-                  <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.55)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {syncLabel}
-                  </span>
-                </div>
-              </div>
-            </button>
-
             {/* Action icons row */}
-            <div style={{ display: 'flex', gap: 2, padding: '0 2px' }}>
-              <button onClick={() => onChangePage('arquivo')} title="Arquivo" style={iconBtn(currentPage === 'arquivo', accentColor, accentRgb, 28, 28)}><FiArchive size={12} /></button>
-              <button onClick={cycleTheme} title={`Tema: ${THEME_LABELS[theme]}`} style={iconBtn(false, accentColor, accentRgb, 28, 28)}>{isLightTheme ? <FiMoon size={12} /> : <FiSun size={12} />}</button>
-              <button onClick={onLock} title="Bloquear" style={iconBtn(false, accentColor, accentRgb, 28, 28)}><FiLock size={12} /></button>
-              <button onClick={onOpenSettings} title="Configurações" style={iconBtn(false, accentColor, accentRgb, 28, 28)}><FiSettings size={12} /></button>
-              <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', alignSelf: 'center', padding: '0 4px', fontWeight: 600 }}>
+            <div style={{ display: 'flex', gap: 2, marginBottom: 6 }}>
+              <button onClick={() => onChangePage('arquivo')} title="Arquivo" style={iconBtn(currentPage === 'arquivo', accentColor, accentRgb, 30, 28)}><FiArchive size={13} /></button>
+              <button onClick={cycleTheme} title={`Tema: ${THEME_LABELS[theme]}`} style={iconBtn(false, accentColor, accentRgb, 30, 28)}>{isLightTheme ? <FiMoon size={13} /> : <FiSun size={13} />}</button>
+              <button onClick={onLock} title="Bloquear" style={iconBtn(false, accentColor, accentRgb, 30, 28)}><FiLock size={13} /></button>
+              <button onClick={onOpenAccount} title={user ? (user.email ?? 'Perfil') : 'Entrar'} style={iconBtn(false, accentColor, accentRgb, 30, 28)}><FiUser size={13} /></button>
+              <button onClick={onOpenSettings} title="Configurações" style={iconBtn(false, accentColor, accentRgb, 30, 28)}><FiSettings size={13} /></button>
+            </div>
+
+            {/* Sync status + version */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 4px' }}>
+              <div className={syncStatus === 'syncing' ? 'sync-pulse' : ''} style={{ width: 6, height: 6, borderRadius: '50%', background: syncDotColor, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {syncLabel}
+              </span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', fontWeight: 600, flexShrink: 0 }}>
                 v{__APP_VERSION__}
               </span>
             </div>
