@@ -316,15 +316,33 @@ Veja `<AreaChart>` como referência.
 
 ---
 
-## Workflow
+## Workflow — pensar como designer, não como aplicador
+
+> **Regra geral**: sempre que tocar uma página, fazer **análise crítica de UI/UX** antes de implementar. Não só executar o pedido literal — questionar, propor melhorias que o user não pediu mas elevam a página, apontar fricções e inconsistências do estado atual. O objetivo é entregar o melhor possível, não o "que foi pedido".
 
 Pra refazer uma página existente no estilo dashboard:
 
-1. **Ler este doc + identificar o arquétipo** da página na tabela acima
-2. **Ler o componente atual** pra entender a função real da página
-3. Importar primitivos de `src/components/dashboard` — só os que fazem sentido pro arquétipo
-4. Aplicar tipografia branca + paleta semântica conforme regras
-5. Build e revisar
-6. Se em dúvida sobre nível de complexidade, **perguntar antes** de aplicar
+1. **Estudar a página de verdade**:
+   - Ler o componente todo (não só o header)
+   - Entender o que o user faz lá: que decisões toma, que info precisa, qual é o fluxo
+   - Identificar problemas de UX no estado atual (hierarquia confusa, ações escondidas, vazio sem direção, atrito em tarefas comuns)
+   - Olhar o que existe hoje e perguntar se isso resolve o problema da página
 
-Pra qualquer dúvida visual, **referenciar `src/components/HomePage.tsx`** — é o exemplo canônico do arquétipo "Dashboard executivo" (peso alto).
+2. **Decidir se cabe dashboard**:
+   - Algumas páginas NÃO precisam de tratamento dashboard. Só estilo visual coerente (tipografia + paleta + Card + EmptyState).
+   - Outras ganham muito com KPIs, charts, hero, listas inteligentes.
+   - Outras precisam de **elementos completamente novos** que não existem ainda em `src/components/dashboard` — e tudo bem criar.
+
+3. **Considerar elementos novos** — o design system é base, não limite:
+   - Timeline horizontal, stepper visual, mini-calendar, split view, mapa de relacionamento, sparkline de outro tipo, gauge, badge tracker, comparador...
+   - Se faltar algo no `src/components/dashboard`, criar e adicionar lá.
+
+4. **Identificar arquétipo** (tabela acima) só como referência inicial — útil pra direção, não dogma.
+
+5. **Sempre aplicar**: tipografia branca, paleta semântica, Card/CardHeader, EmptyState (nunca emoji).
+
+6. **Importar primitivos** de `src/components/dashboard` — só os que fazem sentido.
+
+7. Se em dúvida sobre direção visual, **perguntar antes** de implementar.
+
+Pra qualquer dúvida visual, **referenciar `src/components/HomePage.tsx`** como exemplo canônico do arquétipo "Dashboard executivo" (peso alto).
