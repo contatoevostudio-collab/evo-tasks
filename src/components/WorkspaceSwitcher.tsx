@@ -153,9 +153,9 @@ export function WorkspaceSwitcher({ onOpenManager, compact = false }: Props) {
                 position: 'absolute', top: 'calc(100% + 6px)',
                 ...(compact ? { left: 0, width: 280 } : { left: 0, right: 0 }),
                 zIndex: 200,
-                background: '#0b1028', backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12,
-                boxShadow: '0 16px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
+                background: '#0b1028',
+                border: '1px solid rgba(255,255,255,0.18)', borderRadius: 12,
+                boxShadow: '0 20px 50px rgba(0,0,0,0.85), 0 0 0 1px rgba(0,0,0,0.4)',
                 padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
               }}
             >
@@ -253,9 +253,9 @@ export function WorkspaceSwitcher({ onOpenManager, compact = false }: Props) {
                 position: 'absolute', top: 'calc(100% + 6px)',
                 ...(compact ? { left: 0, width: 240 } : { left: 0, right: 0 }),
                 zIndex: 200,
-                background: '#0b1028', backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12,
-                boxShadow: '0 16px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
+                background: '#0b1028',
+                border: '1px solid rgba(255,255,255,0.18)', borderRadius: 12,
+                boxShadow: '0 20px 50px rgba(0,0,0,0.85), 0 0 0 1px rgba(0,0,0,0.4)',
                 padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
               }}
             >

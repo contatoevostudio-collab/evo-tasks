@@ -22,8 +22,29 @@ import { useTaskStore } from '../store/tasks';
 import { useIdeasStore } from '../store/ideas';
 import { useProposalsStore } from '../store/proposals';
 import { useVisibleWorkspaceIds, isInLens } from '../store/workspaces';
-import { FiCheckSquare } from 'react-icons/fi';
+import { FiCheckSquare, FiActivity, FiClock } from 'react-icons/fi';
+import { Card, CardHeader, KpiTile, AreaChart, ProductivityHeatmap, hexToRgb, fmtBRL } from './dashboard';
+import { startOfMonth, endOfMonth, subMonths } from 'date-fns';
 void FiCheckSquare;
+
+// ─── Health score helper ─────────────────────────────────────────────────
+function calcHealthScore(opts: {
+  hasOverdueTasks: boolean;
+  overdueCount: number;
+  hasOverduePayments: boolean;
+  daysSinceLastTask: number | null;
+  daysSinceLastInteraction: number | null;
+}): { score: number; label: string; color: string; rgb: string } {
+  let score = 100;
+  if (opts.hasOverdueTasks) score -= Math.min(40, opts.overdueCount * 8);
+  if (opts.hasOverduePayments) score -= 30;
+  if (opts.daysSinceLastTask !== null && opts.daysSinceLastTask > 30) score -= 20;
+  if (opts.daysSinceLastInteraction !== null && opts.daysSinceLastInteraction > 30) score -= 15;
+  score = Math.max(0, Math.min(100, score));
+  if (score >= 70) return { score, label: 'Saudável',   color: '#30d158', rgb: '48,209,88' };
+  if (score >= 40) return { score, label: 'Atenção',    color: '#ff9f0a', rgb: '255,159,10' };
+  return                   { score, label: 'Crítico',    color: '#ff453a', rgb: '255,69,58' };
+}
 
 const PRESET_COLORS = [
   '#30d158','#ff9f0a','#ff453a','#bf5af2','#636366',
@@ -596,6 +617,84 @@ export function EmpresasPage({ defaultSelectedId, onNavigate }: { defaultSelecte
     (!taskFilterCat || (t.taskCategory ?? 'criacao') === taskFilterCat)
   );
 
+  // ─── Dashboard metrics for selected company ────────────────────────────
+  // Sparkline: tarefas concluídas por dia nos últimos 7 dias
+  const tasksSpark = (() => {
+    const days: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = format(new Date(Date.now() - i * 86400000), 'yyyy-MM-dd');
+      days.push(companyTasks.filter(t => t.status === 'done' && t.date === day).length);
+    }
+    return days;
+  })();
+
+  // Pagamentos do mês corrente vs mês anterior (PaymentRecord = sempre pago)
+  const paymentHistory = selected?.paymentHistory ?? [];
+  const monthlyRevenue = (() => {
+    const start = startOfMonth(new Date());
+    const prevStart = startOfMonth(subMonths(new Date(), 1));
+    const prevEnd = endOfMonth(subMonths(new Date(), 1));
+    const sumIn = (from: Date, to: Date | null = null) =>
+      paymentHistory
+        .filter(p => { try { const d = parseISO(p.date); return d >= from && (to ? d <= to : true); } catch { return false; } })
+        .reduce((s, p) => s + p.amount, 0);
+    const current = sumIn(start);
+    const prev = sumIn(prevStart, prevEnd);
+    const delta = prev > 0 ? ((current - prev) / prev) * 100 : (current > 0 ? 100 : 0);
+    return { current, prev, delta };
+  })();
+
+  // Receita 6 meses (area chart)
+  const revenueSeries6m = (() => {
+    return Array.from({ length: 6 }).map((_, i) => {
+      const d = subMonths(new Date(), 5 - i);
+      const start = startOfMonth(d);
+      const end = endOfMonth(d);
+      const value = paymentHistory
+        .filter(p => { try { const dd = parseISO(p.date); return dd >= start && dd <= end; } catch { return false; } })
+        .reduce((s, p) => s + p.amount, 0);
+      return { label: format(d, 'MMM', { locale: ptBR }), value };
+    });
+  })();
+
+  // Heatmap counts (tarefas concluídas)
+  const heatmapCounts = (() => {
+    const m = new Map<string, number>();
+    companyTasks.filter(t => t.status === 'done').forEach(t => {
+      m.set(t.date, (m.get(t.date) ?? 0) + 1);
+    });
+    return m;
+  })();
+
+  // Próxima fatura/cobrança em aberto
+  const nextDueDays = (() => {
+    if (!selected?.invoiceDueDay) return null;
+    const todayD = new Date();
+    let due = new Date(todayD.getFullYear(), todayD.getMonth(), selected.invoiceDueDay);
+    if (due < todayD) due = new Date(todayD.getFullYear(), todayD.getMonth() + 1, selected.invoiceDueDay);
+    return differenceInDays(due, todayD);
+  })();
+
+  // Dias desde última interação
+  const daysSinceLastInteraction = (() => {
+    const interactions = selected?.interactions ?? [];
+    if (interactions.length === 0) return null;
+    const latest = interactions.reduce((a, b) => a.date > b.date ? a : b).date;
+    try { return differenceInDays(new Date(), parseISO(latest)); } catch { return null; }
+  })();
+
+  // Health score — PaymentRecord não tem status; usamos invoiceDueDay+nextDueDays pra "vencida"
+  const hasOverduePayments = nextDueDays !== null && nextDueDays < 0;
+  const health = selected ? calcHealthScore({
+    hasOverdueTasks: overdueCount > 0,
+    overdueCount,
+    hasOverduePayments,
+    daysSinceLastTask: companyInactivityDays,
+    daysSinceLastInteraction,
+  }) : null;
+
+  void hexToRgb;
+
   const handleAddCompany = () => {
     const name = newName.trim().toUpperCase();
     if (!name) return;
@@ -815,8 +914,8 @@ export function EmpresasPage({ defaultSelectedId, onNavigate }: { defaultSelecte
             </button>
           )}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--t4)', marginBottom: 2 }}>Gestão</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.4px' }}>Empresas & Clientes</div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 2 }}>Gestão</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.5px' }}>Empresas</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1140,7 +1239,7 @@ export function EmpresasPage({ defaultSelectedId, onNavigate }: { defaultSelecte
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--t1)' }}>{selected.name}</div>
+                        <div style={{ fontSize: 19, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.4px' }}>{selected.name}</div>
                         <button onClick={() => { setNewCompanyNameVal(selected.name); setEditingCompanyName(true); }} aria-label="Editar nome"
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t4)', padding: 3, borderRadius: 4, transition: 'color .15s' }}
                           onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#64C4FF')}
@@ -1176,6 +1275,22 @@ export function EmpresasPage({ defaultSelectedId, onNavigate }: { defaultSelecte
                             </button>
                           );
                         })()}
+                        {/* Health score badge */}
+                        {health && (
+                          <span title={`Score: ${health.score}/100 — ${health.label}`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              padding: '2px 9px', borderRadius: 99,
+                              background: `rgba(${health.rgb},0.16)`,
+                              border: `1px solid rgba(${health.rgb},0.4)`,
+                              fontSize: 10, fontWeight: 800, color: health.color,
+                              letterSpacing: '0.4px',
+                            }}
+                          >
+                            <FiActivity size={9} />
+                            {health.label} · {health.score}
+                          </span>
+                        )}
                         {/* #27 Inactivity alert */}
                         {companyInactivityDays !== null && companyInactivityDays >= 30 && (
                           <span title={`Última tarefa há ${companyInactivityDays} dias`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,159,10,0.13)', border: '1px solid rgba(255,159,10,0.3)', fontSize: 10, fontWeight: 700, color: '#ff9f0a' }}>
@@ -1424,40 +1539,83 @@ export function EmpresasPage({ defaultSelectedId, onNavigate }: { defaultSelecte
 
               </div>
 
-              {/* ── Backlinks panel — leads / propostas / ideias / tarefas ──── */}
-              {selected && (() => {
-                const bentos: { label: string; count: number; color: string; Icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; page: 'crm' | 'propostas' | 'ideias' | 'tarefas' }[] = [
-                  { label: 'Leads',     count: leadsCount,             color: '#bf5af2',      Icon: FiTarget,      page: 'crm' },
-                  { label: 'Propostas', count: proposalsCount,         color: '#356BFF',      Icon: FiFileText,    page: 'propostas' },
-                  { label: 'Ideias',    count: ideasCount,             color: '#ffd60a',      Icon: FiZap,         page: 'ideias' },
-                  { label: 'Tarefas',   count: companyTasks.length,    color: selected.color, Icon: FiCheckSquare, page: 'tarefas' },
-                ];
-                return (
-                  <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                    {bentos.map(({ label, count, color, Icon, page }) => (
-                      <button
-                        key={label}
-                        onClick={() => onNavigate?.(page)}
-                        style={{
-                          flex: 1, background: 'var(--s1)', border: '1px solid var(--b2)',
-                          borderRadius: 12, padding: '12px 14px',
-                          display: 'flex', flexDirection: 'column', gap: 6,
-                          cursor: onNavigate ? 'pointer' : 'default',
-                          textAlign: 'left', transition: 'all .15s',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${color}55`; (e.currentTarget as HTMLElement).style.background = `${color}0c`; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--b2)'; (e.currentTarget as HTMLElement).style.background = 'var(--s1)'; }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <Icon size={13} style={{ color }} />
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--t4)' }}>{label}</span>
+              {/* ── KPI tiles — visão executiva da empresa ────────────────── */}
+              {selected && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 4 }}>
+                  <KpiTile
+                    label="Tarefas em aberto"
+                    value={companyTasks.filter(t => t.status !== 'done').length}
+                    suffix={overdueCount > 0 ? `· ${overdueCount} atras.` : undefined}
+                    icon={<FiCheckSquare size={13} />}
+                    color={selected.color}
+                    sparkline={tasksSpark}
+                  />
+                  <KpiTile
+                    label="Receita do mês"
+                    value={fmtBRL(monthlyRevenue.current)}
+                    delta={monthlyRevenue.delta}
+                    icon={<FiDollarSign size={13} />}
+                    color="#30d158"
+                  />
+                  <KpiTile
+                    label={nextDueDays !== null && nextDueDays < 0 ? 'Cobrança vencida' : 'Próxima cobrança'}
+                    value={nextDueDays === null ? '—' : Math.abs(nextDueDays)}
+                    suffix={nextDueDays === null ? 'sem dia' : nextDueDays < 0 ? 'd atrasada' : nextDueDays === 0 ? 'hoje' : 'd restantes'}
+                    icon={<FiClock size={13} />}
+                    color={nextDueDays !== null && nextDueDays < 0 ? '#ff453a' : (nextDueDays !== null && nextDueDays <= 5 ? '#ff9f0a' : '#64C4FF')}
+                  />
+                  <KpiTile
+                    label="Última atividade"
+                    value={companyInactivityDays === null ? '—' : companyInactivityDays}
+                    suffix={companyInactivityDays === null ? 'sem dados' : companyInactivityDays === 0 ? 'hoje' : companyInactivityDays === 1 ? 'dia atrás' : 'dias atrás'}
+                    icon={<FiActivity size={13} />}
+                    color={companyInactivityDays !== null && companyInactivityDays > 30 ? '#ff453a' : companyInactivityDays !== null && companyInactivityDays > 14 ? '#ff9f0a' : '#bf5af2'}
+                  />
+                </div>
+              )}
+
+              {/* ── Charts row: Receita 6 meses + Heatmap atividade ───────── */}
+              {selected && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: 14, marginTop: 4 }}>
+                  <Card>
+                    <CardHeader
+                      icon={<FiTrendingUp size={14} />}
+                      title="Receita — últimos 6 meses"
+                      accent="#30d158"
+                      right={<span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>{fmtBRL(revenueSeries6m.reduce((s, m) => s + m.value, 0))}</span>}
+                    />
+                    <div style={{ padding: '10px 8px 8px' }}>
+                      {revenueSeries6m.some(m => m.value > 0) ? (
+                        <AreaChart series={revenueSeries6m} accentColor="#30d158" accentRgb="48,209,88" />
+                      ) : (
+                        <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+                          <FiDollarSign size={28} style={{ color: 'rgba(255,255,255,0.25)', marginBottom: 8 }} />
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>Sem pagamentos registrados</div>
                         </div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: count > 0 ? color : 'var(--t4)', lineHeight: 1 }}>{count}</div>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card>
+                    <CardHeader
+                      icon={<FiActivity size={14} />}
+                      title="Atividade"
+                      accent={selected.color}
+                    />
+                    {heatmapCounts.size > 0 ? (
+                      <ProductivityHeatmap counts={heatmapCounts} />
+                    ) : (
+                      <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+                        <FiActivity size={28} style={{ color: 'rgba(255,255,255,0.25)', marginBottom: 8 }} />
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>Sem tarefas concluídas</div>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+              )}
+
+              {/* Hidden — backlinks values now live in sticky pills below */}
+              <div style={{ display: 'none' }}>{leadsCount}{proposalsCount}{ideasCount}</div>
 
               {/* Bento 2-col layout: main col + right col */}
               <div className="bento-grid bento-sidebar" style={{ gap: 14, alignItems: 'start' }}>
