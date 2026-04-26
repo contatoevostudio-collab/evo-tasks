@@ -435,15 +435,6 @@ export function NavSidebar({ currentPage, onChangePage, onAddTask: _onAddTask, o
               </button>
             )}
 
-            {/* Action icons row */}
-            <div style={{ display: 'flex', gap: 2, marginBottom: 6 }}>
-              <button onClick={() => onChangePage('arquivo')} title="Arquivo" style={iconBtn(currentPage === 'arquivo', accentColor, accentRgb, 30, 28)}><FiArchive size={13} /></button>
-              <button onClick={cycleTheme} title={`Tema: ${THEME_LABELS[theme]}`} style={iconBtn(false, accentColor, accentRgb, 30, 28)}>{isLightTheme ? <FiMoon size={13} /> : <FiSun size={13} />}</button>
-              <button onClick={onLock} title="Bloquear" style={iconBtn(false, accentColor, accentRgb, 30, 28)}><FiLock size={13} /></button>
-              <button onClick={onOpenAccount} title={user ? (user.email ?? 'Perfil') : 'Entrar'} style={iconBtn(false, accentColor, accentRgb, 30, 28)}><FiUser size={13} /></button>
-              <button onClick={onOpenSettings} title="Configurações" style={iconBtn(false, accentColor, accentRgb, 30, 28)}><FiSettings size={13} /></button>
-            </div>
-
             {/* Sync status + version */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 4px' }}>
               <div className={syncStatus === 'syncing' ? 'sync-pulse' : ''} style={{ width: 6, height: 6, borderRadius: '50%', background: syncDotColor, flexShrink: 0 }} />

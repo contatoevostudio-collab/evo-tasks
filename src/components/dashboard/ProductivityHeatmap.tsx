@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { format, addDays, startOfWeek, endOfWeek, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, subDays } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export type HeatmapView = 'anual' | 'mensal' | 'semanal' | 'diario';
@@ -77,68 +77,58 @@ export function ProductivityHeatmap({ counts }: { counts: Map<string, number> })
   };
 
   const renderMensal = () => {
-    const CELL = 14, GAP = 3, MONTH_GAP = 18;
-    const months = Array.from({ length: 4 }).map((_, i) => {
-      const ref = subMonths(today, 3 - i);
-      const monthStart = startOfMonth(ref);
-      const monthEnd = endOfMonth(ref);
-      const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-      const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-      const allDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
-      const weeks: (Date | null)[][] = [];
-      for (let j = 0; j < allDays.length; j += 7) {
-        const week = allDays.slice(j, j + 7).map(d =>
-          (d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear()) ? d : null
-        );
-        weeks.push(week);
-      }
-      const total = allDays.filter(d => d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear()).reduce((s, d) => s + get(d), 0);
-      return {
-        label: format(monthStart, 'MMM', { locale: ptBR }).toUpperCase(),
-        weeks, total,
-        isCurrent: ref.getMonth() === today.getMonth() && ref.getFullYear() === today.getFullYear(),
-      };
-    });
+    const CELL = 28, GAP = 4;
+    const monthStart = startOfMonth(today);
+    const monthEnd = endOfMonth(today);
+    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    const allDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
+    const total = allDays
+      .filter(d => d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear())
+      .reduce((s, d) => s + get(d), 0);
+
     return (
-      <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: MONTH_GAP }}>
-          {months.map((m, mi) => (
-            <div key={mi} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.8px', color: m.isCurrent ? '#30d158' : 'rgba(255,255,255,0.55)' }}>
-                  {m.label}
-                </span>
-                <span style={{
-                  fontSize: 9, fontWeight: 700,
-                  color: m.total > 0 ? '#30d158' : 'rgba(255,255,255,0.35)',
-                  background: m.total > 0 ? 'rgba(48,209,88,0.12)' : 'rgba(255,255,255,0.04)',
-                  border: m.total > 0 ? '1px solid rgba(48,209,88,0.25)' : '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 99, padding: '1px 7px',
-                }}>{m.total}</span>
-              </div>
-              <div style={{ display: 'flex', gap: GAP }}>
-                {m.weeks.map((week, wi) => (
-                  <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
-                    {week.map((d, di) => {
-                      if (!d) return <div key={di} style={{ width: CELL, height: CELL }} />;
-                      const c = get(d);
-                      const isToday = format(d, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
-                      return (
-                        <div key={di}
-                          title={`${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}`}
-                          style={{
-                            width: CELL, height: CELL, borderRadius: 3,
-                            background: cellColor(c),
-                            border: isToday ? '1.5px solid #ffffff' : 'none',
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.1px', textTransform: 'capitalize' }}>
+            {format(today, 'MMMM yyyy', { locale: ptBR })}
+          </span>
+          <span style={{
+            fontSize: 10, fontWeight: 700,
+            color: total > 0 ? '#30d158' : 'rgba(255,255,255,0.45)',
+            background: total > 0 ? 'rgba(48,209,88,0.14)' : 'rgba(255,255,255,0.05)',
+            border: total > 0 ? '1px solid rgba(48,209,88,0.3)' : '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 99, padding: '2px 9px',
+          }}>
+            {total} concluída{total !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gap: GAP, marginBottom: 6 }}>
+          {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map((l, i) => (
+            <div key={i} style={{ width: CELL, fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textAlign: 'center', letterSpacing: '0.6px' }}>{l}</div>
           ))}
+        </div>
+        <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gap: GAP }}>
+          {allDays.map((d, i) => {
+            const inMonth = d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+            const c = inMonth ? get(d) : 0;
+            const isToday = format(d, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+            return (
+              <div key={i}
+                title={inMonth ? `${format(d, 'dd/MM/yyyy')}: ${c} concluída${c !== 1 ? 's' : ''}` : ''}
+                style={{
+                  width: CELL, height: CELL, borderRadius: 5,
+                  background: inMonth ? cellColor(c) : 'transparent',
+                  border: isToday ? '1.5px solid #ffffff' : (inMonth ? 'none' : '1px dashed rgba(255,255,255,0.05)'),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700,
+                  color: !inMonth ? 'transparent' : c > 0 ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                }}
+              >
+                {inMonth ? d.getDate() : ''}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
