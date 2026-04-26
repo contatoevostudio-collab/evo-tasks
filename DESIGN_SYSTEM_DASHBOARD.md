@@ -268,14 +268,63 @@ Veja `<AreaChart>` como referência.
 
 ---
 
+## Adaptação por arquétipo de página (CRÍTICO)
+
+**Não aplicar todos os primitivos cegamente.** Cada página tem uma natureza — algumas precisam de mais peso visual, outras de menos. Antes de mexer numa página, identifique o arquétipo e aplique só o que faz sentido.
+
+### Taxonomia
+
+| Arquétipo | Páginas | Peso visual | O que aplicar |
+|---|---|---|---|
+| **Dashboard executivo** | Home, KPIs, Finanças | Alto | Hero gigante + 4 KpiTiles + Charts (Area, Donut, Funnel) + Heatmap + Listas inteligentes + Insight banner |
+| **Listas com gestão** | Empresas, CRM, Aprovações | Médio-alto | Hero compacto + 2-3 KpiTiles relevantes + filtros + list/kanban/grid |
+| **Editor / produção** | Tarefas/Calendário, Editorial | Médio | Hero pequeno + view selectors (kanban/lista/grid) + grid principal. Sem KPIs. |
+| **Triagem** | Inbox, Lixeira | Compacto | Header pequeno com counts por seção + listas agrupadas |
+| **Documentos individuais** | Briefings, Propostas, Faturas | Baixo-médio | Header com filtro de status + lista. KpiTile só se houver métrica forte (ex: "R$ em aberto"). |
+| **Bibliotecas** | Snippets, Onboarding templates | Mínimo | Header simples (busca + filtro) + grid. Sem hero, sem KPIs. |
+| **Time-based** | Hábitos, Time tracking | Médio | Hero compacto + Heatmap + lista. KpiTile pra streak/total. |
+| **Criativo (caixa de ideias)** | Ideias | Médio | Hero compacto + 3-4 KpiTiles (com sparkline em 1) + grid/kanban |
+
+### Regra de ouro
+
+**Sempre aplicar:**
+- Tipografia branca (`#ffffff` em títulos, `rgba(255,255,255,0.78)` secundário)
+- Paleta semântica (azul/verde/vermelho/laranja/roxo)
+- Card + CardHeader pros containers
+- EmptyState com ícone (NUNCA emoji)
+
+**Aplicar só se fizer sentido pra página:**
+- Hero gigante → só páginas com saudação ou contexto complexo (Home, Finanças)
+- KpiTiles → só se as métricas guiam ação (não use stat só pra encher)
+- Charts → só se há tendência relevante a mostrar
+- Heatmap → só se a dimensão temporal é central pra página
+
+### Exemplos do que evitar
+
+- ❌ Hero gigante com gradient azul em Snippets (é só biblioteca)
+- ❌ 4 KpiTiles forçados quando 2 já cobrem o que importa
+- ❌ Heatmap em página sem dimensão temporal forte
+- ❌ Charts decorativos sem tendência real a mostrar
+
+### Exemplos do que aplicar bem
+
+- ✅ Home / Finanças → completo (hero + 4 tiles + charts + listas inteligentes)
+- ✅ Empresas / CRM → médio (hero compacto + 2-3 tiles + list/kanban)
+- ✅ Snippets → mínimo (header com busca + grid de cards)
+- ✅ Inbox → compacto (header com counts + sections agrupadas)
+- ✅ Hábitos → médio (hero + heatmap + list)
+
+---
+
 ## Workflow
 
 Pra refazer uma página existente no estilo dashboard:
 
-1. **Ler este doc**
-2. Importar primitivos de `src/components/dashboard`
-3. Estruturar a página em `Hero → KPIs → Charts → Listas inteligentes`
-4. Aplicar tipografia branca conforme tabela acima
+1. **Ler este doc + identificar o arquétipo** da página na tabela acima
+2. **Ler o componente atual** pra entender a função real da página
+3. Importar primitivos de `src/components/dashboard` — só os que fazem sentido pro arquétipo
+4. Aplicar tipografia branca + paleta semântica conforme regras
 5. Build e revisar
+6. Se em dúvida sobre nível de complexidade, **perguntar antes** de aplicar
 
-Pra qualquer dúvida visual, **referenciar `src/components/HomePage.tsx`** — é o exemplo canônico.
+Pra qualquer dúvida visual, **referenciar `src/components/HomePage.tsx`** — é o exemplo canônico do arquétipo "Dashboard executivo" (peso alto).
